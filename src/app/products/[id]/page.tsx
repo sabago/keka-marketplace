@@ -11,15 +11,16 @@ import AddToCartButton from "@/components/AddToCartButton";
 type Product = {
 	id: string;
 	title: string;
-	price: number;
+	price: unknown;
 	description: string;
 	thumbnail?: string | null;
-	categoryId: string;
-	category?: {
-		id: string;
-		name: string;
-		slug: string;
-	} | null;
+	categories?: Array<{
+		category: {
+			id: string;
+			name: string;
+			slug: string;
+		};
+	}>;
 	active?: boolean;
 };
 
@@ -35,7 +36,11 @@ export default async function ProductDetailPage({
 	const product = await prisma.product.findUnique({
 		where: { id },
 		include: {
-			category: true,
+			categories: {
+				include: {
+					category: true,
+				},
+			},
 		},
 	});
 
@@ -44,12 +49,30 @@ export default async function ProductDetailPage({
 		notFound();
 	}
 
+	// Get the first category ID if available
+	const firstCategoryId =
+		product.categories && product.categories.length > 0
+			? product.categories[0].category.id
+			: null;
+
 	// Fetch related products
 	const relatedProducts = await prisma.product.findMany({
 		where: {
-			categoryId: product.categoryId,
 			id: { not: product.id },
-			active: true,
+			...(firstCategoryId && {
+				categories: {
+					some: {
+						categoryId: firstCategoryId,
+					},
+				},
+			}),
+		},
+		include: {
+			categories: {
+				include: {
+					category: true,
+				},
+			},
 		},
 		take: 3,
 	});
@@ -86,19 +109,19 @@ export default async function ProductDetailPage({
 						<h1 className="text-3xl font-bold text-gray-800 mb-2">{product.title}</h1>
 
 						{/* Category */}
-						{product.category && (
+						{product.categories && product.categories.length > 0 && (
 							<Link
-								href={`/categories/${product.category.slug}`}
+								href={`/categories/${product.categories[0].category.slug}`}
 								className="text-blue-600 hover:text-blue-800 text-sm mb-4"
 							>
-								{product.category.name}
+								{product.categories[0].category.name}
 							</Link>
 						)}
 
 						{/* Price */}
 						<div className="mb-6">
 							<span className="text-3xl font-bold text-blue-600">
-								{formatCurrency(product.price, "USD")}
+								{formatCurrency(Number(product.price), "USD")}
 							</span>
 
 							{/* Client component for add to cart with login button */}
@@ -146,7 +169,7 @@ export default async function ProductDetailPage({
 										{relatedProduct.title}
 									</h3>
 									<p className="text-blue-600 font-bold mt-2">
-										{formatCurrency(relatedProduct.price, "USD")}
+										{formatCurrency(Number(relatedProduct.price), "USD")}
 									</p>
 								</div>
 							</Link>

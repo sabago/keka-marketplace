@@ -9,7 +9,7 @@ interface Product {
   id: string;
   title: string;
   description: string;
-  price: number;
+  price: unknown;
   thumbnail: string;
   filePath?: string;
   createdAt?: Date;
@@ -43,8 +43,14 @@ export async function POST(request: Request) {
       };
     });
     
+    // Convert prices to numbers for Stripe
+    const lineItemsWithNumberPrices = lineItems.map((item: Product & { quantity: number }) => ({
+      ...item,
+      price: Number(item.price)
+    }));
+    
     // Create a Stripe checkout session
-    const session = await createCheckoutSession(lineItems, customerEmail);
+    const session = await createCheckoutSession(lineItemsWithNumberPrices, customerEmail);
     
     // For development: Create a test order in the database
     // In production, this would be handled by the webhook
@@ -99,10 +105,11 @@ export async function POST(request: Request) {
         // Send test email in development mode
         try {
           // Create a map of product IDs to titles for easy lookup
-          const productTitlesMap = products.reduce((map: Record<string, string>, product: Product) => {
-            map[product.id] = product.title;
-            return map;
-          }, {});
+          // Create a map of product IDs to titles for easy lookup
+          const productTitlesMap: Record<string, string> = {};
+          products.forEach((product: Product) => {
+            productTitlesMap[product.id] = product.title;
+          });
 
           // Prepare download information for the email
           const downloadInfo = downloads.map(download => ({
@@ -117,8 +124,10 @@ export async function POST(request: Request) {
               id: order.id,
               customerEmail,
               totalAmount,
-              orderItems: order.orderItems.map((item: { id: string; productId: string; price: number }) => ({
-                ...item,
+              orderItems: order.orderItems.map((item: { id: string; productId: string; price: unknown }) => ({
+                id: item.id,
+                productId: item.productId,
+                price: Number(item.price),
                 product: {
                   title: productTitlesMap[item.productId] || 'Digital Product'
                 }

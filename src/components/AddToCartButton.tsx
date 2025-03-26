@@ -10,7 +10,7 @@ import { useCartStore } from "@/lib/useCart";
 type Product = {
 	id: string;
 	title: string;
-	price: number;
+	price: unknown;
 	thumbnail?: string | null;
 };
 
@@ -20,15 +20,18 @@ export default function AddToCartButton({ product }: { product: Product }) {
 	const { settings } = useSettings();
 	const addItem = useCartStore((state) => state.addItem);
 
+	// Convert price to number
+	const priceAsNumber = Number(product.price);
+
 	// Calculate discounted price for logged-in users
 	const discountPercentage = settings.memberDiscountPercentage || 0;
 	const discountedPrice = isLoggedIn
-		? product.price * (1 - discountPercentage / 100)
-		: product.price;
+		? priceAsNumber * (1 - discountPercentage / 100)
+		: priceAsNumber;
 
 	// Format prices using the helper function
 	const formattedOriginalPrice = formatCurrency(
-		product.price,
+		priceAsNumber,
 		settings.currency
 	);
 	const formattedDiscountedPrice = formatCurrency(
@@ -39,7 +42,7 @@ export default function AddToCartButton({ product }: { product: Product }) {
 	// Handle add to cart
 	const handleAddToCart = () => {
 		// Use discounted price for logged-in users
-		const finalPrice = isLoggedIn ? discountedPrice : product.price;
+		const finalPrice = isLoggedIn ? discountedPrice : priceAsNumber;
 
 		addItem({
 			id: product.id,

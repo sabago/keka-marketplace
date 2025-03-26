@@ -143,16 +143,16 @@ export async function GET(
             </tr>
           </thead>
           <tbody>
-            ${order.orderItems.map((item: { product: { title: string }, price: number }) => `
+            ${order.orderItems.map((item: { product: { title: string }, price: unknown }) => `
               <tr>
                 <td>${item.product.title}</td>
                 <td>Digital Product</td>
-                <td class="text-right">${formatPrice(item.price)}</td>
+                <td class="text-right">${formatPrice(Number(item.price))}</td>
               </tr>
             `).join('')}
             <tr class="total-row">
               <td colspan="2">Total</td>
-              <td class="text-right">${formatPrice(order.totalAmount)}</td>
+              <td class="text-right">${formatPrice(Number(order.totalAmount))}</td>
             </tr>
           </tbody>
         </table>

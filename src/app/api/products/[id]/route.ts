@@ -148,7 +148,7 @@ export async function DELETE(
     }
 
     // Use a transaction to delete related records first
-    await prisma.$transaction(async (tx: typeof prisma) => {
+    await prisma.$transaction(async (tx: any) => {
       // Delete related ProductCategory records
       await tx.productCategory.deleteMany({
         where: { productId: id }

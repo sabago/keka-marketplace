@@ -149,7 +149,7 @@ async function getDailySalesData(startDate: string, endDate: string) {
   }
   
   // Populate the data
-  orders.forEach((order: { createdAt: Date; totalAmount: number }) => {
+  orders.forEach((order: { createdAt: Date; totalAmount: unknown }) => {
     const dateStr = order.createdAt.toISOString().split('T')[0];
     if (dailyData[dateStr]) {
       dailyData[dateStr].orders += 1;
@@ -190,7 +190,7 @@ async function getTopProducts(startDate: string, endDate: string) {
   // Group by product and calculate sales and revenue
   const productMap: Record<string, { id: string; title: string; sales: number; revenue: number }> = {};
   
-  orderItems.forEach((item: { productId: string; price: number; product: { title: string } }) => {
+  orderItems.forEach((item: { productId: string; price: unknown; product: { title: string } }) => {
     const productId = item.productId;
     if (!productMap[productId]) {
       productMap[productId] = {
