@@ -5,10 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
   /* eslint-disable @typescript-eslint/no-explicit-any */
 // Initialize S3 client
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.S3_REGION || process.env.AWS_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.SECRET_ACCESS_KEY || '',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY || '',
   },
 });
 
@@ -30,7 +30,7 @@ export async function uploadFileToS3(
   const key = `${folder}/${uuidv4()}-${fileName.replace(/\s+/g, '-')}`;
 
   const params = {
-    Bucket: process.env.AWS_S3_BUCKET || '',
+    Bucket: process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '',
     Key: key,
     Body: file,
     ContentType: contentType,
@@ -62,7 +62,7 @@ export async function getSignedDownloadUrl(
     Key: string;
     ResponseContentDisposition?: string;
   } = {
-    Bucket: process.env.AWS_S3_BUCKET || '',
+    Bucket: process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '',
     Key: key,
   };
 
@@ -87,7 +87,7 @@ export async function getSignedDownloadUrl(
  * @returns Public URL of the file
  */
 export function getPublicUrl(key: string): string {
-  return `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${key}`;
+  return `https://${process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${key}`;
 }
 
 /**
@@ -97,7 +97,7 @@ export function getPublicUrl(key: string): string {
  */
 export async function getFileFromS3(key: string): Promise<ReadableStream> {
   const params = {
-    Bucket: process.env.AWS_S3_BUCKET || '',
+    Bucket: process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '',
     Key: key,
   };
 
