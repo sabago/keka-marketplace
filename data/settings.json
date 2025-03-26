@@ -1,0 +1,15 @@
+{
+  "siteName": "Digital Marketplace",
+  "siteDescription": "Your one-stop shop for digital products",
+  "contactEmail": "contact@example.com",
+  "currency": "USD",
+  "downloadExpiryDays": 30,
+  "maxDownloadsPerPurchase": 5,
+  "allowGuestCheckout": true,
+  "requireEmailVerification": false,
+  "enableReviews": true,
+  "enableRatings": true,
+  "enableWishlist": false,
+  "enableNewsletter": true,
+  "maintenanceMode": false
+}

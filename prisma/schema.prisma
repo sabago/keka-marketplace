@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  price       Decimal
+  filePath    String
+  thumbnail   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categories      ProductCategory[]
+  orderItems      OrderItem[]
+  downloads       Download[]
+  reviews         Review[]
+}
+
+model Category {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  products ProductCategory[]
+}
+
+model ProductCategory {
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   String
+  category    Category @relation(fields: [categoryId], references: [id])
+  categoryId  String
+
+  @@id([productId, categoryId])
+}
+
+model Order {
+  id               String   @id @default(uuid())
+  customerEmail    String
+  totalAmount      Decimal
+  stripePaymentId  String?
+  status           String   // PENDING, COMPLETED, FAILED
+  createdAt        DateTime @default(now())
+
+  orderItems       OrderItem[]
+  downloads        Download[]
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  order     Order   @relation(fields: [orderId], references: [id])
+  orderId   String
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+  price     Decimal
+}
+
+model Download {
+  id            String   @id @default(uuid())
+  order         Order    @relation(fields: [orderId], references: [id])
+  orderId       String
+  product       Product  @relation(fields: [productId], references: [id])
+  productId     String
+  downloadToken String   @unique
+  downloadCount Int      @default(0)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+}
+
+model Review {
+  id            String   @id @default(uuid())
+  product       Product  @relation(fields: [productId], references: [id])
+  productId     String
+  customerName  String
+  customerEmail String
+  rating        Int
+  comment       String
+  approved      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
