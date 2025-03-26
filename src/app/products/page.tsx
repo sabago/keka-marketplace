@@ -1,11 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import { Star, Tag, X } from "lucide-react";
 import { useCartStore } from "@/lib/useCart";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
+
+// Component that uses useSearchParams
+function ProductsWithParams({
+	onCategoryChange,
+}: {
+	onCategoryChange: (categoryId: string | null) => void;
+}) {
+	const searchParams = useSearchParams();
+	const categoryId = searchParams.get("categoryId");
+
+	useEffect(() => {
+		onCategoryChange(categoryId);
+	}, [categoryId, onCategoryChange]);
+
+	return null;
+}
 
 // Define types
 interface Product {
@@ -140,9 +156,13 @@ export default function ProductsPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [sortOption, setSortOption] = useState("featured");
 
-	const searchParams = useSearchParams();
 	const router = useRouter();
-	const categoryId = searchParams.get("categoryId");
+	const [categoryId, setCategoryId] = useState<string | null>(null);
+
+	// Handle category change from the ProductsWithParams component
+	const handleCategoryChange = (newCategoryId: string | null) => {
+		setCategoryId(newCategoryId);
+	};
 
 	// Fetch products, categories, and settings
 	useEffect(() => {
@@ -235,6 +255,10 @@ export default function ProductsPage() {
 
 	return (
 		<div className="container mx-auto px-4 py-8">
+			{/* Use the ProductsWithParams component wrapped in Suspense */}
+			<Suspense fallback={null}>
+				<ProductsWithParams onCategoryChange={handleCategoryChange} />
+			</Suspense>
 			<h1 className="text-3xl font-bold mb-2">
 				{activeCategory ? `${activeCategory.name} Products` : "All Products"}
 			</h1>

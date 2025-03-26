@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { useCartStore } from "@/lib/useCart";
+
+// Component that uses useSearchParams
+function CheckoutSuccessWithParams({
+	onSessionIdChange,
+}: {
+	onSessionIdChange: (sessionId: string | null) => void;
+}) {
+	const searchParams = useSearchParams();
+	const sessionId = searchParams.get("session_id");
+
+	useEffect(() => {
+		onSessionIdChange(sessionId);
+	}, [sessionId, onSessionIdChange]);
+
+	return null;
+}
 
 interface OrderDetails {
 	id: string;
@@ -27,12 +43,16 @@ interface OrderDetails {
 }
 
 export default function CheckoutSuccessPage() {
-	const searchParams = useSearchParams();
-	const sessionId = searchParams.get("session_id");
 	const clearCart = useCartStore((state) => state.clearCart);
+	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
+
+	// Handle session ID change from the CheckoutSuccessWithParams component
+	const handleSessionIdChange = (newSessionId: string | null) => {
+		setSessionId(newSessionId);
+	};
 
 	useEffect(() => {
 		// Clear the cart on successful checkout
@@ -98,6 +118,10 @@ export default function CheckoutSuccessPage() {
 
 	return (
 		<div className="container mx-auto px-4 py-16">
+			{/* Use the CheckoutSuccessWithParams component wrapped in Suspense */}
+			<Suspense fallback={null}>
+				<CheckoutSuccessWithParams onSessionIdChange={handleSessionIdChange} />
+			</Suspense>
 			<div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
 				<div className="text-center mb-8">
 					<CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />

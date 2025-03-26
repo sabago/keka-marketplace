@@ -6,68 +6,16 @@ import {
 	useState,
 	useEffect,
 	ReactNode,
+	Suspense,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// Define user type based on WordPress JWT payload
-export interface WordPressUser {
-	user_id: number;
-	email: string;
-	display_name: string;
-	roles: string[];
-	iss: string;
-	iat: number;
-	exp: number;
-}
-
-// Define auth context type
-export interface AuthContextType {
-	isLoggedIn: boolean;
-	user: WordPressUser | null;
-	loading: boolean;
-	token: string | null;
-}
-
-// Create the context with default values
-const AuthContext = createContext<AuthContextType>({
-	isLoggedIn: false,
-	user: null,
-	loading: true,
-	token: null,
-});
-
-// Provider props type
-interface AuthProviderProps {
-	children: ReactNode;
-}
-
-// Simple JWT decoder function (doesn't verify signature)
-function decodeJwt(token: string): WordPressUser | null {
-	try {
-		const base64Url = token.split(".")[1];
-		const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-		const jsonPayload = decodeURIComponent(
-			atob(base64)
-				.split("")
-				.map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-				.join("")
-		);
-		return JSON.parse(jsonPayload);
-	} catch (error) {
-		console.error("Error decoding JWT:", error);
-		return null;
-	}
-}
-
-// Auth provider component
-export function AuthProvider({ children }: AuthProviderProps) {
-	const [state, setState] = useState<AuthContextType>({
-		isLoggedIn: false,
-		user: null,
-		loading: true,
-		token: null,
-	});
-
+// Component that uses useSearchParams
+function AuthStateManager({
+	setState,
+}: {
+	setState: React.Dispatch<React.SetStateAction<AuthContextType>>;
+}) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 
@@ -152,9 +100,116 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		};
 
 		checkAuthStatus();
-	}, [pathname, searchParams]);
+	}, [pathname, searchParams, setState]);
 
-	return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+	return null;
+}
+
+// Define user type based on WordPress JWT payload
+export interface WordPressUser {
+	user_id: number;
+	email: string;
+	display_name: string;
+	roles: string[];
+	iss: string;
+	iat: number;
+	exp: number;
+}
+
+// Define auth context type
+export interface AuthContextType {
+	isLoggedIn: boolean;
+	user: WordPressUser | null;
+	loading: boolean;
+	token: string | null;
+}
+
+// Create the context with default values
+const AuthContext = createContext<AuthContextType>({
+	isLoggedIn: false,
+	user: null,
+	loading: true,
+	token: null,
+});
+
+// Provider props type
+interface AuthProviderProps {
+	children: ReactNode;
+}
+
+// Simple JWT decoder function (doesn't verify signature)
+function decodeJwt(token: string): WordPressUser | null {
+	try {
+		const base64Url = token.split(".")[1];
+		const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+		const jsonPayload = decodeURIComponent(
+			atob(base64)
+				.split("")
+				.map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+				.join("")
+		);
+		return JSON.parse(jsonPayload);
+	} catch (error) {
+		console.error("Error decoding JWT:", error);
+		return null;
+	}
+}
+
+// Auth provider component
+export function AuthProvider({ children }: AuthProviderProps) {
+	const [state, setState] = useState<AuthContextType>({
+		isLoggedIn: false,
+		user: null,
+		loading: true,
+		token: null,
+	});
+
+	// Check for token in sessionStorage on initial load (client-side only)
+	useEffect(() => {
+		const storedToken = sessionStorage.getItem("wp_marketplace_token");
+
+		if (storedToken) {
+			try {
+				// Decode token
+				const user = decodeJwt(storedToken) as WordPressUser;
+
+				// Check if token is expired
+				if (user && user.exp * 1000 > Date.now()) {
+					// Token is valid
+					setState({
+						isLoggedIn: true,
+						user,
+						loading: false,
+						token: storedToken,
+					});
+					return;
+				} else {
+					// Token is expired, remove it
+					sessionStorage.removeItem("wp_marketplace_token");
+				}
+			} catch (error) {
+				console.error("Error processing stored token:", error);
+				sessionStorage.removeItem("wp_marketplace_token");
+			}
+		}
+
+		// No valid token found in sessionStorage
+		setState({
+			isLoggedIn: false,
+			user: null,
+			loading: false,
+			token: null,
+		});
+	}, []);
+
+	return (
+		<AuthContext.Provider value={state}>
+			<Suspense fallback={null}>
+				<AuthStateManager setState={setState} />
+			</Suspense>
+			{children}
+		</AuthContext.Provider>
+	);
 }
 
 // Custom hook to use auth context
