@@ -129,10 +129,10 @@ Update your production environment variables:
 DATABASE_URL="your-production-database-url"
 
 # AWS S3
-AWS_ACCESS_KEY_ID="your-production-access-key"
-AWS_SECRET_ACCESS_KEY="your-production-secret-key"
-AWS_REGION="us-east-1"
-AWS_S3_BUCKET="keka-marketplace-s3"
+ACCESS_KEY_ID="your-production-access-key"
+SECRET_ACCESS_KEY="your-production-secret-key"
+REGION="us-east-1"
+S3_BUCKET="keka-marketplace-s3"
 
 # AWS SES (Email)
 SES_SENDER_EMAIL="contact@yourdomain.com"

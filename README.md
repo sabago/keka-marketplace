@@ -38,10 +38,10 @@ Create a `.env` file in the root directory with the following variables:
 DATABASE_URL="postgresql://username:password@localhost:5432/marketplace"
 
 # AWS
-AWS_REGION="us-east-1"
-AWS_ACCESS_KEY_ID="your-access-key"
-AWS_SECRET_ACCESS_KEY="your-secret-key"
-AWS_S3_BUCKET="your-bucket-name"
+REGION="us-east-1"
+ACCESS_KEY_ID="your-access-key"
+SECRET_ACCESS_KEY="your-secret-key"
+S3_BUCKET="your-bucket-name"
 
 # Stripe
 STRIPE_SECRET_KEY="sk_test_..."
