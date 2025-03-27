@@ -4,11 +4,11 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
-		"build": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma generate && next build",
+		"build": "npx prisma generate && next build",
 		"start": "next start",
 		"lint": "next lint",
-		"postinstall": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma generate",
-		"db:migrate": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma migrate deploy",
+		"postinstall": "npx prisma generate",
+		"db:migrate": "npx prisma migrate deploy",
 		"db:seed": "node src/scripts/seed-categories.js && node src/scripts/seed-projects.js"
 	},
 	"dependencies": {
