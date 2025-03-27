@@ -1,6 +1,17 @@
 const { PrismaClient } = require('@prisma/client');
+require('dotenv').config({ path: '.env.migrate' });
 
-const prisma = new PrismaClient();
+// Use the external connection string
+const connectionUrl = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+console.log('Using connection URL:', connectionUrl?.replace(/\/\/[^:]+:[^@]+@/, '//[REDACTED]:[REDACTED]@'));
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: connectionUrl,
+    },
+  },
+});
 
 const categories = [
   { name: 'Business', slug: 'business' },

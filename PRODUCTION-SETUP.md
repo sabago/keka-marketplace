@@ -1,204 +1,142 @@
 # Production Setup Guide
 
-This document outlines the steps needed to prepare your digital marketplace for production deployment.
+This document outlines the steps taken to set up the production environment for the marketplace application on Railway.
 
-## AWS S3 Configuration
+## PostgreSQL Database Setup
 
-### 1. IAM User Permissions
+### 1. Database Connection Configuration
 
-Apply the following policy to your IAM user (`keka-marketplace`):
+We've implemented a flexible database connection system that works both locally and in production:
 
-```json
-// s3-policy.json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::keka-marketplace-s3",
-        "arn:aws:s3:::keka-marketplace-s3/*"
-      ]
-    }
-  ]
-}
-```
-
-To apply this policy:
-1. Go to the AWS IAM console
-2. Select the user `keka-marketplace`
-3. Click "Add permissions" > "Create inline policy"
-4. Select the JSON tab and paste the policy above
-5. Click "Review policy", give it a name (e.g., "S3AccessPolicy"), and click "Create policy"
-
-### 2. S3 Bucket CORS Configuration
-
-Configure CORS for your S3 bucket to allow requests from your domain:
-
-```json
-// s3-cors.json
-{
-  "CORSRules": [
-    {
-      "AllowedHeaders": ["*"],
-      "AllowedMethods": ["GET", "PUT", "POST"],
-      "AllowedOrigins": ["http://localhost:3000", "https://yourdomain.com"],
-      "ExposeHeaders": ["ETag"],
-      "MaxAgeSeconds": 3000
-    }
-  ]
-}
-```
-
-To apply this configuration:
-1. Go to the AWS S3 console
-2. Select your bucket `keka-marketplace-s3`
-3. Click on the "Permissions" tab
-4. Scroll down to the "Cross-origin resource sharing (CORS)" section
-5. Click "Edit" and paste the configuration above
-6. Click "Save changes"
-
-## AWS SES Configuration
-
-### 1. Verify Your Domain
-
-1. Go to the AWS SES console
-2. Click on "Verified identities" in the left sidebar
-3. Click "Create identity"
-4. Select "Domain" and enter your domain name
-5. Follow the instructions to add the required DNS records to your domain
-
-### 2. Request Production Access
-
-By default, your SES account will be in the sandbox mode, which limits you to sending emails only to verified email addresses. To send emails to any recipient:
-
-1. Go to the AWS SES console
-2. Click on "Account dashboard" in the left sidebar
-3. Under "Sending statistics", click "Request production access"
-4. Fill out the form with your use case details
-5. Submit the request and wait for approval (usually takes 1-2 business days)
-
-### 3. IAM Permissions for SES
-
-Ensure your IAM user has the following permissions for SES:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ses:SendEmail",
-        "ses:SendRawEmail"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-You can add these permissions to the same policy as your S3 permissions or create a separate policy.
-
-### 4. Email Service Implementation
-
-The application includes a robust email service that:
-
-- Uses AWS SES in production mode
-- Provides a development fallback that logs emails to the console
-- Sends beautiful HTML emails with order details and download links
-- Handles errors gracefully
-
-In development mode, emails are not actually sent but are logged to the console for debugging purposes. This allows you to test the complete checkout flow without needing to configure SES.
-
-In production, make sure to set:
-- `NODE_ENV=production` to enable actual email sending
-- `SES_SENDER_EMAIL` to your verified sender email address
-
-## Environment Variables
-
-Update your production environment variables:
-
-```
-# Database
-DATABASE_URL="your-production-database-url"
-
-# AWS S3
-ACCESS_KEY_ID="your-production-access-key"
-SECRET_ACCESS_KEY="your-production-secret-key"
-REGION="us-east-1"
-S3_BUCKET_NAME="keka-marketplace-s3"
-
-# AWS SES (Email)
-SES_SENDER_EMAIL="contact@yourdomain.com"
-
-# Stripe
-STRIPE_SECRET_KEY="your-production-stripe-secret-key"
-STRIPE_WEBHOOK_SECRET="your-production-webhook-secret"
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-production-publishable-key"
-
-# App
-NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
-```
-
-## Stripe Webhook Configuration
-
-1. Go to the Stripe Dashboard
-2. Navigate to Developers > Webhooks
-3. Click "Add endpoint"
-4. Enter your webhook URL: `https://yourdomain.com/api/webhook`
-5. Select the events to listen for:
-   - `checkout.session.completed`
-   - `payment_intent.payment_failed`
-6. Click "Add endpoint"
-7. Copy the "Signing secret" and update your `STRIPE_WEBHOOK_SECRET` environment variable
-
-## Next.js Configuration for S3 Images
-
-Ensure your `next.config.ts` file includes the S3 bucket hostname in the images configuration:
+- Created a `dbConfig.ts` helper that intelligently constructs a database connection string from:
+  - `DIRECT_DATABASE_URL` environment variable (if available)
+  - Individual PostgreSQL environment variables (PGHOST, PGUSER, etc.)
+  - `DATABASE_URL` environment variable as a fallback
 
 ```typescript
-import type { NextConfig } from "next";
+// src/lib/dbConfig.ts
+export function getConnectionString(): string {
+  // First, check if we have a direct database URL (for external connections)
+  if (process.env.DIRECT_DATABASE_URL) {
+    return process.env.DIRECT_DATABASE_URL;
+  }
+  
+  // Check if we have individual PostgreSQL environment variables
+  const pgHost = process.env.PGHOST;
+  const pgUser = process.env.PGUSER;
+  const pgPassword = process.env.PGPASSWORD;
+  const pgDatabase = process.env.PGDATABASE;
+  const pgPort = process.env.PGPORT;
 
-const nextConfig: NextConfig = {
-  images: {
-    domains: ['placehold.co', 'keka-marketplace-s3.s3.amazonaws.com'],
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'keka-marketplace-s3.s3.amazonaws.com',
-        port: '',
-        pathname: '/**',
-      },
-    ],
-  },
-};
+  // If we have all the individual variables, construct a connection string
+  if (pgHost && pgUser && pgPassword && pgDatabase && pgPort) {
+    return `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDatabase}`;
+  }
 
-export default nextConfig;
+  // Otherwise, use the DATABASE_URL environment variable
+  return process.env.DATABASE_URL || '';
+}
 ```
 
-This configuration allows Next.js to optimize and serve images from your S3 bucket.
+### 2. Environment Variables
 
-## Deployment Checklist
+The following environment variables are used for database connection:
 
-- [ ] Database is properly configured and accessible
-- [ ] AWS S3 bucket is configured with proper permissions and CORS settings
-- [ ] Next.js is configured to serve images from S3
-- [ ] AWS SES is verified and out of sandbox mode
-- [ ] Stripe webhooks are configured for the production domain
-- [ ] All environment variables are set in the production environment
-- [ ] SSL certificate is installed and working
-- [ ] Run database migrations: `npx prisma migrate deploy`
-- [ ] Build the application: `npm run build`
-- [ ] Test the entire purchase flow in production
+- For Railway's internal connection (used by the application):
+  ```
+  DATABASE_URL="postgresql://postgres:password@postgres.railway.internal:5432/railway"
+  PGHOST="postgres.railway.internal"
+  PGUSER="postgres"
+  PGPASSWORD="your-password"
+  PGDATABASE="railway"
+  PGPORT="5432"
+  ```
+
+- For external connection (used for migrations and seeding):
+  ```
+  DIRECT_DATABASE_URL="postgresql://postgres:password@hostname.proxy.rlwy.net:port/railway"
+  ```
+
+### 3. Database Migrations
+
+Database migrations are handled by Prisma and are automatically applied during the Railway deployment process.
+
+To manually apply migrations:
+
+```bash
+npx prisma migrate deploy
+```
+
+### 4. Database Seeding
+
+To seed the database with initial data:
+
+```bash
+node src/scripts/seed-categories.js
+node src/scripts/seed-projects.js
+```
+
+## Node.js Version
+
+The application requires Node.js >= 18.18 due to dependencies like Prisma 6.5.0. We've configured this using:
+
+- `.node-version` file with version 18.17.0
+- `.nvmrc` file with version 18.17.0
+
+## Deployment Process
+
+### Automatic Deployment (via GitHub)
+
+Railway can be configured to automatically deploy when changes are pushed to a specific branch of your GitHub repository. This is the recommended approach:
+
+1. Update the code and commit changes
+2. Push to GitHub
+3. Railway automatically detects the changes and starts a new deployment
+4. Verify the deployment by checking the logs in Railway
+
+You can use the `deploy.sh` script to automate this process:
+
+```bash
+./deploy.sh
+```
+
+### Manual Deployment
+
+If automatic deployment is not set up or not working, you can manually deploy from the Railway dashboard:
+
+1. Update the code and commit changes
+2. Push to GitHub
+3. Go to the [Railway dashboard](https://railway.app/dashboard)
+4. Select your project (keka-marketplace)
+5. Click on the "Deploy" or "Redeploy" button
+6. Wait for the deployment to complete
+7. Verify the deployment by checking the logs in Railway
+
+### Verifying the Deployment
+
+After deployment, you can verify that the database connection is working correctly by visiting:
+
+```
+https://keka-marketplace-production.up.railway.app/api/test-db
+```
+
+This endpoint will return information about the database connection and the number of categories in the database.
+
+## Troubleshooting
+
+### Database Connection Issues
+
+If you encounter database connection issues:
+
+1. Verify the database connection string in the Railway dashboard
+2. Check the logs for any error messages
+3. Ensure the database is running and accessible
+4. Try connecting to the database using a PostgreSQL client
+
+### Prisma Issues
+
+If you encounter Prisma-related issues:
+
+1. Ensure you're using Node.js >= 18.18
+2. Try regenerating the Prisma client: `npx prisma generate`
+3. Check the Prisma schema for any errors: `npx prisma validate`
