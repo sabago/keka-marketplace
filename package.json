@@ -4,10 +4,12 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
-		"build": "npx prisma generate && next build",
+		"build": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma generate && next build",
 		"start": "next start",
 		"lint": "next lint",
-		"postinstall": "npx prisma generate"
+		"postinstall": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma generate",
+		"db:migrate": "node --experimental-wasm-reftypes ./node_modules/.bin/prisma migrate deploy",
+		"db:seed": "node src/scripts/seed-categories.js && node src/scripts/seed-projects.js"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.758.0",

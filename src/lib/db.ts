@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { getConnectionString } from './dbConfig';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
@@ -6,9 +7,23 @@ import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
+// Get the database connection string
+const connectionString = getConnectionString();
+
+// If we're in a production environment, log the connection string (without password)
+if (process.env.NODE_ENV === 'production') {
+  const sanitizedUrl = connectionString.replace(/\/\/[^:]+:[^@]+@/, '//[REDACTED]:[REDACTED]@');
+  console.log('Using database connection:', sanitizedUrl);
+}
+
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasources: {
+      db: {
+        url: connectionString,
+      },
+    },
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 

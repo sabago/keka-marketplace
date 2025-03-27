@@ -41,7 +41,7 @@ DATABASE_URL="postgresql://username:password@localhost:5432/marketplace"
 REGION="us-east-1"
 ACCESS_KEY_ID="your-access-key"
 SECRET_ACCESS_KEY="your-secret-key"
-S3_BUCKET="your-bucket-name"
+S3_BUCKET_NAME="your-bucket-name"
 
 # Stripe
 STRIPE_SECRET_KEY="sk_test_..."

@@ -132,7 +132,7 @@ DATABASE_URL="your-production-database-url"
 ACCESS_KEY_ID="your-production-access-key"
 SECRET_ACCESS_KEY="your-production-secret-key"
 REGION="us-east-1"
-S3_BUCKET="keka-marketplace-s3"
+S3_BUCKET_NAME="keka-marketplace-s3"
 
 # AWS SES (Email)
 SES_SENDER_EMAIL="contact@yourdomain.com"
