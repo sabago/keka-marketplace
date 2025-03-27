@@ -59,23 +59,51 @@ export default function CheckoutSuccessPage() {
 		clearCart();
 
 		if (sessionId) {
-			// Fetch order details
-			fetch(`/api/orders/by-session?session_id=${sessionId}`)
-				.then((res) => {
-					if (!res.ok) {
-						throw new Error("Failed to load order details");
-					}
-					return res.json();
-				})
-				.then((data) => {
-					setOrderDetails(data);
-					setLoading(false);
-				})
-				.catch((err) => {
-					console.error("Error fetching order details:", err);
-					setError(err.message || "Failed to load order details");
-					setLoading(false);
-				});
+			// Add a small delay to allow the webhook to process the order
+			const timer = setTimeout(() => {
+				// Fetch order details
+				fetch(`/api/orders/by-session?session_id=${sessionId}`)
+					.then((res) => {
+						if (!res.ok) {
+							throw new Error("Failed to load order details");
+						}
+						return res.json();
+					})
+					.then((data) => {
+						setOrderDetails(data);
+						setLoading(false);
+					})
+					.catch((err) => {
+						console.error("Error fetching order details:", err);
+
+						// If we're in development mode, try to create a test order
+						if (process.env.NODE_ENV === "development") {
+							console.log("Attempting to create a test order in development mode");
+							// Retry with a flag to force create a test order
+							fetch(`/api/orders/by-session?session_id=${sessionId}&force_create=true`)
+								.then((res) => {
+									if (!res.ok) {
+										throw new Error("Failed to create test order");
+									}
+									return res.json();
+								})
+								.then((data) => {
+									setOrderDetails(data);
+									setLoading(false);
+								})
+								.catch((retryErr) => {
+									console.error("Error creating test order:", retryErr);
+									setError("Failed to load or create order details");
+									setLoading(false);
+								});
+						} else {
+							setError(err.message || "Failed to load order details");
+							setLoading(false);
+						}
+					});
+			}, 3000); // 3 second delay to allow webhook processing
+
+			return () => clearTimeout(timer);
 		} else {
 			setLoading(false);
 			setError("Invalid checkout session");

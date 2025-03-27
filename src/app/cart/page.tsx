@@ -8,7 +8,7 @@ import { useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 
 export default function CartPage() {
-	const { items, removeItem, getTotalPrice, isHydrated } = useCart();
+	const { items, removeItem, getTotalPrice, isHydrated, clearCart } = useCart();
 	const { settings } = useSettings();
 	const [email, setEmail] = useState("");
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -53,12 +53,26 @@ export default function CartPage() {
 
 			const { url } = await response.json();
 
-			// Redirect to Stripe checkout at the top level to avoid iframe issues
-			// Always use window.top to ensure we're not in an iframe
-			if (window.top) {
-				window.top.location.href = url;
+			// First open a new tab, then redirect it to Stripe checkout
+			// This is the recommended approach for handling Stripe Checkout in iframe environments
+			// Open a new tab for checkout
+			const newTab = window.open("about:blank", "_blank");
+			if (newTab) {
+				// Clear the cart in the current tab
+				clearCart();
+
+				// Redirect the new tab to Stripe checkout
+				newTab.location.href = url;
+
+				// Reset the checkout state after opening the new tab
+				setIsCheckingOut(false);
+
+				// Refresh the current page to show empty cart
+				window.location.reload();
 			} else {
-				window.location.href = url;
+				// Fallback if popup is blocked
+				alert("Please allow popups for this website to proceed with checkout");
+				setIsCheckingOut(false);
 			}
 		} catch (error: unknown) {
 			console.error("Checkout error:", error);
