@@ -50,6 +50,15 @@ export async function POST(request: Request) {
     }));
     
     // Create a Stripe checkout session
+    // Make sure lineItemsWithNumberPrices is not empty
+    if (!lineItemsWithNumberPrices.length) {
+      return NextResponse.json(
+        { error: 'No valid items in cart' },
+        { status: 400 }
+      );
+    }
+    
+    console.log('Creating checkout session with line items:', JSON.stringify(lineItemsWithNumberPrices));
     const session = await createCheckoutSession(lineItemsWithNumberPrices, customerEmail);
     
     // For development: Create a test order in the database
@@ -147,8 +156,16 @@ export async function POST(request: Request) {
       }
     }
     
-    // Return the checkout URL
-    return NextResponse.json({ url: session.url });
+    // Return the checkout URL with headers to ensure it's opened at the top level
+    return NextResponse.json(
+      { url: session.url },
+      { 
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Frame-Options': 'DENY', // Prevent embedding in iframes
+        }
+      }
+    );
   } catch (error) {
     console.error('Checkout API error:', error);
     return NextResponse.json(

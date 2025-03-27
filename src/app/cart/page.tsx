@@ -53,8 +53,13 @@ export default function CartPage() {
 
 			const { url } = await response.json();
 
-			// Redirect to Stripe checkout
-			window.location.href = url;
+			// Redirect to Stripe checkout at the top level to avoid iframe issues
+			// Always use window.top to ensure we're not in an iframe
+			if (window.top) {
+				window.top.location.href = url;
+			} else {
+				window.location.href = url;
+			}
 		} catch (error: unknown) {
 			console.error("Checkout error:", error);
 			if (error instanceof Error) {

@@ -35,13 +35,15 @@ export async function createCheckoutSession(
       currency: currency,
       product_data: {
         name: product.title,
-        description: product.description,
-        images: [product.thumbnail],
+        description: product.description || '',
+        images: product.thumbnail ? [product.thumbnail] : [],
       },
       unit_amount: Math.round(Number(product.price) * 100), // Convert to cents
     },
     quantity: product.quantity,
   }));
+  
+  console.log('Creating Stripe checkout session with line items:', JSON.stringify(lineItems));
 
   // Create checkout session
   const session = await stripe.checkout.sessions.create({
