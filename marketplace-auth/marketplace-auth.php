@@ -302,7 +302,7 @@ function mpauth_shortcode($atts) {
     
     ob_start();
     ?>
-    <div id="marketplace-container" style="width:100%; min-height:<?php echo esc_attr($atts['height']); ?>">
+    <div id="marketplace-container" style="width:100%; min-height:<?php echo esc_attr($atts['height']); ?>; max-width:100%; margin:0 auto;">
         <div class="loading" style="text-align:center; padding:20px;">
             <p>Loading marketplace...</p>
         </div>
@@ -312,10 +312,11 @@ function mpauth_shortcode($atts) {
 }
 
 /**
- * Enqueue scripts
+ * Enqueue scripts and styles
  */
 add_action('wp_enqueue_scripts', 'mpauth_enqueue_scripts');
 function mpauth_enqueue_scripts() {
+    // Register and enqueue script
     wp_register_script(
         'mpauth-script',
         plugin_dir_url(__FILE__) . 'marketplace-auth.js',
@@ -336,6 +337,33 @@ function mpauth_enqueue_scripts() {
             'nonce' => wp_create_nonce('wp_rest')
         ]
     );
+    
+    // Add inline CSS for full-width iframe
+    wp_add_inline_style('wp-block-library', '
+        #marketplace-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+        #marketplace-iframe {
+            width: 100% !important;
+            max-width: 100% !important;
+            border: none !important;
+            display: block !important;
+        }
+        /* Override theme container widths */
+        .entry-content .wp-block-group__inner-container #marketplace-container,
+        .entry-content > #marketplace-container,
+        .site-content #marketplace-container,
+        .content-area #marketplace-container {
+            max-width: 100% !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+        }
+    ');
 }
 
 /**
@@ -350,75 +378,73 @@ function mpauth_create_js_file() {
     $(document).ready(function() {
         var container = $("#marketplace-container");
         
-        // If user is not logged in, show login message
-        if (!mpauthData.isLoggedIn) {
-            container.html(
-                '<div class="login-required" style="padding: 20px; text-align: center; border: 1px solid #ddd;">' +
-                '<h3>Login Required</h3>' +
-                '<p>Please <a href="' + mpauthData.loginUrl + '">login</a> to access the marketplace.</p>' +
-                '</div>'
-            );
-            return;
+        // Always load the marketplace, but with or without token based on login status
+        var marketplaceUrl = mpauthData.marketplaceUrl;
+        
+        // If user is logged in, get auth token and add it to the URL
+        if (mpauthData.isLoggedIn) {
+            $.ajax({
+                url: mpauthData.apiUrl,
+                method: "GET",
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', mpauthData.nonce);
+                },
+                success: function(data) {
+                    if (data.token) {
+                        // Store token in sessionStorage (more secure than localStorage)
+                        sessionStorage.setItem("wp_marketplace_token", data.token);
+                        
+                        // Add token to marketplace URL
+                        if (marketplaceUrl.indexOf("?") > -1) {
+                            marketplaceUrl += "&token=" + encodeURIComponent(data.token);
+                        } else {
+                            marketplaceUrl += "?token=" + encodeURIComponent(data.token);
+                        }
+                        
+                        // Load marketplace in iframe with token
+                        loadMarketplaceIframe(marketplaceUrl);
+                    }
+                },
+                error: function(xhr) {
+                    // If token retrieval fails, still load marketplace but without token
+                    loadMarketplaceIframe(marketplaceUrl);
+                    console.error("Failed to get authentication token:", xhr);
+                }
+            });
+        } else {
+            // User is not logged in, load marketplace without token
+            loadMarketplaceIframe(marketplaceUrl);
         }
         
-        // User is logged in, get auth token
-        $.ajax({
-            url: mpauthData.apiUrl,
-            method: "GET",
-            beforeSend: function(xhr) {
-                xhr.setRequestHeader('X-WP-Nonce', mpauthData.nonce);
-            },
-            success: function(data) {
-                if (data.token) {
-                    // Store token in sessionStorage (more secure than localStorage)
-                    sessionStorage.setItem("wp_marketplace_token", data.token);
-                    
-                    // Load marketplace in iframe with token
-                    var marketplaceUrl = mpauthData.marketplaceUrl;
-                    if (marketplaceUrl.indexOf("?") > -1) {
-                        marketplaceUrl += "&token=" + encodeURIComponent(data.token);
-                    } else {
-                        marketplaceUrl += "?token=" + encodeURIComponent(data.token);
-                    }
-                    
-                    container.html(
-                        '<iframe src="' + marketplaceUrl + '" ' +
-                        'id="marketplace-iframe" ' +
-                        'width="100%" ' +
-                        'height="800" ' +
-                        'style="border:none; min-height:800px;" ' +
-                        'allow="clipboard-read; clipboard-write" ' +
-                        '></iframe>'
-                    );
-                    
-                    // Setup message listener for iframe communication
-                    window.addEventListener('message', function(event) {
-                        // Verify origin
-                        var marketplaceOrigin = new URL(mpauthData.marketplaceUrl).origin;
-                        if (event.origin !== marketplaceOrigin) return;
-                        
-                        // Handle login required message
-                        if (event.data.action === 'requireLogin') {
-                            window.location.href = mpauthData.loginUrl;
-                        }
-                        
-                        // Handle resize iframe
-                        if (event.data.action === 'resize' && event.data.height) {
-                            $('#marketplace-iframe').height(event.data.height);
-                        }
-                    });
+        // Function to load the marketplace iframe
+        function loadMarketplaceIframe(url) {
+            container.html(
+                '<iframe src="' + url + '" ' +
+                'id="marketplace-iframe" ' +
+                'width="100%" ' +
+                'height="800" ' +
+                'style="border:none; min-height:800px; width:100%; max-width:100%;" ' +
+                'allow="clipboard-read; clipboard-write" ' +
+                '></iframe>'
+            );
+            
+            // Setup message listener for iframe communication
+            window.addEventListener('message', function(event) {
+                // Verify origin
+                var marketplaceOrigin = new URL(mpauthData.marketplaceUrl).origin;
+                if (event.origin !== marketplaceOrigin) return;
+                
+                // Handle login required message
+                if (event.data.action === 'requireLogin') {
+                    window.location.href = mpauthData.loginUrl;
                 }
-            },
-            error: function(xhr) {
-                container.html(
-                   '<div class="error" style="padding: 20px; text-align: center; border: 1px solid #f00;">' +
-                    '<h3>Error</h3>' +
-                    '<p>Could not authenticate with the marketplace. Please try again later.</p>' +
-                    '<p><a href="' + window.location.href + '">Refresh</a> to try again.</p>' +
-                    '</div>'
-                );
-            }
-        });
+                
+                // Handle resize iframe
+                if (event.data.action === 'resize' && event.data.height) {
+                    $('#marketplace-iframe').height(event.data.height);
+                }
+            });
+        }
     });
 })(jQuery);
 EOT;

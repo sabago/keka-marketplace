@@ -2,10 +2,11 @@
 
 import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
-import { Star, Tag, X } from "lucide-react";
+import { Star, Tag, X, LogIn } from "lucide-react";
 import { useCartStore } from "@/lib/useCart";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
+import { useAuth } from "@/lib/authContext";
 
 // Component that uses useSearchParams
 function ProductsWithParams({
@@ -56,19 +57,27 @@ const ProductRow = ({
 	const addItem = useCartStore((state) => state.addItem);
 	const [addedToCart, setAddedToCart] = useState(false);
 	const { settings } = useSettings();
+	const { isLoggedIn } = useAuth();
+
+	// Calculate discounted price if user is logged in
+	const discountPercentage = isLoggedIn ? settings.memberDiscountPercentage : 0;
+	const discountedPrice = price - (price * discountPercentage) / 100;
 
 	// Handle add to cart
 	const handleAddToCart = (e: React.MouseEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
 
+		// Use discounted price if applicable
+		const finalPrice = isLoggedIn ? discountedPrice : price;
+
 		// Log before adding to cart
-		console.log("Adding to cart:", { id, title, price, thumbnail });
+		console.log("Adding to cart:", { id, title, price: finalPrice, thumbnail });
 
 		addItem({
 			id,
 			title,
-			price,
+			price: finalPrice,
 			thumbnail: thumbnail || "/images/dummy.jpeg",
 		});
 
@@ -128,9 +137,25 @@ const ProductRow = ({
 					</span>
 				</div>
 				<div className="flex items-center justify-between mt-4">
-					<span className="text-xl font-bold">
-						{formatCurrency(price, settings.currency)}
-					</span>
+					<div>
+						{isLoggedIn && discountPercentage > 0 ? (
+							<div>
+								<span className="text-xl font-bold text-green-600">
+									{formatCurrency(discountedPrice, settings.currency)}
+								</span>
+								<span className="text-sm text-gray-500 line-through ml-2">
+									{formatCurrency(price, settings.currency)}
+								</span>
+								<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+									{discountPercentage}% off
+								</span>
+							</div>
+						) : (
+							<span className="text-xl font-bold">
+								{formatCurrency(price, settings.currency)}
+							</span>
+						)}
+					</div>
 					<button
 						onClick={handleAddToCart}
 						className={`px-4 py-2 rounded ${
@@ -253,12 +278,40 @@ export default function ProductsPage() {
 		}
 	});
 
+	// Get auth state
+	const { isLoggedIn } = useAuth();
+
 	return (
 		<div className="container mx-auto px-4 py-8">
 			{/* Use the ProductsWithParams component wrapped in Suspense */}
 			<Suspense fallback={null}>
 				<ProductsWithParams onCategoryChange={handleCategoryChange} />
 			</Suspense>
+
+			{/* Login banner for non-logged in users */}
+			{!isLoggedIn && settings.memberDiscountPercentage > 0 && (
+				<div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-md shadow-sm">
+					<div className="flex items-center">
+						<LogIn className="h-6 w-6 text-blue-500 mr-3" />
+						<div>
+							<h3 className="font-medium text-blue-800">Member Discount Available!</h3>
+							<p className="text-blue-600">
+								Log in to receive a {settings.memberDiscountPercentage}% discount on all
+								products.{" "}
+								<a
+									href="https://masteringhomecare.com/login-custom/"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="font-medium underline hover:text-blue-800"
+								>
+									Login now
+								</a>
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
+
 			<h1 className="text-3xl font-bold mb-2">
 				{activeCategory ? `${activeCategory.name} Products` : "All Products"}
 			</h1>

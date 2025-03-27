@@ -35,15 +35,15 @@
                       marketplaceUrl += "?token=" + encodeURIComponent(data.token);
                   }
                   
-                  container.html(
-                      '<iframe src="' + marketplaceUrl + '" ' +
-                      'id="marketplace-iframe" ' +
-                      'width="100%" ' +
-                      'height="800" ' +
-                      'style="border:none; min-height:800px;" ' +
-                      'allow="clipboard-read; clipboard-write" ' +
-                      '></iframe>'
-                  );
+                    container.html(
+                        '<iframe src="' + marketplaceUrl + '" ' +
+                        'id="marketplace-iframe" ' +
+                        'width="100%" ' +
+                        'height="800" ' +
+                        'style="border:none; min-height:800px; width:100%; max-width:100%;" ' +
+                        'allow="clipboard-read; clipboard-write" ' +
+                        '></iframe>'
+                    );
                   
                   // Setup message listener for iframe communication
                   window.addEventListener('message', function(event) {

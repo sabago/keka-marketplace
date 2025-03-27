@@ -74,16 +74,19 @@ export default function Header() {
 						>
 							Categories
 						</Link>
-						<Link
-							href="/admin"
-							className={`hover:text-blue-600 ${
-								pathname?.startsWith("/admin")
-									? "text-blue-600 font-medium"
-									: "text-gray-600"
-							}`}
-						>
-							Admin
-						</Link>
+						{/* Only show Admin link for users with Administrator role */}
+						{isLoggedIn && user?.roles && user.roles.includes("administrator") && (
+							<Link
+								href="/admin"
+								className={`hover:text-blue-600 ${
+									pathname?.startsWith("/admin")
+										? "text-blue-600 font-medium"
+										: "text-gray-600"
+								}`}
+							>
+								Admin
+							</Link>
+						)}
 					</nav>
 
 					{/* Search, Cart, and Auth */}
@@ -183,17 +186,20 @@ export default function Header() {
 							>
 								Categories
 							</Link>
-							<Link
-								href="/admin"
-								className={`hover:text-blue-600 ${
-									pathname?.startsWith("/admin")
-										? "text-blue-600 font-medium"
-										: "text-gray-600"
-								}`}
-								onClick={() => setIsMenuOpen(false)}
-							>
-								Admin
-							</Link>
+							{/* Only show Admin link for users with Administrator role */}
+							{isLoggedIn && user?.roles && user.roles.includes("administrator") && (
+								<Link
+									href="/admin"
+									className={`hover:text-blue-600 ${
+										pathname?.startsWith("/admin")
+											? "text-blue-600 font-medium"
+											: "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Admin
+								</Link>
+							)}
 							{/* Auth Section for Mobile */}
 							{isLoggedIn ? (
 								<>
