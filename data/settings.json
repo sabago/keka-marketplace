@@ -11,5 +11,6 @@
   "enableRatings": true,
   "enableWishlist": false,
   "enableNewsletter": true,
-  "maintenanceMode": false
+  "maintenanceMode": false,
+  "memberDiscountPercentage": 10
 }

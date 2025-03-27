@@ -95,7 +95,10 @@ const ProductRow = ({
 	return (
 		<div className="flex flex-col md:flex-row bg-white rounded-lg shadow-md p-4 mb-4">
 			<div className="md:w-1/4 mb-4 md:mb-0">
-				<div className="bg-gray-200 rounded-md h-40 w-full flex items-center justify-center relative">
+				<div
+					className="bg-gray-200 rounded-md h-40 w-full flex items-center justify-center relative"
+					style={{ position: "relative" }}
+				>
 					<Image
 						src={thumbnail}
 						alt={title}

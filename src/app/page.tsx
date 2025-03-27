@@ -1,8 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LogIn } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
+import { useAuth } from "@/lib/authContext";
+import { useSettings } from "@/lib/useSettings";
 
 // Define types
 interface Product {
@@ -27,6 +29,8 @@ export default function Home() {
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const { isLoggedIn } = useAuth();
+	const { settings } = useSettings();
 
 	// Fetch products and categories
 	useEffect(() => {
@@ -60,6 +64,29 @@ export default function Home() {
 	}, []);
 	return (
 		<div className="min-h-screen">
+			{/* Login banner for non-logged in users */}
+			{!isLoggedIn && settings.memberDiscountPercentage > 0 && (
+				<div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 container mx-auto mt-4 rounded-md shadow-sm">
+					<div className="flex items-center">
+						<LogIn className="h-6 w-6 text-blue-500 mr-3" />
+						<div>
+							<h3 className="font-medium text-blue-800">Member Discount Available!</h3>
+							<p className="text-blue-600">
+								Log in to receive a {settings.memberDiscountPercentage}% discount on all
+								products.{" "}
+								<a
+									href="https://masteringhomecare.com/login-custom/"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="font-medium underline hover:text-blue-800"
+								>
+									Login now
+								</a>
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
 			{/* Hero Section */}
 			<section className="bg-blue-600 text-white py-16 md:py-24">
 				<div className="container mx-auto px-4">
@@ -150,7 +177,7 @@ export default function Home() {
 			</section>
 
 			{/* Call to Action */}
-			<section className="py-16 bg-blue-50">
+			{/* <section className="py-16 bg-blue-50">
 				<div className="container mx-auto px-4 text-center">
 					<h2 className="text-2xl md:text-3xl font-bold mb-4">
 						Ready to Get Started?
@@ -166,7 +193,7 @@ export default function Home() {
 						Explore All Products
 					</Link>
 				</div>
-			</section>
+			</section> */}
 		</div>
 	);
 }

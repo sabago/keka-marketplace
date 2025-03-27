@@ -1,71 +1,57 @@
 #!/bin/bash
 
-# This script helps update the environment variables in Railway for WordPress integration
+# Script to update the WordPress plugin files on the server
+# This script assumes you have SSH access to the server and know the path to the WordPress plugins directory
 
-# Exit on error
-set -e
+# Configuration - Update these variables with your server details
+SERVER_USER="your-server-username"
+SERVER_HOST="your-server-hostname"
+WORDPRESS_PLUGINS_PATH="/path/to/wordpress/wp-content/plugins"
 
-echo "🚀 WordPress Integration Setup"
-echo "=============================="
-echo ""
-echo "This script will help you update the environment variables in Railway for WordPress integration."
-echo ""
+# Local plugin files
+LOCAL_PHP_FILE="marketplace-auth/marketplace-auth.php"
+LOCAL_JS_FILE="marketplace-auth/marketplace-auth.js"
 
-# Prompt for WordPress secret key
-echo "Enter the WordPress JWT Secret Key from the WordPress plugin settings:"
-read -p "> " WP_JWT_SECRET
-
-# Prompt for WordPress domain
-echo ""
-echo "Enter the WordPress domain (without https:// or trailing slash, e.g. masteringhomecare.com):"
-read -p "> " WORDPRESS_DOMAIN
-
-# Confirm the values
-echo ""
-echo "Please confirm these values:"
-echo "WordPress JWT Secret Key: $WP_JWT_SECRET"
-echo "WordPress Domain: $WORDPRESS_DOMAIN"
-echo ""
-read -p "Are these values correct? (y/n) " CONFIRM
-
-if [[ $CONFIRM != "y" && $CONFIRM != "Y" ]]; then
-  echo "Aborting. Please run the script again with the correct values."
-  exit 1
+# Check if files exist locally
+if [ ! -f "$LOCAL_PHP_FILE" ] || [ ! -f "$LOCAL_JS_FILE" ]; then
+    echo "Error: Local plugin files not found. Make sure you're running this script from the correct directory."
+    exit 1
 fi
 
-# Create a temporary .env file with the new variables
-echo "Creating temporary .env file with the new variables..."
-cat > .env.wordpress << EOL
-# WordPress Integration
-WP_JWT_SECRET=$WP_JWT_SECRET
-NEXT_PUBLIC_WORDPRESS_DOMAIN=$WORDPRESS_DOMAIN
-ALLOWED_ORIGINS=https://$WORDPRESS_DOMAIN
-EOL
+echo "Updating WordPress plugin files on the server..."
 
-echo ""
-echo "✅ Created .env.wordpress file with the following variables:"
-cat .env.wordpress
-echo ""
+# Create a temporary directory for the plugin
+echo "Creating temporary directory..."
+ssh $SERVER_USER@$SERVER_HOST "mkdir -p $WORDPRESS_PLUGINS_PATH/marketplace-auth-temp"
 
-# Instructions for updating Railway variables
-echo "To update the environment variables in Railway:"
-echo ""
-echo "Option 1: Use the Railway CLI (if installed):"
-echo "  railway variables set --from-file .env.wordpress"
-echo ""
-echo "Option 2: Manually add these variables in the Railway dashboard:"
-echo "  1. Go to https://railway.app/dashboard"
-echo "  2. Select your project (keka-marketplace)"
-echo "  3. Click on the 'Variables' tab"
-echo "  4. Add the following variables:"
-echo "     - WP_JWT_SECRET=$WP_JWT_SECRET"
-echo "     - NEXT_PUBLIC_WORDPRESS_DOMAIN=$WORDPRESS_DOMAIN"
-echo "     - ALLOWED_ORIGINS=https://$WORDPRESS_DOMAIN"
-echo ""
-echo "After updating the variables, deploy the application again to apply the changes."
-echo ""
-echo "To test the integration, visit:"
-echo "  https://keka-marketplace-production.up.railway.app/test-wordpress-login"
-echo ""
-echo "Then add the shortcode to your WordPress page:"
-echo "  [marketplace_auth height=\"800px\"]"
+# Upload the files
+echo "Uploading PHP file..."
+scp "$LOCAL_PHP_FILE" $SERVER_USER@$SERVER_HOST:"$WORDPRESS_PLUGINS_PATH/marketplace-auth-temp/marketplace-auth.php"
+
+echo "Uploading JS file..."
+scp "$LOCAL_JS_FILE" $SERVER_USER@$SERVER_HOST:"$WORDPRESS_PLUGINS_PATH/marketplace-auth-temp/marketplace-auth.js"
+
+# Move the files to the plugin directory
+echo "Moving files to plugin directory..."
+ssh $SERVER_USER@$SERVER_HOST "
+    # Backup existing files
+    if [ -d '$WORDPRESS_PLUGINS_PATH/marketplace-auth' ]; then
+        cp -r '$WORDPRESS_PLUGINS_PATH/marketplace-auth' '$WORDPRESS_PLUGINS_PATH/marketplace-auth-backup'
+    fi
+    
+    # Move new files
+    mkdir -p '$WORDPRESS_PLUGINS_PATH/marketplace-auth'
+    mv '$WORDPRESS_PLUGINS_PATH/marketplace-auth-temp/marketplace-auth.php' '$WORDPRESS_PLUGINS_PATH/marketplace-auth/'
+    mv '$WORDPRESS_PLUGINS_PATH/marketplace-auth-temp/marketplace-auth.js' '$WORDPRESS_PLUGINS_PATH/marketplace-auth/'
+    
+    # Clean up
+    rm -rf '$WORDPRESS_PLUGINS_PATH/marketplace-auth-temp'
+    
+    # Set permissions
+    chmod 644 '$WORDPRESS_PLUGINS_PATH/marketplace-auth/marketplace-auth.php'
+    chmod 644 '$WORDPRESS_PLUGINS_PATH/marketplace-auth/marketplace-auth.js'
+"
+
+echo "WordPress plugin updated successfully!"
+echo "Note: You may need to clear your browser cache or use incognito mode to see the changes."
+echo "If you encounter any issues, a backup of the original plugin is available at $WORDPRESS_PLUGINS_PATH/marketplace-auth-backup"

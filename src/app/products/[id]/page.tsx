@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
-import { formatCurrency } from "@/lib/useSettings";
+import { formatCurrency } from "@/lib/serverUtils";
 import AddToCartButton from "@/components/AddToCartButton";
 
 // Define types for our data

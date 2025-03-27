@@ -372,18 +372,18 @@ function mpauth_enqueue_scripts() {
 register_activation_hook(__FILE__, 'mpauth_create_js_file');
 function mpauth_create_js_file() {
     $js_content = <<<EOT
-(function($) {
+(function(\$) {
     "use strict";
     
-    $(document).ready(function() {
-        var container = $("#marketplace-container");
+    \$(document).ready(function() {
+        var container = \$("#marketplace-container");
         
         // Always load the marketplace, but with or without token based on login status
         var marketplaceUrl = mpauthData.marketplaceUrl;
         
         // If user is logged in, get auth token and add it to the URL
         if (mpauthData.isLoggedIn) {
-            $.ajax({
+            \$.ajax({
                 url: mpauthData.apiUrl,
                 method: "GET",
                 beforeSend: function(xhr) {
@@ -423,8 +423,9 @@ function mpauth_create_js_file() {
                 'id="marketplace-iframe" ' +
                 'width="100%" ' +
                 'height="800" ' +
-                'style="border:none; min-height:800px; width:100%; max-width:100%;" ' +
+                'style="border:none; min-height:800px; width:100%; max-width:100%; overflow:hidden;" ' +
                 'allow="clipboard-read; clipboard-write" ' +
+                'scrolling="yes" ' +
                 '></iframe>'
             );
             
@@ -441,7 +442,7 @@ function mpauth_create_js_file() {
                 
                 // Handle resize iframe
                 if (event.data.action === 'resize' && event.data.height) {
-                    $('#marketplace-iframe').height(event.data.height);
+                    \$('#marketplace-iframe').height(event.data.height);
                 }
             });
         }
@@ -451,4 +452,17 @@ EOT;
     
     $js_file = plugin_dir_path(__FILE__) . 'marketplace-auth.js';
     file_put_contents($js_file, $js_content);
+    
+    // Also update the JS file immediately to ensure it's updated without requiring reactivation
+    $js_file_url = plugin_dir_url(__FILE__) . 'marketplace-auth.js';
+    wp_enqueue_script('mpauth-script-update', $js_file_url, ['jquery'], time(), true);
+}
+
+/**
+ * Update JS file on plugin load to ensure it's always up to date
+ */
+add_action('plugins_loaded', 'mpauth_update_js_file');
+function mpauth_update_js_file() {
+    // Call the create function to ensure the JS file is up to date
+    mpauth_create_js_file();
 }
