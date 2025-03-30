@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { constructWebhookEvent } from '@/lib/stripe';
 import { sendOrderConfirmationEmail } from '@/lib/email';
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // POST /api/webhook - Handle Stripe webhook events
 export async function POST(request: Request) {
   try {
@@ -30,76 +30,103 @@ export async function POST(request: Request) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         
-        // Get product IDs from metadata
-        const productIds = session.metadata?.productIds?.split(',') || [];
-        
-        if (!productIds.length) {
-          console.error('No product IDs found in session metadata');
-          return NextResponse.json({ received: true });
-        }
-
-        // Get customer email
-        const customerEmail = session.customer_email;
-        
-        if (!customerEmail) {
-          console.error('No customer email found in session');
-          return NextResponse.json({ received: true });
-        }
-
-        // Get products
-        const products = await prisma.product.findMany({
-          where: {
-            id: {
-              in: productIds,
+        try {
+          // Check if an order with this session ID already exists
+          const existingOrder = await prisma.order.findFirst({
+            where: {
+              stripePaymentId: session.id,
             },
-          },
-        });
-
-        // Calculate total amount
-        const totalAmount = products.reduce((sum: number, product: { price: any; }) => sum + Number(product.price), 0);
-
-        // Create order
-        const order = await prisma.order.create({
-          data: {
-            customerEmail,
-            totalAmount,
-            stripePaymentId: session.id,
-            status: 'PAID',
-            orderItems: {
-              create: products.map((product: { id: any; price: any; }) => ({
-                productId: product.id,
-                price: Number(product.price),
-              })),
-            },
-          },
-          include: {
-            orderItems: true,
-          },
-        });
-
-        // Create download tokens
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
-
-        const downloads = await Promise.all(
-          order.orderItems.map((item: { productId: any; }) => {
-            // Generate a random token
-            const token = Buffer.from(Math.random().toString(36)).toString('hex');
-
-            return prisma.download.create({
-              data: {
-                orderId: order.id,
-                productId: item.productId,
-                downloadToken: token,
-                downloadCount: 0,
-                expiresAt,
-              },
+          });
+          
+          if (existingOrder) {
+            console.log(`Order already exists for session ${session.id}, skipping creation`);
+            return NextResponse.json({ received: true, status: 'Order already exists' });
+          }
+          
+          // Get product IDs from metadata
+          const productIds = session.metadata?.productIds?.split(',') || [];
+          
+          if (!productIds.length) {
+            console.error('No product IDs found in session metadata');
+            return NextResponse.json({ 
+              received: true, 
+              error: 'No product IDs found in session metadata' 
             });
-          })
-        );
+          }
 
-        // Send order confirmation email with download links
-        if (process.env.NODE_ENV === 'production') {
+          // Get customer email
+          const customerEmail = session.customer_email;
+          
+          if (!customerEmail) {
+            console.error('No customer email found in session');
+            return NextResponse.json({ 
+              received: true, 
+              error: 'No customer email found in session' 
+            });
+          }
+
+          // Get products
+          const products = await prisma.product.findMany({
+            where: {
+              id: {
+                in: productIds,
+              },
+            },
+          });
+          
+          if (!products.length) {
+            console.error('No products found for the given product IDs');
+            return NextResponse.json({ 
+              received: true, 
+              error: 'No products found for the given product IDs' 
+            });
+          }
+
+          // Calculate total amount
+          const totalAmount = products.reduce((sum: number, product: { price: any; }) => sum + Number(product.price), 0);
+
+          // Create order
+          const order = await prisma.order.create({
+            data: {
+              customerEmail,
+              totalAmount,
+              stripePaymentId: session.id,
+              status: 'PAID',
+              orderItems: {
+                create: products.map((product: { id: any; price: any; }) => ({
+                  productId: product.id,
+                  price: Number(product.price),
+                })),
+              },
+            },
+            include: {
+              orderItems: true,
+            },
+          });
+
+          // Create download tokens
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
+
+          const downloads = await Promise.all(
+            order.orderItems.map((item: { productId: any; }) => {
+              // Generate a random token
+              const token = Buffer.from(Math.random().toString(36)).toString('hex');
+
+              return prisma.download.create({
+                data: {
+                  orderId: order.id,
+                  productId: item.productId,
+                  downloadToken: token,
+                  downloadCount: 0,
+                  expiresAt,
+                },
+              });
+            })
+          );
+
+          // Send order confirmation email with download links
+          // Send emails in both production and development mode
           try {
             // Create a map of product IDs to titles for easy lookup
             const productTitlesMap = products.reduce((map: Record<string, string>, product: any) => {
@@ -135,8 +162,17 @@ export async function POST(request: Request) {
             console.error('Failed to send order confirmation email:', emailError);
             // Continue processing even if email fails
           }
+          
+          console.log(`Successfully created order ${order.id} for session ${session.id}`);
+        } catch (orderError) {
+          console.error('Error processing checkout.session.completed event:', orderError);
+          // Return success to Stripe to prevent retries, but log the error
+          return NextResponse.json({ 
+            received: true, 
+            error: orderError instanceof Error ? orderError.message : 'Unknown error processing order'
+          });
         }
-
+        
         break;
       }
 

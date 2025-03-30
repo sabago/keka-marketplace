@@ -256,7 +256,7 @@ function mpauth_settings_page() {
             <li>Check for the token in query string or Authorization header</li>
         </ol>
         
-        <pre style="background:#f4f4f4; padding:10px; overflow:auto;">
+        <pre style="background:#f4f4f4; padding:10px; overflow:hidden;">
 // Example Node.js code
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = '<?php echo esc_js($secret_key); ?>';
@@ -425,7 +425,7 @@ function mpauth_create_js_file() {
                 'height="800" ' +
                 'style="border:none; min-height:800px; width:100%; max-width:100%; overflow:hidden;" ' +
                 'allow="clipboard-read; clipboard-write" ' +
-                'scrolling="yes" ' +
+                'scrolling="no" ' +
                 '></iframe>'
             );
             

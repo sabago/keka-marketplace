@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createCheckoutSession } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { CartItem } from '@/lib/useCart';
-import { sendOrderConfirmationEmail } from '@/lib/email';
+// Email sending is now handled by the webhook
 
 // Define Product type
 interface Product {
@@ -58,97 +58,76 @@ export async function POST(request: Request) {
       );
     }
     
-    console.log('Creating checkout session with line items:', JSON.stringify(lineItemsWithNumberPrices));
-    const session = await createCheckoutSession(lineItemsWithNumberPrices, customerEmail);
+    // Ensure each item has a quantity property
+    const itemsWithQuantity = lineItemsWithNumberPrices.map(item => ({
+      ...item,
+      quantity: item.quantity || 1
+    }));
+    
+    console.log('Creating checkout session with line items:', JSON.stringify(itemsWithQuantity));
+    const session = await createCheckoutSession(itemsWithQuantity, customerEmail);
     
     // For development: Create a test order in the database
     // In production, this would be handled by the webhook
     if (process.env.NODE_ENV === 'development') {
       try {
-        // Calculate total amount
-        const totalAmount = lineItems.reduce((sum: number, item: Product & { quantity: number }) => 
-          sum + Number(item.price) * item.quantity, 0);
-        
-        // Create order
-        const order = await prisma.order.create({
-          data: {
-            customerEmail,
-            totalAmount,
+        // Check if an order with this session ID already exists
+        const existingOrder = await prisma.order.findFirst({
+          where: {
             stripePaymentId: session.id,
-            status: 'PAID',
-            orderItems: {
-              create: lineItems.map((item: Product & { quantity: number }) => ({
-                productId: item.id,
-                price: Number(item.price),
-              })),
-            },
-          },
-          include: {
-            orderItems: true,
           },
         });
         
-        // Create download tokens
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
-        
-        const downloads = await Promise.all(
-          order.orderItems.map((item: { id: string; productId: string }) => {
-            // Generate a random token
-            const token = Buffer.from(Math.random().toString(36)).toString('hex');
-            
-            return prisma.download.create({
-              data: {
-                orderId: order.id,
-                productId: item.productId,
-                downloadToken: token,
-                downloadCount: 0,
-                expiresAt,
-              },
-            });
-          })
-        );
-        
-        console.log(`Created test order ${order.id} for session ${session.id}`);
-        
-        // Send test email in development mode
-        try {
-          // Create a map of product IDs to titles for easy lookup
-          // Create a map of product IDs to titles for easy lookup
-          const productTitlesMap: Record<string, string> = {};
-          products.forEach((product: Product) => {
-            productTitlesMap[product.id] = product.title;
-          });
-
-          // Prepare download information for the email
-          const downloadInfo = downloads.map(download => ({
-            downloadToken: download.downloadToken,
-            productId: download.productId,
-            productTitle: productTitlesMap[download.productId] || 'Digital Product'
-          }));
-
-          // Send the email
-          await sendOrderConfirmationEmail(
-            {
-              id: order.id,
+        if (existingOrder) {
+          console.log(`Order already exists for session ${session.id}, skipping creation`);
+        } else {
+          // Calculate total amount
+          const totalAmount = lineItems.reduce((sum: number, item: Product & { quantity: number }) => 
+            sum + Number(item.price) * item.quantity, 0);
+          
+          // Create order
+          const order = await prisma.order.create({
+            data: {
               customerEmail,
               totalAmount,
-              orderItems: order.orderItems.map((item: { id: string; productId: string; price: unknown }) => ({
-                id: item.id,
-                productId: item.productId,
-                price: Number(item.price),
-                product: {
-                  title: productTitlesMap[item.productId] || 'Digital Product'
-                }
-              }))
+              stripePaymentId: session.id,
+              status: 'PAID',
+              orderItems: {
+                create: lineItems.map((item: Product & { quantity: number }) => ({
+                  productId: item.id,
+                  price: Number(item.price),
+                })),
+              },
             },
-            downloadInfo
+            include: {
+              orderItems: true,
+            },
+          });
+          
+          // Create download tokens - this is now just for creating the test order
+          // The actual email with download links will be sent by the webhook
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
+          
+          await Promise.all(
+            order.orderItems.map((item: { id: string; productId: string }) => {
+              // Generate a random token
+              const token = Buffer.from(Math.random().toString(36)).toString('hex');
+              
+              return prisma.download.create({
+                data: {
+                  orderId: order.id,
+                  productId: item.productId,
+                  downloadToken: token,
+                  downloadCount: 0,
+                  expiresAt,
+                },
+              });
+            })
           );
           
-          console.log(`Test email sent to ${customerEmail}`);
-        } catch (emailError) {
-          console.error('Failed to send test email:', emailError);
-          // Continue even if email fails
+          console.log(`Created test order ${order.id} for session ${session.id}`);
+          console.log(`No email sent yet. Email will be sent by webhook after payment is completed.`);
         }
       } catch (err) {
         console.error('Error creating test order:', err);

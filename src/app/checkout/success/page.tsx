@@ -51,6 +51,7 @@ export default function CheckoutSuccessPage() {
 
 	// Handle session ID change from the CheckoutSuccessWithParams component
 	const handleSessionIdChange = (newSessionId: string | null) => {
+		console.log("Session ID from URL:", newSessionId);
 		setSessionId(newSessionId);
 	};
 
@@ -58,56 +59,106 @@ export default function CheckoutSuccessPage() {
 		// Clear the cart on successful checkout
 		clearCart();
 
-		if (sessionId) {
-			// Add a small delay to allow the webhook to process the order
-			const timer = setTimeout(() => {
-				// Fetch order details
-				fetch(`/api/orders/by-session?session_id=${sessionId}`)
-					.then((res) => {
-						if (!res.ok) {
-							throw new Error("Failed to load order details");
+		// Get session ID from URL directly as a fallback
+		const urlParams = new URLSearchParams(window.location.search);
+		const urlSessionId = urlParams.get("session_id");
+
+		console.log("Session ID from state:", sessionId);
+		console.log("Session ID from URL directly:", urlSessionId);
+
+		// Use the session ID from the URL if the one from state is not available
+		const effectiveSessionId = sessionId || urlSessionId;
+
+		// Validate session ID format (basic check for cs_live or cs_test prefix)
+		if (!effectiveSessionId) {
+			setLoading(false);
+			setError("Missing checkout session ID");
+			return;
+		}
+
+		// Remove curly braces if present (Stripe sometimes includes them in the redirect URL)
+		let cleanSessionId = effectiveSessionId;
+		if (cleanSessionId.startsWith("{") && cleanSessionId.endsWith("}")) {
+			cleanSessionId = cleanSessionId.substring(1, cleanSessionId.length - 1);
+		}
+
+		if (!cleanSessionId.startsWith("cs_")) {
+			setLoading(false);
+			setError("Invalid checkout session ID format");
+			return;
+		}
+
+		// Function to fetch order details with retry logic
+		const fetchOrderDetails = async (retryCount = 0, maxRetries = 5) => {
+			try {
+				// First try to get the order normally
+				const response = await fetch(
+					`/api/orders/by-session?session_id=${cleanSessionId}`
+				);
+
+				if (!response.ok) {
+					throw new Error("Failed to load order details");
+				}
+
+				const data = await response.json();
+				setOrderDetails(data);
+				setLoading(false);
+			} catch (err) {
+				console.error(
+					`Error fetching order details (attempt ${retryCount + 1}):`,
+					err
+				);
+
+				// If we're in development mode and this is the last retry, try to create a test order
+				if (
+					retryCount >= maxRetries - 1 &&
+					process.env.NODE_ENV === "development"
+				) {
+					console.log("Attempting to create a test order in development mode");
+					try {
+						// Retry with a flag to force create a test order
+						const retryResponse = await fetch(
+							`/api/orders/by-session?session_id=${cleanSessionId}&force_create=true`
+						);
+
+						if (!retryResponse.ok) {
+							throw new Error("Failed to create test order");
 						}
-						return res.json();
-					})
-					.then((data) => {
+
+						const data = await retryResponse.json();
 						setOrderDetails(data);
 						setLoading(false);
-					})
-					.catch((err) => {
-						console.error("Error fetching order details:", err);
+					} catch (retryErr) {
+						console.error("Error creating test order:", retryErr);
+						setError(
+							"Failed to load or create order details. The webhook may not have processed the payment yet."
+						);
+						setLoading(false);
+					}
+				}
+				// If we haven't reached max retries, try again after a delay
+				else if (retryCount < maxRetries) {
+					console.log(`Retrying in ${(retryCount + 1) * 2} seconds...`);
+					setTimeout(() => {
+						fetchOrderDetails(retryCount + 1, maxRetries);
+					}, (retryCount + 1) * 2000); // Increasing delay with each retry
+				}
+				// If we've exhausted all retries, show an error
+				else {
+					setError(
+						"Failed to load order details. The webhook may not have processed the payment yet. Please check your email for order confirmation."
+					);
+					setLoading(false);
+				}
+			}
+		};
 
-						// If we're in development mode, try to create a test order
-						if (process.env.NODE_ENV === "development") {
-							console.log("Attempting to create a test order in development mode");
-							// Retry with a flag to force create a test order
-							fetch(`/api/orders/by-session?session_id=${sessionId}&force_create=true`)
-								.then((res) => {
-									if (!res.ok) {
-										throw new Error("Failed to create test order");
-									}
-									return res.json();
-								})
-								.then((data) => {
-									setOrderDetails(data);
-									setLoading(false);
-								})
-								.catch((retryErr) => {
-									console.error("Error creating test order:", retryErr);
-									setError("Failed to load or create order details");
-									setLoading(false);
-								});
-						} else {
-							setError(err.message || "Failed to load order details");
-							setLoading(false);
-						}
-					});
-			}, 3000); // 3 second delay to allow webhook processing
+		// Start the fetch process with a small initial delay
+		const timer = setTimeout(() => {
+			fetchOrderDetails();
+		}, 2000); // Initial 2 second delay
 
-			return () => clearTimeout(timer);
-		} else {
-			setLoading(false);
-			setError("Invalid checkout session");
-		}
+		return () => clearTimeout(timer);
 	}, [sessionId, clearCart]);
 
 	// Format price
