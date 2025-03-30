@@ -8,7 +8,7 @@ import { useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 
 export default function CartPage() {
-	const { items, removeItem, getTotalPrice, isHydrated } = useCart();
+	const { items, removeItem, getTotalPrice, isHydrated, clearCart } = useCart();
 	const { settings } = useSettings();
 	const [email, setEmail] = useState("");
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -53,8 +53,13 @@ export default function CartPage() {
 
 			const { url } = await response.json();
 
-			// Instead of opening in a new tab, redirect the current tab to Stripe checkout
-			window.location.href = url;
+			// Open Stripe checkout in a new tab
+			window.open(url, "_blank");
+
+			// Clear the cart and reset the checkout button state
+			// This gives the impression that the payment was successful
+			clearCart();
+			setIsCheckingOut(false);
 		} catch (error: unknown) {
 			console.error("Checkout error:", error);
 			if (error instanceof Error) {
