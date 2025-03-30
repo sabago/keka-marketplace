@@ -425,7 +425,7 @@ function mpauth_create_js_file() {
                 'height="800" ' +
                 'style="border:none; min-height:800px; width:100%; max-width:100%; overflow:hidden;" ' +
                 'allow="clipboard-read; clipboard-write" ' +
-                'scrolling="no" ' +
+                'scrolling="yes" ' +
                 '></iframe>'
             );
             
