@@ -12,7 +12,53 @@ interface Category {
 	name: string;
 	slug: string;
 	productCount: number;
+	description?: string;
+	icon?: string;
 }
+
+// Category descriptions and icons
+const categoryDetails: Record<string, { description: string; icon: string }> = {
+	"clinical-forms-templates": {
+		description:
+			"Evaluation Forms (PT, OT, RN, etc.), Care Plans & Goals, Admission Packets, Daily Visit Notes, Discharge Summaries, EVV Documentation Templates",
+		icon: "📝",
+	},
+	"courses-training-materials": {
+		description:
+			"Home Health Aide (HHA) Training, Caregiver Certification Prep, EVV Compliance & Billing, Clinical Skills & Competency, OSHA/Infection Control, Medicare Documentation Training",
+		icon: "📚",
+	},
+	"compliance-accreditation-tools": {
+		description:
+			"State-Specific Policy Templates, Quality Assurance & Performance Improvement (QAPI), HR & Personnel Files, Mock Survey Tools, Emergency Preparedness Plans",
+		icon: "🛠️",
+	},
+	"staffing-hr-resources": {
+		description:
+			"Job Descriptions (RN, PT, HHA, etc.), Interview & Hiring Forms, Orientation Packets, Performance Review Templates, Contractor Agreements",
+		icon: "🧑‍⚕️",
+	},
+	"medical-equipment-supplies": {
+		description:
+			"Mobility Aids (canes, walkers, wheelchairs), Incontinence Products, Personal Protective Equipment (PPE), Transfer & Safety Aids, Wound Care Supplies",
+		icon: "🩺",
+	},
+	"vendor-services": {
+		description:
+			"Billing & Payroll Services, QA Consultants, Virtual Assistants, Scheduling & Software Solutions, Insurance & Credentialing Partners",
+		icon: "🛎️",
+	},
+	"marketing-business-growth": {
+		description:
+			"Branding & Logo Packages, Social Media Templates, Business Plans & Pitch Decks, Referral Scripts & Guides, Website Design Services",
+		icon: "📈",
+	},
+	"downloadables-digital-tools": {
+		description:
+			"Checklists & Cheat Sheets, Quick-Reference Clinical Guides, Printable Client Education Materials, Editable PDF Templates",
+		icon: "📥",
+	},
+};
 
 export default function CategoriesPage() {
 	const [categories, setCategories] = useState<Category[]>([]);
@@ -26,11 +72,13 @@ export default function CategoriesPage() {
 		const fetchData = async () => {
 			try {
 				// Fetch categories
+				console.log("Fetching categories...");
 				const categoriesResponse = await fetch("/api/categories");
 				if (!categoriesResponse.ok) {
 					throw new Error("Failed to fetch categories");
 				}
 				const categoriesData = await categoriesResponse.json();
+				console.log("Categories data:", categoriesData);
 
 				setCategories(categoriesData.categories || []);
 				setLoading(false);
@@ -72,39 +120,48 @@ export default function CategoriesPage() {
 			{/* Categories grid */}
 			{!loading && !error && (
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-					{categories.map((category) => (
-						<div
-							key={category.id}
-							className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-							onClick={() => handleCategoryClick(category.id)}
-						>
-							<div className="p-6">
-								<div className="flex items-center justify-between mb-4">
-									<div className="flex items-center">
-										<Tag className="h-5 w-5 text-blue-600 mr-2" />
-										<h2 className="text-xl font-semibold">{category.name}</h2>
+					{categories
+						.filter((category) => !category.name.startsWith("Hidden Category"))
+						.map((category) => (
+							<div
+								key={category.id}
+								className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+								onClick={() => handleCategoryClick(category.id)}
+							>
+								<div className="p-6">
+									<div className="flex items-center justify-between mb-4">
+										<div className="flex items-center">
+											{categoryDetails[category.slug]?.icon ? (
+												<span className="text-xl mr-2">
+													{categoryDetails[category.slug].icon}
+												</span>
+											) : (
+												<Tag className="h-5 w-5 text-blue-600 mr-2" />
+											)}
+											<h2 className="text-xl font-semibold">{category.name}</h2>
+										</div>
+										<span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+											{category.productCount}{" "}
+											{category.productCount === 1 ? "product" : "products"}
+										</span>
 									</div>
-									<span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-										{category.productCount}{" "}
-										{category.productCount === 1 ? "product" : "products"}
-									</span>
-								</div>
-								<p className="text-gray-600 mb-4">
-									Browse all {category.name.toLowerCase()} products in our marketplace.
-								</p>
-								<div className="flex justify-end">
-									<Link
-										href={`/products?categoryId=${category.id}`}
-										className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
-										onClick={(e) => e.stopPropagation()}
-									>
-										View Products
-										<ArrowRight className="ml-1 h-4 w-4" />
-									</Link>
+									<p className="text-gray-600 mb-4">
+										{categoryDetails[category.slug]?.description ||
+											`Browse all ${category.name.toLowerCase()} products in our marketplace.`}
+									</p>
+									<div className="flex justify-end">
+										<Link
+											href={`/products?categoryId=${category.id}`}
+											className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
+											onClick={(e) => e.stopPropagation()}
+										>
+											View Products
+											<ArrowRight className="ml-1 h-4 w-4" />
+										</Link>
+									</div>
 								</div>
 							</div>
-						</div>
-					))}
+						))}
 				</div>
 			)}
 

@@ -155,22 +155,24 @@ export default function Home() {
 						</div>
 					) : (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-							{categories.map((category) => (
-								<Link
-									key={category.id}
-									href={`/products?categoryId=${category.id}`}
-									className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-								>
-									<div className="relative h-40 w-full bg-gray-200">
-										<div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-											<h3 className="text-white text-xl font-bold">{category.name}</h3>
+							{categories
+								.filter((category) => !category.name.startsWith("Hidden Category"))
+								.map((category) => (
+									<Link
+										key={category.id}
+										href={`/products?categoryId=${category.id}`}
+										className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+									>
+										<div className="relative h-40 w-full bg-gray-200">
+											<div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+												<h3 className="text-white text-xl font-bold">{category.name}</h3>
+											</div>
 										</div>
-									</div>
-									<div className="p-4 text-center">
-										<p className="text-gray-600">{category.productCount} Products</p>
-									</div>
-								</Link>
-							))}
+										<div className="p-4 text-center">
+											<p className="text-gray-600">{category.productCount} Products</p>
+										</div>
+									</Link>
+								))}
 						</div>
 					)}
 				</div>

@@ -330,25 +330,27 @@ export default function ProductsPage() {
 					<div className="bg-white rounded-lg shadow-md p-6 mb-6">
 						<h2 className="text-lg font-semibold mb-4">Categories</h2>
 						<div className="space-y-2">
-							{categories.map((category) => (
-								<div
-									key={category.id}
-									onClick={() => handleCategoryFilter(category)}
-									className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer ${
-										activeCategory?.id === category.id
-											? "bg-blue-100 text-blue-800"
-											: "hover:bg-gray-100"
-									}`}
-								>
-									<div className="flex items-center">
-										<Tag className="h-4 w-4 mr-2 text-gray-500" />
-										<span>{category.name}</span>
+							{categories
+								.filter((category) => !category.name.startsWith("Hidden Category"))
+								.map((category) => (
+									<div
+										key={category.id}
+										onClick={() => handleCategoryFilter(category)}
+										className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer ${
+											activeCategory?.id === category.id
+												? "bg-blue-100 text-blue-800"
+												: "hover:bg-gray-100"
+										}`}
+									>
+										<div className="flex items-center">
+											<Tag className="h-4 w-4 mr-2 text-gray-500" />
+											<span>{category.name}</span>
+										</div>
+										<span className="text-xs text-gray-500">
+											({category.productCount})
+										</span>
 									</div>
-									<span className="text-xs text-gray-500">
-										({category.productCount})
-									</span>
-								</div>
-							))}
+								))}
 						</div>
 					</div>
 				</div>
