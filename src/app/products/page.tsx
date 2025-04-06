@@ -7,6 +7,7 @@ import { useCartStore } from "@/lib/useCart";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
+import ReviewForm from "@/components/ReviewForm";
 
 // Component that uses useSearchParams
 function ProductsWithParams({
@@ -55,9 +56,15 @@ const ProductRow = ({
 	reviewCount = 0,
 }: Product) => {
 	const addItem = useCartStore((state) => state.addItem);
+	const items = useCartStore((state) => state.items);
 	const [addedToCart, setAddedToCart] = useState(false);
+	const [showReviewForm, setShowReviewForm] = useState(false);
 	const { settings } = useSettings();
 	const { isLoggedIn } = useAuth();
+
+	// Check if product is already in cart and get its quantity
+	const cartItem = items.find((item) => item.id === id);
+	const quantity = cartItem ? cartItem.quantity : 0;
 
 	// Calculate discounted price if user is logged in
 	const discountPercentage = isLoggedIn ? settings.memberDiscountPercentage : 0;
@@ -124,7 +131,15 @@ const ProductRow = ({
 			<div className="md:w-3/4 md:pl-6">
 				<h3 className="text-lg font-semibold mb-2">{title}</h3>
 				<p className="text-gray-600 mb-3">{description}</p>
-				<div className="flex items-center mb-2">
+				<div
+					className="flex items-center mb-2 cursor-pointer hover:opacity-80 transition-opacity"
+					onClick={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						setShowReviewForm(true);
+					}}
+					title="Click to write a review"
+				>
 					<div className="flex text-yellow-400 mr-2">
 						{[...Array(5)].map((_, i) => (
 							<Star
@@ -139,22 +154,59 @@ const ProductRow = ({
 						{averageRating} ({reviewCount} reviews)
 					</span>
 				</div>
+
+				{/* Review Form Modal */}
+				{showReviewForm && (
+					<div
+						className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							setShowReviewForm(false);
+						}}
+					>
+						<div
+							className="bg-white p-6 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto"
+							onClick={(e) => e.stopPropagation()}
+						>
+							<div className="flex justify-between items-center mb-4">
+								<h2 className="text-xl font-semibold">Write a Review for {title}</h2>
+								<button
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setShowReviewForm(false);
+									}}
+									className="text-gray-500 hover:text-gray-700"
+								>
+									✕
+								</button>
+							</div>
+							<ReviewForm
+								productId={id}
+								onSuccess={() => setShowReviewForm(false)}
+								onCancel={() => setShowReviewForm(false)}
+								compact={true}
+							/>
+						</div>
+					</div>
+				)}
 				<div className="flex items-center justify-between mt-4">
 					<div>
 						{isLoggedIn && discountPercentage > 0 ? (
 							<div>
-								<span className="text-xl font-bold text-green-600">
+								<span className="text-xl font-bold text-[#48ccbc]">
 									{formatCurrency(discountedPrice, settings.currency)}
 								</span>
 								<span className="text-sm text-gray-500 line-through ml-2">
 									{formatCurrency(price, settings.currency)}
 								</span>
-								<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+								<span className="ml-2 bg-[#48ccbc]/20 text-[#48ccbc] text-xs px-2 py-0.5 rounded-full">
 									{discountPercentage}% off
 								</span>
 							</div>
 						) : (
-							<span className="text-xl font-bold">
+							<span className="text-xl font-bold text-[#48ccbc]">
 								{formatCurrency(price, settings.currency)}
 							</span>
 						)}
@@ -162,12 +214,16 @@ const ProductRow = ({
 					<button
 						onClick={handleAddToCart}
 						className={`px-4 py-2 rounded ${
-							addedToCart
-								? "bg-green-600 text-white"
+							addedToCart || quantity > 0
+								? "bg-[#48ccbc] text-white"
 								: "bg-blue-600 hover:bg-blue-700 text-white"
 						}`}
 					>
-						{addedToCart ? "Added!" : "Add to Cart"}
+						{quantity > 0
+							? `${quantity} in Cart`
+							: addedToCart
+							? "Added!"
+							: "Add to Cart"}
 					</button>
 				</div>
 			</div>

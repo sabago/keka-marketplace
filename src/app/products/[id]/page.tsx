@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { formatCurrency } from "@/lib/serverUtils";
 import AddToCartButton from "@/components/AddToCartButton";
+import ReviewList from "@/components/ReviewList";
 
 // Define types for our data
 type Product = {
@@ -140,7 +141,20 @@ export default async function ProductDetailPage({
 									</p>
 								))}
 						</div>
+
+						{/* No review form here - it will be shown in the reviews section when stars are clicked */}
 					</div>
+				</div>
+			</div>
+
+			{/* Reviews Section with clickable stars */}
+			<div className="bg-white rounded-lg shadow-md overflow-hidden mb-12 p-6">
+				<h3 className="text-xl font-semibold mb-4">Customer Reviews</h3>
+				<div className="mb-6">
+					<p className="text-sm text-gray-600 mb-2">
+						Click on the stars to write a review
+					</p>
+					<ReviewList productId={id} />
 				</div>
 			</div>
 

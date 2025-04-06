@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingCart, Menu, X, Search, User, LogOut } from "lucide-react";
+import { ShoppingCart, Menu, X, Search, User } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
@@ -20,12 +20,12 @@ export default function Header() {
 	const cartItemCount = isHydrated ? getTotalItems() : 0;
 
 	// Handle logout
-	const handleLogout = () => {
-		// Remove token from sessionStorage
-		sessionStorage.removeItem("wp_marketplace_token");
-		// Reload the page to reset auth state
-		window.location.reload();
-	};
+	// const handleLogout = () => {
+	// 	// Remove token from sessionStorage
+	// 	sessionStorage.removeItem("wp_marketplace_token");
+	// 	// Reload the page to reset auth state
+	// 	window.location.reload();
+	// };
 
 	// Debug cart item count
 	useEffect(() => {
@@ -50,7 +50,7 @@ export default function Header() {
 			<div className="container mx-auto px-4 py-4">
 				<div className="flex items-center justify-between">
 					{/* Logo */}
-					<Link href="/" className="text-2xl font-bold text-blue-600">
+					<Link href="/" className="text-2xl font-bold text-[#48ccbc]">
 						{settings.siteName}
 					</Link>
 
@@ -58,17 +58,19 @@ export default function Header() {
 					<nav className="hidden md:flex items-center space-x-8">
 						<Link
 							href="/products"
-							className={`hover:text-blue-600 ${
-								pathname === "/products" ? "text-blue-600 font-medium" : "text-gray-600"
+							className={`hover:text-[#48ccbc] ${
+								pathname === "/products"
+									? "text-[#48ccbc] font-medium"
+									: "text-gray-600"
 							}`}
 						>
 							All Products
 						</Link>
 						<Link
 							href="/categories"
-							className={`hover:text-blue-600 ${
+							className={`hover:text-[#48ccbc] ${
 								pathname === "/categories"
-									? "text-blue-600 font-medium"
+									? "text-[#48ccbc] font-medium"
 									: "text-gray-600"
 							}`}
 						>
@@ -78,9 +80,9 @@ export default function Header() {
 						{isLoggedIn && user?.roles && user.roles.includes("administrator") && (
 							<Link
 								href="/admin"
-								className={`hover:text-blue-600 ${
+								className={`hover:text-[#48ccbc] ${
 									pathname?.startsWith("/admin")
-										? "text-blue-600 font-medium"
+										? "text-[#48ccbc] font-medium"
 										: "text-gray-600"
 								}`}
 							>
@@ -103,41 +105,42 @@ export default function Header() {
 						</form>
 
 						{/* Auth Section */}
-						{isLoggedIn ? (
-							<div className="flex items-center">
-								<div className="mr-4 flex items-center">
-									<User className="h-5 w-5 text-blue-600 mr-1" />
-									<span className="text-sm font-medium">
-										{user?.display_name || "Member"}
-									</span>
-									{settings.memberDiscountPercentage > 0 && (
-										<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-											{settings.memberDiscountPercentage}% off
+						{
+							isLoggedIn ? (
+								<div className="flex items-center">
+									<div className="mr-4 flex items-center">
+										<User className="h-5 w-5 text-blue-600 mr-1" />
+										<span className="text-sm font-medium">
+											{user?.display_name || "Member"}
 										</span>
-									)}
-								</div>
-								<button
+										{settings.memberDiscountPercentage > 0 && (
+											<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+												{settings.memberDiscountPercentage}% off
+											</span>
+										)}
+									</div>
+									{/* <button
 									onClick={handleLogout}
 									className="flex items-center text-gray-600 hover:text-red-600"
 								>
 									<LogOut className="h-5 w-5" />
-								</button>
-							</div>
-						) : (
-							<a
-								href="https://masteringhomecare.com/login-custom/"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-							>
-								Login
-							</a>
-						)}
+								</button> */}
+								</div>
+							) : null
+							// <a
+							// 	href="https://masteringhomecare.com/login-custom/"
+							// 	target="_blank"
+							// 	rel="noopener noreferrer"
+							// 	className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+							// >
+							// 	Login
+							// </a>
+						}
 
 						<Link href="/cart" className="relative">
 							<ShoppingCart className="h-6 w-6 text-gray-600 hover:text-blue-600" />
 							{cartItemCount > 0 && (
-								<span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+								<span className="absolute -top-2 -right-2 bg-[#48ccbc] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
 									{cartItemCount}
 								</span>
 							)}
@@ -201,37 +204,38 @@ export default function Header() {
 								</Link>
 							)}
 							{/* Auth Section for Mobile */}
-							{isLoggedIn ? (
-								<>
-									<div className="flex items-center text-gray-600">
-										<User className="h-5 w-5 text-blue-600 mr-2" />
-										<span className="font-medium">{user?.display_name || "Member"}</span>
-										{settings.memberDiscountPercentage > 0 && (
-											<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-												{settings.memberDiscountPercentage}% off
-											</span>
-										)}
-									</div>
-									<button
+							{
+								isLoggedIn ? (
+									<>
+										<div className="flex items-center text-gray-600">
+											<User className="h-5 w-5 text-blue-600 mr-2" />
+											<span className="font-medium">{user?.display_name || "Member"}</span>
+											{settings.memberDiscountPercentage > 0 && (
+												<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+													{settings.memberDiscountPercentage}% off
+												</span>
+											)}
+										</div>
+										{/* <button
 										onClick={handleLogout}
 										className="flex items-center text-gray-600 hover:text-red-600"
 									>
 										<LogOut className="h-5 w-5 mr-2" />
 										<span>Logout</span>
-									</button>
-								</>
-							) : (
-								<a
-									href="https://masteringhomecare.com/login-custom/"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="flex items-center text-blue-600 hover:text-blue-800"
-									onClick={() => setIsMenuOpen(false)}
-								>
-									<User className="h-5 w-5 mr-2" />
-									<span>Login</span>
-								</a>
-							)}
+									</button> */}
+									</>
+								) : null
+								// <a
+								// 	href="https://masteringhomecare.com/login-custom/"
+								// 	target="_blank"
+								// 	rel="noopener noreferrer"
+								// 	className="flex items-center text-blue-600 hover:text-blue-800"
+								// 	onClick={() => setIsMenuOpen(false)}
+								// >
+								// 	<User className="h-5 w-5 mr-2" />
+								// 	<span>Login</span>
+								// </a>
+							}
 
 							<Link
 								href="/cart"

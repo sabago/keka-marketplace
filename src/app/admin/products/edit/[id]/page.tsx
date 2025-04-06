@@ -26,7 +26,8 @@ export default function EditProductPage({
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
-	const [product, setProduct] = useState<Product | null>(null);
+	// We're using setProduct to store the product data, but accessing individual fields directly
+	const [, setProduct] = useState<Product | null>(null);
 
 	// Form state
 	const [title, setTitle] = useState("");
@@ -44,21 +45,33 @@ export default function EditProductPage({
 	const productFileInputRef = useRef<HTMLInputElement>(null);
 	const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
-	// Healthcare categories
-	const availableCategories = [
-		{ id: "1", name: "Clinical Forms & Templates" },
-		{ id: "2", name: "Courses & Training Materials" },
-		{ id: "3", name: "Compliance & Accreditation Tools" },
-		{ id: "4", name: "Staffing & HR Resources" },
-		{ id: "5", name: "Medical Equipment & Supplies" },
-		{ id: "6", name: "Vendor Services" },
-		{ id: "7", name: "Marketing & Business Growth" },
-		{ id: "8", name: "Downloadables & Digital Tools" },
-	];
+	// Categories state
+	const [availableCategories, setAvailableCategories] = useState<
+		{ id: string; name: string }[]
+	>([]);
 
-	// Fetch product data
+	// Fetch categories and product data
 	useEffect(() => {
-		const fetchProduct = async () => {
+		const fetchData = async () => {
+			// Fetch categories first
+			try {
+				const categoriesResponse = await fetch("/api/categories");
+				if (!categoriesResponse.ok) {
+					throw new Error("Failed to fetch categories");
+				}
+				const categoriesData = await categoriesResponse.json();
+				setAvailableCategories(
+					categoriesData.categories.map((cat: { id: string; name: string }) => ({
+						id: cat.id,
+						name: cat.name,
+					}))
+				);
+			} catch (err) {
+				console.error("Error fetching categories:", err);
+				setError("Failed to load categories. Please try again later.");
+			}
+
+			// Then fetch product data
 			try {
 				const response = await fetch(`/api/products/${params.id}`);
 				if (!response.ok) {
@@ -97,7 +110,7 @@ export default function EditProductPage({
 			}
 		};
 
-		fetchProduct();
+		fetchData();
 	}, [params.id]);
 
 	// Handle product file selection

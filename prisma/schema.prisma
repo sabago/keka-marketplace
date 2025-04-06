@@ -31,9 +31,11 @@ model Product {
 }
 
 model Category {
-  id   String @id @default(uuid())
-  name String
-  slug String @unique
+  id          String @id @default(uuid())
+  name        String
+  slug        String @unique
+  description String?
+  icon        String?
 
   products ProductCategory[]
 }

@@ -161,25 +161,31 @@ export async function POST(request: Request) {
       let categoryName = "Unknown";
       let categorySlug = "unknown";
       
-      // Map category IDs to names based on our mock data
+      // Map category IDs to names based on healthcare categories
       if (categoryId === "1") {
-        categoryName = "Business";
-        categorySlug = "business";
+        categoryName = "Clinical Forms & Templates";
+        categorySlug = "clinical-forms-templates";
       } else if (categoryId === "2") {
-        categoryName = "Education";
-        categorySlug = "education";
+        categoryName = "Courses & Training Materials";
+        categorySlug = "courses-training-materials";
       } else if (categoryId === "3") {
-        categoryName = "Design";
-        categorySlug = "design";
+        categoryName = "Compliance & Accreditation Tools";
+        categorySlug = "compliance-accreditation-tools";
       } else if (categoryId === "4") {
-        categoryName = "Technology";
-        categorySlug = "technology";
+        categoryName = "Staffing & HR Resources";
+        categorySlug = "staffing-hr-resources";
       } else if (categoryId === "5") {
-        categoryName = "Marketing";
-        categorySlug = "marketing";
+        categoryName = "Medical Equipment & Supplies";
+        categorySlug = "medical-equipment-supplies";
       } else if (categoryId === "6") {
-        categoryName = "Finance";
-        categorySlug = "finance";
+        categoryName = "Vendor Services";
+        categorySlug = "vendor-services";
+      } else if (categoryId === "7") {
+        categoryName = "Marketing & Business Growth";
+        categorySlug = "marketing-business-growth";
+      } else if (categoryId === "8") {
+        categoryName = "Downloadables & Digital Tools";
+        categorySlug = "downloadables-digital-tools";
       }
       
       try {

@@ -182,7 +182,7 @@ export default function CategoriesPage() {
 									<div className="flex justify-end">
 										<Link
 											href={`/products?categoryId=${category.id}`}
-											className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
+											className="text-[#48ccbc] hover:text-blue-800 font-medium inline-flex items-center"
 											onClick={(e) => e.stopPropagation()}
 										>
 											View Products

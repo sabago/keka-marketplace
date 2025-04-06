@@ -232,7 +232,7 @@ export default function AdminPage() {
 			)}
 
 			{/* Admin Navigation */}
-			<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+			<div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
 				<Link
 					href="/admin/orders"
 					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
@@ -253,6 +253,13 @@ export default function AdminPage() {
 				>
 					<h2 className="text-xl font-semibold mb-2">Settings</h2>
 					<p className="text-gray-600">Configure marketplace settings</p>
+				</Link>
+				<Link
+					href="/admin/reviews"
+					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+				>
+					<h2 className="text-xl font-semibold mb-2">Reviews</h2>
+					<p className="text-gray-600">Manage customer reviews</p>
 				</Link>
 			</div>
 		</div>

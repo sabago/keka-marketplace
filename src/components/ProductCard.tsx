@@ -1,12 +1,14 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
-import { Star, ShoppingCart, LogIn } from "lucide-react";
-import { useCartStore } from "@/lib/useCart";
+import { ShoppingCart, LogIn } from "lucide-react";
+import ProductCardReview from "./ProductCardReview";
+import { useCartStore, useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
+import ReviewForm from "./ReviewForm";
 
 type ProductCardProps = {
 	id: string;
@@ -29,7 +31,21 @@ export default function ProductCard({
 }: ProductCardProps) {
 	const pathname = usePathname();
 	const addItem = useCartStore((state) => state.addItem);
+	const items = useCartStore((state) => state.items);
+	const { isHydrated } = useCart();
 	const [addedToCart, setAddedToCart] = useState(false);
+
+	// Check if product is already in cart and get its quantity
+	const cartItem = isHydrated ? items.find((item) => item.id === id) : null;
+	const quantity = cartItem ? cartItem.quantity : 0;
+
+	// Debug cart state
+	console.log(
+		`Product ${id} - isHydrated: ${isHydrated}, cartItem:`,
+		cartItem,
+		`quantity: ${quantity}`
+	);
+	const [showReviewForm, setShowReviewForm] = useState(false);
 	const { settings } = useSettings();
 	const { isLoggedIn } = useAuth();
 
@@ -78,9 +94,15 @@ export default function ProductCard({
 			thumbnail: thumbnail || "/images/dummy.jpeg",
 		});
 
+		// Get updated cart state
+		const updatedItems = useCartStore.getState().items;
+		const updatedCartItem = updatedItems.find((item) => item.id === id);
+		const updatedQuantity = updatedCartItem ? updatedCartItem.quantity : 0;
+
 		// Log cart state after adding item
-		console.log("Cart state after adding item:", useCartStore.getState().items);
+		console.log("Cart state after adding item:", updatedItems);
 		console.log("Total items:", useCartStore.getState().getTotalItems());
+		console.log("Updated quantity for this product:", updatedQuantity);
 
 		setAddedToCart(true);
 
@@ -91,10 +113,7 @@ export default function ProductCard({
 	};
 
 	return (
-		<Link
-			href={`/products/${id}`}
-			className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-		>
+		<div className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
 			<div className="relative h-48 w-full">
 				{thumbnail ? (
 					<Image
@@ -128,49 +147,88 @@ export default function ProductCard({
 				)}
 			</div>
 
-			<div className="p-4">
-				<h3 className="text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
-					{title}
-				</h3>
+			<Link href={`/products/${id}`} className="block">
+				<div className="p-4">
+					<h3 className="text-lg font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+						{title}
+					</h3>
+				</div>
+			</Link>
 
-				{/* Rating */}
-				<div className="flex items-center mt-1 mb-2">
-					<div className="flex items-center">
-						{[1, 2, 3, 4, 5].map((star) => (
-							<Star
-								key={star}
-								size={16}
-								className={`${
-									star <= Math.round(averageRating)
-										? "text-yellow-400 fill-yellow-400"
-										: "text-gray-300"
-								}`}
-							/>
-						))}
+			{/* Rating and Review - Outside the Link */}
+			<div
+				className="px-4 py-2 bg-gray-50 relative cursor-pointer hover:bg-gray-100 transition-colors"
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					setShowReviewForm(true);
+				}}
+				title="Click to write a review"
+			>
+				<ProductCardReview
+					averageRating={averageRating}
+					reviewCount={reviewCount}
+				/>
+			</div>
+
+			{/* Review Form Modal */}
+			{showReviewForm && (
+				<div
+					className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+					onClick={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						setShowReviewForm(false);
+					}}
+				>
+					<div
+						className="bg-white p-6 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div className="flex justify-between items-center mb-4">
+							<h2 className="text-xl font-semibold">Write a Review for {title}</h2>
+							<button
+								onClick={(e) => {
+									e.preventDefault();
+									e.stopPropagation();
+									setShowReviewForm(false);
+								}}
+								className="text-gray-500 hover:text-gray-700"
+							>
+								✕
+							</button>
+						</div>
+						<ReviewForm
+							productId={id}
+							onSuccess={() => setShowReviewForm(false)}
+							onCancel={() => setShowReviewForm(false)}
+							compact={true}
+						/>
 					</div>
-					<span className="text-sm text-gray-500 ml-1">
-						{reviewCount > 0 ? `(${reviewCount})` : "No reviews"}
-					</span>
+				</div>
+			)}
+
+			<Link href={`/products/${id}`} className="block">
+				<div className="px-4">
+					<p className="text-gray-600 text-sm mb-3">{truncatedDescription}</p>
 				</div>
 
-				<p className="text-gray-600 text-sm mb-3">{truncatedDescription}</p>
-
-				<div className="flex items-center justify-between mt-auto">
+				<div className="flex items-center justify-between mt-auto m-4">
 					<div>
 						{isLoggedIn && discountPercentage > 0 ? (
 							<div className="flex flex-col">
 								<span className="text-sm line-through text-gray-500">
 									{formattedOriginalPrice}
 								</span>
-								<span className="text-lg font-bold text-green-600">
+								<span className="text-lg font-bold text-[#48ccbc]">
 									{formattedDiscountedPrice}
 								</span>
-								<span className="text-xs text-green-700">
+								<span className="text-xs text-[#48ccbc]">
 									{discountPercentage}% off
 								</span>
 							</div>
 						) : (
-							<span className="text-lg font-bold text-blue-600">
+							<span className="text-lg font-bold text-[#48ccbc]">
 								{formattedOriginalPrice}
 							</span>
 						)}
@@ -178,17 +236,38 @@ export default function ProductCard({
 
 					{isProductsPage ? (
 						<div className="flex flex-col items-end">
-							<button
-								onClick={handleAddToCart}
-								className={`p-2 rounded-full ${
-									addedToCart
-										? "bg-green-600 text-white"
-										: "bg-blue-100 text-blue-600 hover:bg-blue-600 hover:text-white"
-								} transition-colors`}
-								aria-label="Add to cart"
-							>
-								<ShoppingCart size={18} />
-							</button>
+							<div className="flex items-center">
+								{quantity > 0 ? (
+									<>
+										<span className="text-sm font-medium bg-[#48ccbc]/20 text-[#48ccbc] px-2 py-1 rounded-l-md">
+											{quantity}
+										</span>
+										<button
+											onClick={handleAddToCart}
+											className={`p-2 rounded-r-md ${
+												addedToCart
+													? "bg-[#48ccbc] text-white"
+													: "bg-[#48ccbc]/20 text-[#48ccbc] hover:bg-[#48ccbc] hover:text-white"
+											} transition-colors`}
+											aria-label="Add to cart"
+										>
+											<ShoppingCart size={18} />
+										</button>
+									</>
+								) : (
+									<button
+										onClick={handleAddToCart}
+										className={`p-2 rounded-full ${
+											addedToCart
+												? "bg-[#48ccbc] text-white"
+												: "bg-[#48ccbc]/20 text-[#48ccbc] hover:bg-[#48ccbc] hover:text-white"
+										} transition-colors`}
+										aria-label="Add to cart"
+									>
+										<ShoppingCart size={18} />
+									</button>
+								)}
+							</div>
 
 							{!isLoggedIn && discountPercentage > 0 && (
 								<Link
@@ -205,7 +284,7 @@ export default function ProductCard({
 						<span className="text-sm text-gray-500">View details</span>
 					)}
 				</div>
-			</div>
-		</Link>
+			</Link>
+		</div>
 	);
 }

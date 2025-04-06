@@ -131,7 +131,7 @@ export default function Home() {
 						<h2 className="text-2xl md:text-3xl font-bold">Featured Products</h2>
 						<Link
 							href="/products"
-							className="text-blue-600 hover:text-blue-800 font-medium flex items-center"
+							className="text-[#48ccbc] hover:text-blue-800 font-medium flex items-center"
 						>
 							View All
 							<ArrowRight className="ml-1 h-4 w-4" />

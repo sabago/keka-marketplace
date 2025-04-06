@@ -68,20 +68,33 @@ export async function PUT(
   try {
     // Fix the "params should be awaited" error
     const { id } = await Promise.resolve(params);
-    const body = await request.json();
-    const { title, description, price, filePath, thumbnail, categories } = body;
-
-    // Check if product exists
+    
+    // Handle FormData instead of JSON
+    const formData = await request.formData();
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const price = parseFloat(formData.get('price') as string);
+    
+    // Get existing product to preserve file paths if not updated
     const existingProduct = await prisma.product.findUnique({
       where: { id },
     });
-
+    
     if (!existingProduct) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       );
     }
+    
+    // Use existing paths if files are not updated
+    const filePath = existingProduct.filePath;
+    const thumbnail = existingProduct.thumbnail;
+    
+    // Get categories from form data
+    const categoryEntries = formData.getAll('categories[]') as string[];
+    const categories = categoryEntries.length > 0 ? categoryEntries : undefined;
+
 
     // Update product
     const updatedProduct = await prisma.product.update({

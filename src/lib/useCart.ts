@@ -78,7 +78,29 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'keka-marketplace-cart', // Storage key
-      skipHydration: true // Important for server-side rendering
+      skipHydration: true, // Important for server-side rendering
+      storage: {
+        getItem: (name) => {
+          // When in browser, use localStorage
+          if (typeof window !== 'undefined') {
+            const str = localStorage.getItem(name);
+            return str ? JSON.parse(str) : null;
+          }
+          return null;
+        },
+        setItem: (name, value) => {
+          // When in browser, use localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(name, JSON.stringify(value));
+          }
+        },
+        removeItem: (name) => {
+          // When in browser, use localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(name);
+          }
+        },
+      }
     }
   )
 );
@@ -89,8 +111,12 @@ export function useCart() {
   const cart = useCartStore();
   
   useEffect(() => {
-    useCartStore.persist.rehydrate();
-    setIsHydrated(true);
+    // Check if localStorage is available
+    if (typeof window !== 'undefined') {
+      // Rehydrate the store
+      useCartStore.persist.rehydrate();
+      setIsHydrated(true);
+    }
   }, []);
   
   return {

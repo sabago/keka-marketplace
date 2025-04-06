@@ -3,12 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Trash2, ArrowLeft, ShoppingBag } from "lucide-react";
+import { Trash2, ArrowLeft, ShoppingBag, Plus, Minus } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 
 export default function CartPage() {
-	const { items, removeItem, getTotalPrice, isHydrated, clearCart } = useCart();
+	const {
+		items,
+		removeItem,
+		updateQuantity,
+		getTotalPrice,
+		isHydrated,
+		clearCart,
+	} = useCart();
 	const { settings } = useSettings();
 	const [email, setEmail] = useState("");
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -25,6 +32,20 @@ export default function CartPage() {
 	// Handle item removal
 	const handleRemoveItem = (id: string) => {
 		removeItem(id);
+	};
+
+	// Handle quantity increase
+	const handleIncreaseQuantity = (id: string, currentQuantity: number) => {
+		updateQuantity(id, currentQuantity + 1);
+	};
+
+	// Handle quantity decrease
+	const handleDecreaseQuantity = (id: string, currentQuantity: number) => {
+		if (currentQuantity > 1) {
+			updateQuantity(id, currentQuantity - 1);
+		} else {
+			removeItem(id);
+		}
 	};
 
 	// Handle checkout
@@ -112,14 +133,41 @@ export default function CartPage() {
 											<p className="text-blue-600 font-bold mt-1">
 												{formatPrice(item.price)}
 											</p>
+
+											{/* Quantity Controls */}
+											<div className="flex items-center mt-3">
+												<button
+													onClick={() => handleDecreaseQuantity(item.id, item.quantity)}
+													className="p-1 rounded-md bg-gray-100 hover:bg-gray-200"
+													aria-label="Decrease quantity"
+												>
+													<Minus className="h-4 w-4" />
+												</button>
+												<span className="mx-3 font-medium">{item.quantity}</span>
+												<button
+													onClick={() => handleIncreaseQuantity(item.id, item.quantity)}
+													className="p-1 rounded-md bg-gray-100 hover:bg-gray-200"
+													aria-label="Increase quantity"
+												>
+													<Plus className="h-4 w-4" />
+												</button>
+												<span className="ml-4 text-sm text-gray-500">
+													{item.quantity > 1 ? `${formatPrice(item.price)} each` : ""}
+												</span>
+											</div>
 										</div>
-										<button
-											onClick={() => handleRemoveItem(item.id)}
-											className="text-gray-500 hover:text-red-600"
-											aria-label="Remove item"
-										>
-											<Trash2 className="h-5 w-5" />
-										</button>
+										<div className="flex flex-col items-end">
+											<p className="font-bold text-blue-600 mb-2">
+												{formatPrice(item.price * item.quantity)}
+											</p>
+											<button
+												onClick={() => handleRemoveItem(item.id)}
+												className="text-gray-500 hover:text-red-600"
+												aria-label="Remove item"
+											>
+												<Trash2 className="h-5 w-5" />
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>

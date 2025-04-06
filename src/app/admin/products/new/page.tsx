@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, FormEvent, ChangeEvent } from "react";
+import { useState, useRef, FormEvent, ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, Loader2 } from "lucide-react";
@@ -10,6 +10,7 @@ export default function NewProductPage() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
 
 	// Form state
 	const [title, setTitle] = useState("");
@@ -27,17 +28,36 @@ export default function NewProductPage() {
 	const productFileInputRef = useRef<HTMLInputElement>(null);
 	const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
-	// Healthcare categories
-	const availableCategories = [
-		{ id: "1", name: "Clinical Forms & Templates" },
-		{ id: "2", name: "Courses & Training Materials" },
-		{ id: "3", name: "Compliance & Accreditation Tools" },
-		{ id: "4", name: "Staffing & HR Resources" },
-		{ id: "5", name: "Medical Equipment & Supplies" },
-		{ id: "6", name: "Vendor Services" },
-		{ id: "7", name: "Marketing & Business Growth" },
-		{ id: "8", name: "Downloadables & Digital Tools" },
-	];
+	// Categories state
+	const [availableCategories, setAvailableCategories] = useState<
+		{ id: string; name: string }[]
+	>([]);
+
+	// Fetch categories
+	useEffect(() => {
+		const fetchCategories = async () => {
+			try {
+				const response = await fetch("/api/categories");
+				if (!response.ok) {
+					throw new Error("Failed to fetch categories");
+				}
+				const data = await response.json();
+				setAvailableCategories(
+					data.categories.map((cat: { id: string; name: string }) => ({
+						id: cat.id,
+						name: cat.name,
+					}))
+				);
+				setIsLoading(false);
+			} catch (err) {
+				console.error("Error fetching categories:", err);
+				setError("Failed to load categories. Please try again later.");
+				setIsLoading(false);
+			}
+		};
+
+		fetchCategories();
+	}, []);
 
 	// Handle product file selection
 	const handleProductFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -211,183 +231,191 @@ export default function NewProductPage() {
 				</div>
 			)}
 
-			<div className="bg-white rounded-lg shadow-md p-6">
-				<form onSubmit={handleSubmit}>
-					{/* Product Title */}
-					<div className="mb-6">
-						<label
-							htmlFor="title"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Product Title
-						</label>
-						<input
-							type="text"
-							id="title"
-							className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-							placeholder="Enter product title"
-							value={title}
-							onChange={(e) => setTitle(e.target.value)}
-							disabled={isSubmitting}
-						/>
-					</div>
-
-					{/* Product Description */}
-					<div className="mb-6">
-						<label
-							htmlFor="description"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Description
-						</label>
-						<textarea
-							id="description"
-							rows={5}
-							className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-							placeholder="Enter product description"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							disabled={isSubmitting}
-						/>
-					</div>
-
-					{/* Product Price */}
-					<div className="mb-6">
-						<label
-							htmlFor="price"
-							className="block text-sm font-medium text-gray-700 mb-1"
-						>
-							Price (USD)
-						</label>
-						<div className="relative">
-							<span className="absolute left-3 top-2 text-gray-500">$</span>
+			{/* Loading state */}
+			{isLoading ? (
+				<div className="bg-white rounded-lg shadow-md p-8 text-center">
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+					<p className="text-gray-600">Loading categories...</p>
+				</div>
+			) : (
+				<div className="bg-white rounded-lg shadow-md p-6">
+					<form onSubmit={handleSubmit}>
+						{/* Product Title */}
+						<div className="mb-6">
+							<label
+								htmlFor="title"
+								className="block text-sm font-medium text-gray-700 mb-1"
+							>
+								Product Title
+							</label>
 							<input
 								type="text"
-								id="price"
-								className="w-full pl-8 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-								placeholder="29.99"
-								value={price}
-								onChange={(e) => setPrice(e.target.value)}
+								id="title"
+								className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+								placeholder="Enter product title"
+								value={title}
+								onChange={(e) => setTitle(e.target.value)}
 								disabled={isSubmitting}
 							/>
 						</div>
-					</div>
 
-					{/* Product File Upload */}
-					<div className="mb-6">
-						<label className="block text-sm font-medium text-gray-700 mb-1">
-							Product File (PDF)
-						</label>
-						<div
-							className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
-							onClick={() => productFileInputRef.current?.click()}
-						>
-							<input
-								type="file"
-								ref={productFileInputRef}
-								className="hidden"
-								accept=".pdf"
-								onChange={handleProductFileChange}
+						{/* Product Description */}
+						<div className="mb-6">
+							<label
+								htmlFor="description"
+								className="block text-sm font-medium text-gray-700 mb-1"
+							>
+								Description
+							</label>
+							<textarea
+								id="description"
+								rows={5}
+								className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+								placeholder="Enter product description"
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
 								disabled={isSubmitting}
 							/>
-
-							{productFilePreview ? (
-								<div className="text-gray-700">
-									<p className="font-medium">{productFilePreview}</p>
-									<p className="text-sm text-gray-500 mt-1">Click to change file</p>
-								</div>
-							) : (
-								<div className="text-gray-500">
-									<Upload className="h-10 w-10 mx-auto mb-2" />
-									<p className="font-medium">Click to upload PDF file</p>
-									<p className="text-sm mt-1">or drag and drop</p>
-								</div>
-							)}
 						</div>
-					</div>
 
-					{/* Thumbnail Upload */}
-					<div className="mb-6">
-						<label className="block text-sm font-medium text-gray-700 mb-1">
-							Thumbnail Image
-						</label>
-						<div
-							className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
-							onClick={() => thumbnailInputRef.current?.click()}
-						>
-							<input
-								type="file"
-								ref={thumbnailInputRef}
-								className="hidden"
-								accept="image/*"
-								onChange={handleThumbnailChange}
+						{/* Product Price */}
+						<div className="mb-6">
+							<label
+								htmlFor="price"
+								className="block text-sm font-medium text-gray-700 mb-1"
+							>
+								Price (USD)
+							</label>
+							<div className="relative">
+								<span className="absolute left-3 top-2 text-gray-500">$</span>
+								<input
+									type="text"
+									id="price"
+									className="w-full pl-8 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+									placeholder="29.99"
+									value={price}
+									onChange={(e) => setPrice(e.target.value)}
+									disabled={isSubmitting}
+								/>
+							</div>
+						</div>
+
+						{/* Product File Upload */}
+						<div className="mb-6">
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Product File (PDF)
+							</label>
+							<div
+								className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
+								onClick={() => productFileInputRef.current?.click()}
+							>
+								<input
+									type="file"
+									ref={productFileInputRef}
+									className="hidden"
+									accept=".pdf"
+									onChange={handleProductFileChange}
+									disabled={isSubmitting}
+								/>
+
+								{productFilePreview ? (
+									<div className="text-gray-700">
+										<p className="font-medium">{productFilePreview}</p>
+										<p className="text-sm text-gray-500 mt-1">Click to change file</p>
+									</div>
+								) : (
+									<div className="text-gray-500">
+										<Upload className="h-10 w-10 mx-auto mb-2" />
+										<p className="font-medium">Click to upload PDF file</p>
+										<p className="text-sm mt-1">or drag and drop</p>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Thumbnail Upload */}
+						<div className="mb-6">
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Thumbnail Image
+							</label>
+							<div
+								className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
+								onClick={() => thumbnailInputRef.current?.click()}
+							>
+								<input
+									type="file"
+									ref={thumbnailInputRef}
+									className="hidden"
+									accept="image/*"
+									onChange={handleThumbnailChange}
+									disabled={isSubmitting}
+								/>
+
+								{thumbnailPreview ? (
+									<div className="flex justify-center">
+										<img
+											src={thumbnailPreview}
+											alt="Thumbnail preview"
+											className="h-40 object-contain"
+										/>
+									</div>
+								) : (
+									<div className="text-gray-500">
+										<Upload className="h-10 w-10 mx-auto mb-2" />
+										<p className="font-medium">Click to upload thumbnail image</p>
+										<p className="text-sm mt-1">or drag and drop</p>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Categories */}
+						<div className="mb-8">
+							<label className="block text-sm font-medium text-gray-700 mb-2">
+								Categories
+							</label>
+							<div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+								{availableCategories.map((category) => (
+									<div key={category.id} className="flex items-center">
+										<input
+											type="checkbox"
+											id={`category-${category.id}`}
+											checked={categories.includes(category.id)}
+											onChange={() => handleCategoryChange(category.id)}
+											className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+											disabled={isSubmitting}
+										/>
+										<label
+											htmlFor={`category-${category.id}`}
+											className="ml-2 text-sm text-gray-700"
+										>
+											{category.name}
+										</label>
+									</div>
+								))}
+							</div>
+						</div>
+
+						{/* Submit Button */}
+						<div className="flex justify-end">
+							<button
+								type="submit"
 								disabled={isSubmitting}
-							/>
-
-							{thumbnailPreview ? (
-								<div className="flex justify-center">
-									<img
-										src={thumbnailPreview}
-										alt="Thumbnail preview"
-										className="h-40 object-contain"
-									/>
-								</div>
-							) : (
-								<div className="text-gray-500">
-									<Upload className="h-10 w-10 mx-auto mb-2" />
-									<p className="font-medium">Click to upload thumbnail image</p>
-									<p className="text-sm mt-1">or drag and drop</p>
-								</div>
-							)}
+								className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
+							>
+								{isSubmitting ? (
+									<>
+										<Loader2 className="h-5 w-5 mr-2 animate-spin" />
+										Creating...
+									</>
+								) : (
+									"Create Product"
+								)}
+							</button>
 						</div>
-					</div>
-
-					{/* Categories */}
-					<div className="mb-8">
-						<label className="block text-sm font-medium text-gray-700 mb-2">
-							Categories
-						</label>
-						<div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-							{availableCategories.map((category) => (
-								<div key={category.id} className="flex items-center">
-									<input
-										type="checkbox"
-										id={`category-${category.id}`}
-										checked={categories.includes(category.id)}
-										onChange={() => handleCategoryChange(category.id)}
-										className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-										disabled={isSubmitting}
-									/>
-									<label
-										htmlFor={`category-${category.id}`}
-										className="ml-2 text-sm text-gray-700"
-									>
-										{category.name}
-									</label>
-								</div>
-							))}
-						</div>
-					</div>
-
-					{/* Submit Button */}
-					<div className="flex justify-end">
-						<button
-							type="submit"
-							disabled={isSubmitting}
-							className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
-						>
-							{isSubmitting ? (
-								<>
-									<Loader2 className="h-5 w-5 mr-2 animate-spin" />
-									Creating...
-								</>
-							) : (
-								"Create Product"
-							)}
-						</button>
-					</div>
-				</form>
-			</div>
+					</form>
+				</div>
+			)}
 		</div>
 	);
 }

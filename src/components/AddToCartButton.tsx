@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingCart, LogIn } from "lucide-react";
+import { ShoppingCart, LogIn, Plus } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/authContext";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
@@ -19,6 +19,11 @@ export default function AddToCartButton({ product }: { product: Product }) {
 	const { isLoggedIn } = useAuth();
 	const { settings } = useSettings();
 	const addItem = useCartStore((state) => state.addItem);
+	const items = useCartStore((state) => state.items);
+
+	// Check if product is already in cart and get its quantity
+	const cartItem = items.find((item) => item.id === product.id);
+	const quantity = cartItem ? cartItem.quantity : 0;
 
 	// Convert price to number
 	const priceAsNumber = Number(product.price);
@@ -87,17 +92,32 @@ export default function AddToCartButton({ product }: { product: Product }) {
 			) : null}
 
 			{/* Add to Cart Button */}
-			<button
-				onClick={handleAddToCart}
-				className={`${
-					addedToCart
-						? "bg-green-600 hover:bg-green-700"
-						: "bg-blue-600 hover:bg-blue-700"
-				} text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full`}
-			>
-				<ShoppingCart className="h-5 w-5 mr-2" />
-				{addedToCart ? "Added to Cart!" : "Add to Cart"}
-			</button>
+			{quantity > 0 ? (
+				<div className="flex flex-col w-full">
+					<div className="flex items-center justify-between mb-2">
+						<span className="text-sm font-medium">In Cart: {quantity}</span>
+					</div>
+					<button
+						onClick={handleAddToCart}
+						className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full"
+					>
+						<Plus className="h-5 w-5 mr-2" />
+						Add Another
+					</button>
+				</div>
+			) : (
+				<button
+					onClick={handleAddToCart}
+					className={`${
+						addedToCart
+							? "bg-green-600 hover:bg-green-700"
+							: "bg-blue-600 hover:bg-blue-700"
+					} text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full`}
+				>
+					<ShoppingCart className="h-5 w-5 mr-2" />
+					{addedToCart ? "Added to Cart!" : "Add to Cart"}
+				</button>
+			)}
 		</div>
 	);
 }
