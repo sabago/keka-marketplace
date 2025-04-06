@@ -88,23 +88,58 @@ export default function Home() {
 				</div>
 			)}
 			{/* Hero Section */}
-			<section className="bg-blue-600 text-white py-16 md:py-24">
+			<section
+				style={{ backgroundColor: "#48ccbc" }}
+				className="text-white py-16 md:py-24"
+			>
 				<div className="container mx-auto px-4">
-					<div className="max-w-3xl">
-						<h1 className="text-4xl md:text-5xl font-bold mb-6">
-							Premium PDF Resources for Every Need
-						</h1>
-						<p className="text-xl mb-8">
-							Browse our collection of high-quality PDF templates, guides, and
-							resources to help you succeed in business, education, and more.
-						</p>
-						<Link
-							href="/products"
-							className="bg-white text-red-600 px-6 py-3 rounded-lg font-medium hover:bg-blue-50 transition-colors inline-flex items-center"
-						>
-							Browse All Products
-							<ArrowRight className="ml-2 h-5 w-5" />
-						</Link>
+					<div className="flex flex-col md:flex-row items-center">
+						<div className="md:w-1/2 md:pr-8">
+							<h1 className="text-4xl md:text-5xl font-bold mb-6">
+								Home Healthcare Resources & Tools
+							</h1>
+							<p className="text-xl mb-8">
+								Access our comprehensive collection of clinical forms, training
+								materials, compliance tools, and resources designed specifically for
+								home healthcare agencies and professionals.
+							</p>
+							<Link
+								href="/products"
+								className="bg-white text-teal-600 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors inline-flex items-center"
+							>
+								Browse All Products
+								<ArrowRight className="ml-2 h-5 w-5" />
+							</Link>
+						</div>
+						<div className="md:w-1/2 mt-8 md:mt-0 flex justify-center">
+							{/* Placeholder for healthcare image */}
+							<div className="relative w-full max-w-md h-80 bg-white rounded-lg shadow-lg overflow-hidden">
+								<div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+									<div className="text-center p-6">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											className="h-16 w-16 mx-auto text-teal-500 mb-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+											/>
+										</svg>
+										<p className="text-gray-600">
+											Healthcare professionals providing home care services
+										</p>
+										<p className="text-xs text-gray-500 mt-2">
+											Replace with actual healthcare image
+										</p>
+									</div>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 			</section>
