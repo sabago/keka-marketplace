@@ -16,6 +16,30 @@ interface Category {
 	icon?: string;
 }
 
+// Function to get the background image for each category
+const getCategoryBackgroundImage = (slug: string): string => {
+	switch (slug) {
+		case "clinical-forms-templates":
+			return "url('/images/clinicalformsandtemplates.jpg')";
+		case "compliance-accreditation-tools":
+			return "url('/images/complianceandaccredition.jpg')";
+		case "courses-training-materials":
+			return "url('/images/courses&trainingmaterials.jpg')";
+		case "downloadables-digital-tools":
+			return "url('/images/downloadables&digitaltools.jpg')";
+		case "marketing-business-growth":
+			return "url('/images/marketingandbusinessgrowth.jpg')";
+		case "medical-equipment-supplies":
+			return "url('/images/medicalequipment&supplies.jpg')";
+		case "staffing-hr-resources":
+			return "url('/images/staffing&hrresources.jpg')";
+		case "vendor-services":
+			return "url('/images/vendorservices2.jpg')";
+		default:
+			return "none";
+	}
+};
+
 // Category descriptions and icons
 const categoryDetails: Record<string, { description: string; icon: string }> = {
 	"clinical-forms-templates": {
@@ -128,23 +152,29 @@ export default function CategoriesPage() {
 								className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
 								onClick={() => handleCategoryClick(category.id)}
 							>
-								<div className="p-6">
-									<div className="flex items-center justify-between mb-4">
-										<div className="flex items-center">
-											{categoryDetails[category.slug]?.icon ? (
-												<span className="text-xl mr-2">
-													{categoryDetails[category.slug].icon}
-												</span>
-											) : (
-												<Tag className="h-5 w-5 text-blue-600 mr-2" />
+								{/* Add background image based on category */}
+								<div
+									className="relative h-48 w-full bg-cover bg-center"
+									style={{
+										backgroundImage: getCategoryBackgroundImage(category.slug),
+									}}
+								>
+									<div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-4">
+										<span className="text-3xl mb-2">
+											{categoryDetails[category.slug]?.icon || (
+												<Tag className="h-8 w-8 text-white" />
 											)}
-											<h2 className="text-xl font-semibold">{category.name}</h2>
-										</div>
-										<span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+										</span>
+										<h2 className="text-white text-2xl font-bold text-center">
+											{category.name}
+										</h2>
+										<span className="mt-2 bg-white bg-opacity-20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full">
 											{category.productCount}{" "}
 											{category.productCount === 1 ? "product" : "products"}
 										</span>
 									</div>
+								</div>
+								<div className="p-4">
 									<p className="text-gray-600 mb-4">
 										{categoryDetails[category.slug]?.description ||
 											`Browse all ${category.name.toLowerCase()} products in our marketplace.`}

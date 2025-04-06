@@ -112,32 +112,12 @@ export default function Home() {
 							</Link>
 						</div>
 						<div className="md:w-1/2 mt-8 md:mt-0 flex justify-center">
-							{/* Placeholder for healthcare image */}
-							<div className="relative w-full max-w-md h-80 bg-white rounded-lg shadow-lg overflow-hidden">
-								<div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-									<div className="text-center p-6">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											className="h-16 w-16 mx-auto text-teal-500 mb-4"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-											/>
-										</svg>
-										<p className="text-gray-600">
-											Healthcare professionals providing home care services
-										</p>
-										<p className="text-xs text-gray-500 mt-2">
-											Replace with actual healthcare image
-										</p>
-									</div>
-								</div>
+							<div className="relative w-full max-w-md h-80 rounded-lg shadow-lg overflow-hidden">
+								<img
+									src="/images/marketplacehomeimage.png"
+									alt="Healthcare professionals providing home care services"
+									className="w-full h-full object-cover"
+								/>
 							</div>
 						</div>
 					</div>
@@ -192,22 +172,65 @@ export default function Home() {
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 							{categories
 								.filter((category) => !category.name.startsWith("Hidden Category"))
-								.map((category) => (
-									<Link
-										key={category.id}
-										href={`/products?categoryId=${category.id}`}
-										className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-									>
-										<div className="relative h-40 w-full bg-gray-200">
-											<div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-												<h3 className="text-white text-xl font-bold">{category.name}</h3>
+								.map((category) => {
+									// Determine the background image based on the category slug
+									let backgroundImage = "";
+									switch (category.slug) {
+										case "clinical-forms-templates":
+											backgroundImage = "/images/clinicalformsandtemplates.jpg";
+											break;
+										case "compliance-accreditation-tools":
+											backgroundImage = "/images/complianceandaccredition.jpg";
+											break;
+										case "courses-training-materials":
+											backgroundImage = "/images/courses&trainingmaterials.jpg";
+											break;
+										case "downloadables-digital-tools":
+											backgroundImage = "/images/downloadables&digitaltools.jpg";
+											break;
+										case "marketing-business-growth":
+											backgroundImage = "/images/marketingandbusinessgrowth.jpg";
+											break;
+										case "medical-equipment-supplies":
+											backgroundImage = "/images/medicalequipment&supplies.jpg";
+											break;
+										case "staffing-hr-resources":
+											backgroundImage = "/images/staffing&hrresources.jpg";
+											break;
+										case "vendor-services":
+											backgroundImage = "/images/vendorservices2.jpg";
+											break;
+										default:
+											backgroundImage = "";
+									}
+
+									return (
+										<Link
+											key={category.id}
+											href={`/products?categoryId=${category.id}`}
+											className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+										>
+											<div
+												className="relative h-40 w-full bg-cover bg-center"
+												style={{
+													backgroundImage: backgroundImage
+														? `url(${backgroundImage})`
+														: undefined,
+													backgroundColor: backgroundImage ? undefined : "#f3f4f6",
+												}}
+											>
+												<div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+													<h3 className="text-white text-xl font-bold text-center px-4">
+														{category.name}
+													</h3>
+												</div>
 											</div>
-										</div>
-										<div className="p-4 text-center">
-											<p className="text-gray-600">{category.productCount} Products</p>
-										</div>
-									</Link>
-								))}
+											<div className="p-4 text-center">
+												<p className="text-gray-600">{category.productCount} Products</p>
+											</div>
+										</Link>
+									);
+								})}
 						</div>
 					)}
 				</div>
