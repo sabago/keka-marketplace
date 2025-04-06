@@ -401,6 +401,112 @@ function mpauth_handle_logout() {
     
     // Add JavaScript to force reload of marketplace iframe
     add_action('wp_footer', 'mpauth_add_reload_script');
+    
+    // Add JavaScript to clear session storage on the logout page
+    add_action('login_head', 'mpauth_add_clear_session_script');
+}
+
+/**
+ * Add JavaScript to clear session storage on the logout page
+ */
+function mpauth_add_clear_session_script() {
+    ?>
+    <script type="text/javascript">
+    // Clear the marketplace token from session storage
+    if (window.sessionStorage) {
+        sessionStorage.removeItem("wp_marketplace_token");
+        console.log("Cleared wp_marketplace_token from sessionStorage");
+    }
+    if (window.localStorage) {
+        localStorage.removeItem("wp_marketplace_token");
+        console.log("Cleared wp_marketplace_token from localStorage");
+    }
+    
+    // Set a cookie to indicate logout
+    document.cookie = "wp_marketplace_logout=1; path=/; max-age=3600";
+    console.log("Set wp_marketplace_logout cookie");
+    
+    // If this is the logout page, redirect to the home page after clearing storage
+    if (window.location.href.indexOf("wp-login.php?loggedout=true") > -1) {
+        console.log("On logout confirmation page, redirecting to home page");
+        // Add a small delay to ensure the cookie is set
+        setTimeout(function() {
+            window.location.href = "<?php echo esc_js(home_url()); ?>";
+        }, 500);
+    }
+    </script>
+    <?php
+}
+
+/**
+ * Add hooks to ensure the script runs on login page
+ */
+add_action('login_enqueue_scripts', 'mpauth_login_enqueue_scripts');
+function mpauth_login_enqueue_scripts() {
+    // Add the clear session script to the login page
+    mpauth_add_clear_session_script();
+}
+
+/**
+ * Add a script to all WordPress pages to handle custom login page
+ */
+add_action('wp_footer', 'mpauth_add_custom_login_script');
+function mpauth_add_custom_login_script() {
+    ?>
+    <script type="text/javascript">
+    (function() {
+        // Check if we're on the custom login page
+        if (window.location.href.indexOf("login-custom") > -1) {
+            console.log("On custom login page, checking for logout");
+            
+            // Check if the URL contains a logout parameter
+            if (window.location.href.indexOf("action=logout") > -1 || 
+                window.location.href.indexOf("loggedout=true") > -1) {
+                console.log("Logout detected on custom login page, clearing marketplace token");
+                
+                // Clear the token from all storage
+                if (window.sessionStorage) {
+                    sessionStorage.removeItem("wp_marketplace_token");
+                    console.log("Cleared wp_marketplace_token from sessionStorage");
+                }
+                if (window.localStorage) {
+                    localStorage.removeItem("wp_marketplace_token");
+                    console.log("Cleared wp_marketplace_token from localStorage");
+                }
+                
+                // Set the logout cookie
+                document.cookie = "wp_marketplace_logout=1; path=/; max-age=3600";
+                console.log("Set wp_marketplace_logout cookie");
+            }
+        }
+    })();
+    </script>
+    <?php
+}
+
+/**
+ * Add a direct script to the WordPress logout page
+ */
+add_action('wp_logout', 'mpauth_add_logout_script_to_page');
+function mpauth_add_logout_script_to_page() {
+    // Output a script directly to the page
+    ?>
+    <script type="text/javascript">
+    // This script is executed immediately when a user logs out
+    console.log("WordPress logout detected, clearing marketplace token");
+    
+    // Clear the token from all storage
+    if (window.sessionStorage) {
+        sessionStorage.removeItem("wp_marketplace_token");
+    }
+    if (window.localStorage) {
+        localStorage.removeItem("wp_marketplace_token");
+    }
+    
+    // Set the logout cookie
+    document.cookie = "wp_marketplace_logout=1; path=/; max-age=3600; domain=.masteringhomecare.com";
+    </script>
+    <?php
 }
 
 /**
@@ -452,10 +558,29 @@ function mpauth_create_js_file() {
             return match ? match[2] : null;
         }
         
+        // Check if we're on the custom login page
+        if (window.location.href.indexOf("login-custom") > -1) {
+            console.log("On custom login page, checking for logout");
+            
+            // Check if the URL contains a logout parameter
+            if (window.location.href.indexOf("action=logout") > -1 || 
+                window.location.href.indexOf("loggedout=true") > -1) {
+                console.log("Logout detected on custom login page, clearing marketplace token");
+                
+                // Clear the token from all storage
+                sessionStorage.removeItem("wp_marketplace_token");
+                localStorage.removeItem("wp_marketplace_token");
+                
+                // Set the logout cookie
+                document.cookie = "wp_marketplace_logout=1; path=/; max-age=3600; domain=.masteringhomecare.com";
+            }
+        }
+        
         // If logout cookie exists, clear token and remove the cookie
         if (getCookie('wp_marketplace_logout') === '1') {
             console.log('Logout cookie detected, clearing token');
             sessionStorage.removeItem("wp_marketplace_token");
+            localStorage.removeItem("wp_marketplace_token");
             document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
             
             // Force reload of the page to ensure all components update
