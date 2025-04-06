@@ -83,6 +83,25 @@
                     $('#marketplace-iframe').height(event.data.height);
                 }
             });
+            
+            // Check for logout cookie
+            function getCookie(name) {
+                var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                return match ? match[2] : null;
+            }
+            
+            // If logout cookie exists, clear token and reload iframe
+            if (getCookie('wp_marketplace_logout') === '1') {
+                console.log('Logout cookie detected, clearing token and reloading iframe');
+                sessionStorage.removeItem("wp_marketplace_token");
+                document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                
+                // Force reload of the iframe
+                var iframe = document.getElementById('marketplace-iframe');
+                if (iframe) {
+                    iframe.src = iframe.src;
+                }
+            }
         }
     });
 })(jQuery);

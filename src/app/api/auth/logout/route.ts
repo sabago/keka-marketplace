@@ -21,9 +21,12 @@ export async function POST() {
       path: '/',
       maxAge: 60 * 60, // 1 hour
       httpOnly: false, // Must be accessible from JavaScript
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: false, // Allow non-HTTPS access for development
+      sameSite: 'none', // Allow cross-site access
     });
+    
+    // Also set a header to clear the token
+    response.headers.set('Clear-Auth-Token', 'true');
     
     // Revalidate all paths to clear the server-side cache
     revalidatePath("/");

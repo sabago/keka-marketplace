@@ -371,8 +371,67 @@ function mpauth_enqueue_scripts() {
  */
 add_action('wp_logout', 'mpauth_handle_logout');
 function mpauth_handle_logout() {
+    // Get marketplace URL from options
+    $marketplace_url = get_option('mpauth_marketplace_url', '');
+    
+    if (!empty($marketplace_url)) {
+        // Construct the logout endpoint URL
+        $logout_url = rtrim($marketplace_url, '/') . '/api/auth/logout';
+        
+        // Make a non-blocking request to the logout endpoint
+        $args = array(
+            'method'      => 'POST',
+            'timeout'     => 1,
+            'redirection' => 0,
+            'httpversion' => '1.1',
+            'blocking'    => false,
+            'headers'     => array(
+                'Content-Type' => 'application/json',
+            ),
+            'body'        => json_encode(array('action' => 'logout')),
+            'cookies'     => array(),
+        );
+        
+        // Send the request
+        wp_remote_post($logout_url, $args);
+    }
+    
     // Set a cookie to indicate logout
     setcookie('wp_marketplace_logout', '1', time() + 3600, '/', '', is_ssl(), true);
+    
+    // Add JavaScript to force reload of marketplace iframe
+    add_action('wp_footer', 'mpauth_add_reload_script');
+}
+
+/**
+ * Add JavaScript to force reload of marketplace iframe
+ */
+function mpauth_add_reload_script() {
+    ?>
+    <script type="text/javascript">
+    (function() {
+        // Try to find the marketplace iframe
+        var iframe = document.getElementById('marketplace-iframe');
+        if (iframe) {
+            // Force reload of the iframe
+            iframe.src = iframe.src;
+        }
+        
+        // Also try to communicate with the iframe to force a reload
+        try {
+            var marketplaceUrl = '<?php echo esc_js(get_option('mpauth_marketplace_url', '')); ?>';
+            if (marketplaceUrl && iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    action: 'logout',
+                    timestamp: new Date().getTime()
+                }, marketplaceUrl);
+            }
+        } catch(e) {
+            console.error('Error communicating with marketplace iframe:', e);
+        }
+    })();
+    </script>
+    <?php
 }
 
 /**
@@ -386,6 +445,23 @@ function mpauth_create_js_file() {
     
     \$(document).ready(function() {
         var container = \$("#marketplace-container");
+        
+        // Check for logout cookie
+        function getCookie(name) {
+            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        
+        // If logout cookie exists, clear token and remove the cookie
+        if (getCookie('wp_marketplace_logout') === '1') {
+            console.log('Logout cookie detected, clearing token');
+            sessionStorage.removeItem("wp_marketplace_token");
+            document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            
+            // Force reload of the page to ensure all components update
+            window.location.reload();
+            return;
+        }
         
         // Always load the marketplace, but with or without token based on login status
         var marketplaceUrl = mpauthData.marketplaceUrl;
@@ -452,6 +528,13 @@ function mpauth_create_js_file() {
                 // Handle resize iframe
                 if (event.data.action === 'resize' && event.data.height) {
                     \$('#marketplace-iframe').height(event.data.height);
+                }
+                
+                // Handle logout message
+                if (event.data.action === 'logout') {
+                    console.log('Logout message received from iframe');
+                    sessionStorage.removeItem("wp_marketplace_token");
+                    window.location.reload();
                 }
             });
         }
