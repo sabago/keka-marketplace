@@ -44,6 +44,9 @@ function AuthStateManager({
 					loading: false,
 					token: null,
 				});
+
+				// Refresh the page to ensure all components update
+				window.location.reload();
 				return;
 			}
 			// First check for token in URL query parameter
