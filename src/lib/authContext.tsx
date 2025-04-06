@@ -157,26 +157,13 @@ function decodeJwt(token: string): WordPressUser | null {
 
 // Auth provider component
 export function AuthProvider({ children }: AuthProviderProps) {
-	// TEMPORARY: Mock admin user for testing
-	const mockAdminUser: WordPressUser = {
-		user_id: 1,
-		email: "admin@example.com",
-		display_name: "Admin User",
-		roles: ["administrator"],
-		iss: "https://example.com",
-		iat: Math.floor(Date.now() / 1000) - 60,
-		exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-	};
-
 	const [state, setState] = useState<AuthContextType>({
-		isLoggedIn: true, // TEMPORARY: Set to true for testing
-		user: mockAdminUser, // TEMPORARY: Use mock admin user
-		loading: false,
-		token: "mock-token-for-testing", // TEMPORARY: Mock token
+		isLoggedIn: false,
+		user: null,
+		loading: true,
+		token: null,
 	});
 
-	// TEMPORARY: Commented out normal authentication logic for testing
-	/*
 	// Check for token in sessionStorage on initial load (client-side only)
 	useEffect(() => {
 		const storedToken = sessionStorage.getItem("wp_marketplace_token");
@@ -214,7 +201,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			token: null,
 		});
 	}, []);
-	*/
 
 	return (
 		<AuthContext.Provider value={state}>
