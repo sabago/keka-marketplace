@@ -34,10 +34,12 @@ export async function GET() {
     });
 
     // Add product count to each category
-    const categoriesWithCount = categories.map((category: CategoryWithProducts) => ({
+    const categoriesWithCount = categories.map((category: CategoryWithProducts & { description?: string, icon?: string }) => ({
       id: category.id,
       name: category.name,
       slug: category.slug,
+      description: category.description,
+      icon: category.icon,
       productCount: category.products.length,
     }));
 

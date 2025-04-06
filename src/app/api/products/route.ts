@@ -57,13 +57,7 @@ export async function GET(request: Request) {
         include: {
           categories: {
             include: {
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                  slug: true,
-                }
-              },
+              category: true,
             },
           },
           reviews: {
