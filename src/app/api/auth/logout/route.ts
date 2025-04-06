@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 /**
  * POST /api/auth/logout
  * 
  * This endpoint is called by the WordPress plugin when a user logs out of WordPress.
  * It sets a special cookie that will be read by the client-side code to clear the session.
+ * It also revalidates all paths to clear the server-side cache.
  */
 export async function POST() {
   try {
@@ -22,6 +24,13 @@ export async function POST() {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
+    
+    // Revalidate all paths to clear the server-side cache
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath("/categories");
+    revalidatePath("/cart");
+    revalidatePath("/admin");
     
     return response;
   } catch (error) {

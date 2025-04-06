@@ -8,7 +8,7 @@ import {
 	ReactNode,
 	Suspense,
 } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 
 // Helper function to get a cookie value
 function getCookie(name: string): string | null {
@@ -26,6 +26,7 @@ function AuthStateManager({
 }) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
+	const router = useRouter();
 
 	useEffect(() => {
 		// Function to check authentication status
@@ -34,6 +35,19 @@ function AuthStateManager({
 			if (getCookie("wp_marketplace_logout") === "1") {
 				// Clear token and remove the cookie
 				sessionStorage.removeItem("wp_marketplace_token");
+				localStorage.removeItem("wp_marketplace_token"); // Also clear from localStorage just in case
+
+				// Clear all other potential storage
+				try {
+					// Clear all cache storage
+					if ("caches" in window) {
+						const cacheKeys = await window.caches.keys();
+						await Promise.all(cacheKeys.map((key) => window.caches.delete(key)));
+					}
+				} catch (e) {
+					console.error("Error clearing cache:", e);
+				}
+
 				document.cookie =
 					"wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
@@ -44,6 +58,9 @@ function AuthStateManager({
 					loading: false,
 					token: null,
 				});
+
+				// Refresh the router cache
+				router.refresh();
 
 				// Refresh the page to ensure all components update
 				window.location.reload();
@@ -127,7 +144,7 @@ function AuthStateManager({
 		};
 
 		checkAuthStatus();
-	}, [pathname, searchParams, setState]);
+	}, [pathname, searchParams, setState, router]);
 
 	return null;
 }
