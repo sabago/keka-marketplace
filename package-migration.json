@@ -1,0 +1,14 @@
+{
+	"name": "migration-script",
+	"version": "1.0.0",
+	"description": "Script to apply database migrations",
+	"type": "module",
+	"main": "apply-migration.js",
+	"scripts": {
+		"migrate": "node apply-migration.js"
+	},
+	"dependencies": {
+		"dotenv": "^16.0.0",
+		"pg": "^8.7.3"
+	}
+}
