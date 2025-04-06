@@ -24,7 +24,7 @@ export async function GET() {
     
     // Query the database
     const categoriesCount = await prisma.category.count();
-    const categories = await prisma.category.findMany({ take: 5 });
+    const categories = await prisma.$queryRaw`SELECT id, name, slug FROM "Category" LIMIT 5`;
     
     // Return the results
     return NextResponse.json({

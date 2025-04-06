@@ -16,7 +16,13 @@ export async function GET(
       include: {
         categories: {
           include: {
-            category: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              }
+            },
           },
         },
         reviews: {

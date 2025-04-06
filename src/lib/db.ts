@@ -91,7 +91,13 @@ export async function getProducts({
       include: {
         categories: {
           include: {
-            category: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              }
+            },
           },
         },
         reviews: {
@@ -132,7 +138,13 @@ export async function getProductById(id: string) {
     include: {
       categories: {
         include: {
-          category: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            }
+          },
         },
       },
       reviews: {
@@ -164,6 +176,11 @@ export async function getProductById(id: string) {
  */
 export async function getCategories() {
   return prisma.category.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
     orderBy: {
       name: 'asc',
     },
