@@ -27,14 +27,16 @@ export default function NewProductPage() {
 	const productFileInputRef = useRef<HTMLInputElement>(null);
 	const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
-	// Mock categories for now - in a real app, these would come from the API
+	// Healthcare categories
 	const availableCategories = [
-		{ id: "1", name: "Business" },
-		{ id: "2", name: "Education" },
-		{ id: "3", name: "Design" },
-		{ id: "4", name: "Technology" },
-		{ id: "5", name: "Marketing" },
-		{ id: "6", name: "Finance" },
+		{ id: "1", name: "Clinical Forms & Templates" },
+		{ id: "2", name: "Courses & Training Materials" },
+		{ id: "3", name: "Compliance & Accreditation Tools" },
+		{ id: "4", name: "Staffing & HR Resources" },
+		{ id: "5", name: "Medical Equipment & Supplies" },
+		{ id: "6", name: "Vendor Services" },
+		{ id: "7", name: "Marketing & Business Growth" },
+		{ id: "8", name: "Downloadables & Digital Tools" },
 	];
 
 	// Handle product file selection
