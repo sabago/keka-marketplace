@@ -10,6 +10,14 @@ import {
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
+// Helper function to get a cookie value
+function getCookie(name: string): string | null {
+	if (typeof document === "undefined") return null;
+
+	const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+	return match ? match[2] : null;
+}
+
 // Component that uses useSearchParams
 function AuthStateManager({
 	setState,
@@ -22,6 +30,22 @@ function AuthStateManager({
 	useEffect(() => {
 		// Function to check authentication status
 		const checkAuthStatus = async () => {
+			// Check for WordPress logout cookie
+			if (getCookie("wp_marketplace_logout") === "1") {
+				// Clear token and remove the cookie
+				sessionStorage.removeItem("wp_marketplace_token");
+				document.cookie =
+					"wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+				// Update state to logged out
+				setState({
+					isLoggedIn: false,
+					user: null,
+					loading: false,
+					token: null,
+				});
+				return;
+			}
 			// First check for token in URL query parameter
 			const token = searchParams.get("token");
 

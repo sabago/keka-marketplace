@@ -4,6 +4,18 @@
     $(document).ready(function() {
         var container = $("#marketplace-container");
         
+        // Check for logout cookie
+        function getCookie(name) {
+            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        
+        // If logout cookie exists, clear token and remove the cookie
+        if (getCookie('wp_marketplace_logout') === '1') {
+            sessionStorage.removeItem("wp_marketplace_token");
+            document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
+        
         // Always load the marketplace, but with or without token based on login status
         var marketplaceUrl = mpauthData.marketplaceUrl;
         

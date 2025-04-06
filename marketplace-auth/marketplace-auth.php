@@ -367,6 +367,15 @@ function mpauth_enqueue_scripts() {
 }
 
 /**
+ * Handle WordPress logout
+ */
+add_action('wp_logout', 'mpauth_handle_logout');
+function mpauth_handle_logout() {
+    // Set a cookie to indicate logout
+    setcookie('wp_marketplace_logout', '1', time() + 3600, '/', '', is_ssl(), true);
+}
+
+/**
  * Create JS file on plugin activation
  */
 register_activation_hook(__FILE__, 'mpauth_create_js_file');
