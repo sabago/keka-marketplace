@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { useCartStore } from "@/lib/useCart";
+import PageLayout from "@/components/PageLayout";
 
 // Component that uses useSearchParams
 function CheckoutSuccessWithParams({
@@ -51,7 +52,6 @@ export default function CheckoutSuccessPage() {
 
 	// Handle session ID change from the CheckoutSuccessWithParams component
 	const handleSessionIdChange = (newSessionId: string | null) => {
-		console.log("Session ID from URL:", newSessionId);
 		setSessionId(newSessionId);
 	};
 
@@ -62,9 +62,6 @@ export default function CheckoutSuccessPage() {
 		// Get session ID from URL directly as a fallback
 		const urlParams = new URLSearchParams(window.location.search);
 		const urlSessionId = urlParams.get("session_id");
-
-		console.log("Session ID from state:", sessionId);
-		console.log("Session ID from URL directly:", urlSessionId);
 
 		// Use the session ID from the URL if the one from state is not available
 		const effectiveSessionId = sessionId || urlSessionId;
@@ -103,18 +100,12 @@ export default function CheckoutSuccessPage() {
 				const data = await response.json();
 				setOrderDetails(data);
 				setLoading(false);
-			} catch (err) {
-				console.error(
-					`Error fetching order details (attempt ${retryCount + 1}):`,
-					err
-				);
-
+			} catch {
 				// If we're in development mode and this is the last retry, try to create a test order
 				if (
 					retryCount >= maxRetries - 1 &&
 					process.env.NODE_ENV === "development"
 				) {
-					console.log("Attempting to create a test order in development mode");
 					try {
 						// Retry with a flag to force create a test order
 						const retryResponse = await fetch(
@@ -128,8 +119,7 @@ export default function CheckoutSuccessPage() {
 						const data = await retryResponse.json();
 						setOrderDetails(data);
 						setLoading(false);
-					} catch (retryErr) {
-						console.error("Error creating test order:", retryErr);
+					} catch {
 						setError(
 							"Failed to load or create order details. The webhook may not have processed the payment yet."
 						);
@@ -138,7 +128,6 @@ export default function CheckoutSuccessPage() {
 				}
 				// If we haven't reached max retries, try again after a delay
 				else if (retryCount < maxRetries) {
-					console.log(`Retrying in ${(retryCount + 1) * 2} seconds...`);
 					setTimeout(() => {
 						fetchOrderDetails(retryCount + 1, maxRetries);
 					}, (retryCount + 1) * 2000); // Increasing delay with each retry
@@ -171,151 +160,157 @@ export default function CheckoutSuccessPage() {
 
 	if (loading) {
 		return (
-			<div className="container mx-auto px-4 py-16 text-center">
-				<div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
-				<p className="text-gray-600">Loading order details...</p>
-			</div>
+			<PageLayout>
+				<div className="container mx-auto px-4 py-16 text-center">
+					<div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
+					<p className="text-gray-600">Loading order details...</p>
+				</div>
+			</PageLayout>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="container mx-auto px-4 py-16">
-				<div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-					<div className="text-center mb-8">
-						<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-							<p>{error}</p>
+			<PageLayout>
+				<div className="container mx-auto px-4 py-16">
+					<div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+						<div className="text-center mb-8">
+							<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+								<p>{error}</p>
+							</div>
+							<Link href="/products" className="text-blue-600 hover:text-blue-800">
+								Return to Products
+							</Link>
 						</div>
-						<Link href="/products" className="text-blue-600 hover:text-blue-800">
-							Return to Products
-						</Link>
 					</div>
 				</div>
-			</div>
+			</PageLayout>
 		);
 	}
 
 	return (
-		<div className="container mx-auto px-4 py-16">
-			{/* Use the CheckoutSuccessWithParams component wrapped in Suspense */}
-			<Suspense fallback={null}>
-				<CheckoutSuccessWithParams onSessionIdChange={handleSessionIdChange} />
-			</Suspense>
-			<div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-				<div className="text-center mb-8">
-					<CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-					<h1 className="text-3xl font-bold mb-2">Thank You for Your Purchase!</h1>
-					<p className="text-gray-600">
-						Your order has been successfully processed.
-						{process.env.NODE_ENV === "development" ? (
-							<span className="block mt-2 text-amber-600 text-sm">
-								<strong>Note:</strong> In development mode, emails are not sent.
-								Download links are available below.
-							</span>
-						) : (
-							<span> A receipt and download links have been sent to your email.</span>
-						)}
-					</p>
-				</div>
+		<PageLayout>
+			<div className="container mx-auto px-4 py-16">
+				{/* Use the CheckoutSuccessWithParams component wrapped in Suspense */}
+				<Suspense fallback={null}>
+					<CheckoutSuccessWithParams onSessionIdChange={handleSessionIdChange} />
+				</Suspense>
+				<div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
+					<div className="text-center mb-8">
+						<CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+						<h1 className="text-3xl font-bold mb-2">Thank You for Your Purchase!</h1>
+						<p className="text-gray-600">
+							Your order has been successfully processed.
+							{process.env.NODE_ENV === "development" ? (
+								<span className="block mt-2 text-amber-600 text-sm">
+									<strong>Note:</strong> In development mode, emails are not sent.
+									Download links are available below.
+								</span>
+							) : (
+								<span> A receipt and download links have been sent to your email.</span>
+							)}
+						</p>
+					</div>
 
-				{orderDetails && (
-					<>
-						<div className="mb-8">
-							<h2 className="text-xl font-semibold mb-4">Order Summary</h2>
-							<div className="border rounded-lg overflow-hidden">
-								<table className="min-w-full divide-y divide-gray-200">
-									<thead className="bg-gray-50">
-										<tr>
-											<th
-												scope="col"
-												className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-											>
-												Product
-											</th>
-											<th
-												scope="col"
-												className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-											>
-												Price
-											</th>
-										</tr>
-									</thead>
-									<tbody className="bg-white divide-y divide-gray-200">
-										{orderDetails.orderItems.map((item) => (
-											<tr key={item.id}>
-												<td className="px-6 py-4 whitespace-nowrap">
-													<div className="flex items-center">
-														<div className="ml-4">
-															<div className="text-sm font-medium text-gray-900">
-																{item.product.title}
+					{orderDetails && (
+						<>
+							<div className="mb-8">
+								<h2 className="text-xl font-semibold mb-4">Order Summary</h2>
+								<div className="border rounded-lg overflow-hidden">
+									<table className="min-w-full divide-y divide-gray-200">
+										<thead className="bg-gray-50">
+											<tr>
+												<th
+													scope="col"
+													className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+												>
+													Product
+												</th>
+												<th
+													scope="col"
+													className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+												>
+													Price
+												</th>
+											</tr>
+										</thead>
+										<tbody className="bg-white divide-y divide-gray-200">
+											{orderDetails.orderItems.map((item) => (
+												<tr key={item.id}>
+													<td className="px-6 py-4 whitespace-nowrap">
+														<div className="flex items-center">
+															<div className="ml-4">
+																<div className="text-sm font-medium text-gray-900">
+																	{item.product.title}
+																</div>
 															</div>
 														</div>
-													</div>
+													</td>
+													<td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+														{formatPrice(item.price)}
+													</td>
+												</tr>
+											))}
+											<tr className="bg-gray-50">
+												<td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+													Total
 												</td>
-												<td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-													{formatPrice(item.price)}
+												<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-blue-600">
+													{formatPrice(orderDetails.totalAmount)}
 												</td>
 											</tr>
-										))}
-										<tr className="bg-gray-50">
-											<td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-												Total
-											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-blue-600">
-												{formatPrice(orderDetails.totalAmount)}
-											</td>
-										</tr>
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						{orderDetails.downloads && orderDetails.downloads.length > 0 && (
-							<div className="mb-8">
-								<h2 className="text-xl font-semibold mb-4">Your Downloads</h2>
-								<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-									<p className="text-sm text-blue-800 mb-4">
-										Your purchases are ready to download. You can also access these
-										downloads from the email sent to {orderDetails.customerEmail}.
-									</p>
-									<div className="space-y-3">
-										{orderDetails.downloads.map((download) => {
-											// Find the corresponding order item to get the product title
-											const orderItem = orderDetails.orderItems.find(
-												(item) => item.productId === download.productId
-											);
-											return (
-												<div
-													key={download.downloadToken}
-													className="flex justify-between items-center border-b border-blue-200 pb-2"
-												>
-													<span className="font-medium">
-														{orderItem?.product.title || "Digital Product"}
-													</span>
-													<a
-														href={`/api/download/${download.downloadToken}`}
-														className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
-														target="_blank"
-														rel="noopener noreferrer"
-													>
-														Download
-													</a>
-												</div>
-											);
-										})}
-									</div>
+										</tbody>
+									</table>
 								</div>
 							</div>
-						)}
-					</>
-				)}
 
-				<div className="text-center">
-					<Link href="/products" className="text-blue-600 hover:text-blue-800">
-						Continue Shopping
-					</Link>
+							{orderDetails.downloads && orderDetails.downloads.length > 0 && (
+								<div className="mb-8">
+									<h2 className="text-xl font-semibold mb-4">Your Downloads</h2>
+									<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+										<p className="text-sm text-blue-800 mb-4">
+											Your purchases are ready to download. You can also access these
+											downloads from the email sent to {orderDetails.customerEmail}.
+										</p>
+										<div className="space-y-3">
+											{orderDetails.downloads.map((download) => {
+												// Find the corresponding order item to get the product title
+												const orderItem = orderDetails.orderItems.find(
+													(item) => item.productId === download.productId
+												);
+												return (
+													<div
+														key={download.downloadToken}
+														className="flex justify-between items-center border-b border-blue-200 pb-2"
+													>
+														<span className="font-medium">
+															{orderItem?.product.title || "Digital Product"}
+														</span>
+														<a
+															href={`/api/download/${download.downloadToken}`}
+															className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+															target="_blank"
+															rel="noopener noreferrer"
+														>
+															Download
+														</a>
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								</div>
+							)}
+						</>
+					)}
+
+					<div className="text-center">
+						<Link href="/products" className="text-blue-600 hover:text-blue-800">
+							Continue Shopping
+						</Link>
+					</div>
 				</div>
 			</div>
-		</div>
+		</PageLayout>
 	);
 }

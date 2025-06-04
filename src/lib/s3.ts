@@ -182,7 +182,6 @@ startxref
         }
       });
       
-      console.log('Returning mock PDF file for development');
       return stream;
     }
     

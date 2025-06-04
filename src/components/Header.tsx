@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ShoppingCart, Menu, X, Search, User, LogOut } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings } from "@/lib/useSettings";
@@ -12,6 +12,7 @@ export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const pathname = usePathname();
+	const router = useRouter();
 	const { getTotalItems, isHydrated } = useCart();
 	const { settings } = useSettings();
 	const { isLoggedIn, user } = useAuth();
@@ -27,11 +28,9 @@ export default function Header() {
 		window.location.reload();
 	};
 
-	// Debug cart item count
+	// Effect to track cart hydration
 	useEffect(() => {
-		if (isHydrated) {
-			console.log("Cart item count:", cartItemCount);
-		}
+		// Cart is now hydrated and ready
 	}, [isHydrated, cartItemCount]);
 
 	const toggleMenu = () => {
@@ -41,7 +40,13 @@ export default function Header() {
 	const handleSearch = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (searchQuery.trim()) {
-			window.location.href = `/products?search=${encodeURIComponent(searchQuery)}`;
+			const searchUrl = `/?search=${encodeURIComponent(searchQuery)}`;
+			router.push(searchUrl);
+
+			// Force a hard navigation as a fallback
+			if (typeof window !== "undefined") {
+				window.location.href = searchUrl;
+			}
 		}
 	};
 
@@ -57,16 +62,6 @@ export default function Header() {
 					{/* Desktop Navigation */}
 					<nav className="hidden md:flex items-center space-x-8">
 						<Link
-							href="/products"
-							className={`hover:text-[#48ccbc] ${
-								pathname === "/products"
-									? "text-[#48ccbc] font-medium"
-									: "text-gray-600"
-							}`}
-						>
-							All Products
-						</Link>
-						<Link
 							href="/categories"
 							className={`hover:text-[#48ccbc] ${
 								pathname === "/categories"
@@ -76,8 +71,10 @@ export default function Header() {
 						>
 							Categories
 						</Link>
-						{/* Only show Admin link for users with Administrator role */}
-						{isLoggedIn && user?.roles && user.roles.includes("administrator") && (
+						{/* Show Admin link for users with Administrator role or when on localhost */}
+						{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
+						(typeof window !== "undefined" &&
+							window.location.hostname === "localhost") ? (
 							<Link
 								href="/admin"
 								className={`hover:text-[#48ccbc] ${
@@ -86,22 +83,32 @@ export default function Header() {
 										: "text-gray-600"
 								}`}
 							>
-								Admin
+								Admin{" "}
+								{typeof window !== "undefined" &&
+									window.location.hostname === "localhost" &&
+									(!isLoggedIn || !user?.roles?.includes("administrator")) &&
+									"(Dev Mode)"}
 							</Link>
-						)}
+						) : null}
 					</nav>
 
 					{/* Search, Cart, and Auth */}
 					<div className="hidden md:flex items-center space-x-4">
-						<form onSubmit={handleSearch} className="relative">
+						<form onSubmit={handleSearch} className="relative flex items-center">
 							<input
 								type="text"
 								placeholder="Search products..."
-								className="pl-10 pr-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="pl-10 pr-4 py-2 border rounded-l-full focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 							/>
 							<Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+							<button
+								type="submit"
+								className="bg-blue-600 text-white px-4 py-2 rounded-r-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+							>
+								Search
+							</button>
 						</form>
 
 						{/* Auth Section */}
@@ -155,28 +162,29 @@ export default function Header() {
 				{/* Mobile Menu */}
 				{isMenuOpen && (
 					<div className="md:hidden mt-4 pb-4">
-						<form onSubmit={handleSearch} className="relative mb-4">
+						<form
+							onSubmit={(e) => {
+								handleSearch(e);
+								setIsMenuOpen(false); // Close menu after search
+							}}
+							className="relative mb-4 flex items-center"
+						>
 							<input
 								type="text"
 								placeholder="Search products..."
-								className="w-full pl-10 pr-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full pl-10 pr-4 py-2 border rounded-l-full focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 							/>
 							<Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+							<button
+								type="submit"
+								className="bg-blue-600 text-white px-4 py-2 rounded-r-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+							>
+								Search
+							</button>
 						</form>
 						<nav className="flex flex-col space-y-4">
-							<Link
-								href="/products"
-								className={`hover:text-blue-600 ${
-									pathname === "/products"
-										? "text-blue-600 font-medium"
-										: "text-gray-600"
-								}`}
-								onClick={() => setIsMenuOpen(false)}
-							>
-								All Products
-							</Link>
 							<Link
 								href="/categories"
 								className={`hover:text-blue-600 ${
@@ -188,8 +196,10 @@ export default function Header() {
 							>
 								Categories
 							</Link>
-							{/* Only show Admin link for users with Administrator role */}
-							{isLoggedIn && user?.roles && user.roles.includes("administrator") && (
+							{/* Show Admin link for users with Administrator role or when on localhost */}
+							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
+							(typeof window !== "undefined" &&
+								window.location.hostname === "localhost") ? (
 								<Link
 									href="/admin"
 									className={`hover:text-blue-600 ${
@@ -199,9 +209,13 @@ export default function Header() {
 									}`}
 									onClick={() => setIsMenuOpen(false)}
 								>
-									Admin
+									Admin{" "}
+									{typeof window !== "undefined" &&
+										window.location.hostname === "localhost" &&
+										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
+										"(Dev Mode)"}
 								</Link>
-							)}
+							) : null}
 							{/* Auth Section for Mobile */}
 							{isLoggedIn ? (
 								<>

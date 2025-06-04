@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Tag, ArrowRight, Loader2 } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
+import PageLayout from "@/components/PageLayout";
 
 // Define category type
 interface Category {
@@ -96,18 +97,15 @@ export default function CategoriesPage() {
 		const fetchData = async () => {
 			try {
 				// Fetch categories
-				console.log("Fetching categories...");
 				const categoriesResponse = await fetch("/api/categories");
 				if (!categoriesResponse.ok) {
 					throw new Error("Failed to fetch categories");
 				}
 				const categoriesData = await categoriesResponse.json();
-				console.log("Categories data:", categoriesData);
 
 				setCategories(categoriesData.categories || []);
 				setLoading(false);
-			} catch (err) {
-				console.error("Error fetching data:", err);
+			} catch {
 				setError("Failed to load categories. Please try again later.");
 				setLoading(false);
 			}
@@ -122,91 +120,93 @@ export default function CategoriesPage() {
 	};
 
 	return (
-		<div className="container mx-auto px-4 py-8">
-			<h1 className="text-3xl font-bold mb-2">Product Categories</h1>
-			<p className="text-gray-600 mb-8">{settings.siteDescription}</p>
+		<PageLayout>
+			<div className="container mx-auto px-4 py-8">
+				<h1 className="text-3xl font-bold mb-2">Product Categories</h1>
+				<p className="text-gray-600 mb-8">{settings.siteDescription}</p>
 
-			{/* Loading state */}
-			{loading && (
-				<div className="flex items-center justify-center py-12">
-					<Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-					<span className="ml-2 text-gray-600">Loading categories...</span>
-				</div>
-			)}
+				{/* Loading state */}
+				{loading && (
+					<div className="flex items-center justify-center py-12">
+						<Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+						<span className="ml-2 text-gray-600">Loading categories...</span>
+					</div>
+				)}
 
-			{/* Error state */}
-			{error && (
-				<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-					<p>{error}</p>
-				</div>
-			)}
+				{/* Error state */}
+				{error && (
+					<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+						<p>{error}</p>
+					</div>
+				)}
 
-			{/* Categories grid */}
-			{!loading && !error && (
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-					{categories
-						.filter((category) => !category.name.startsWith("Hidden Category"))
-						.map((category) => (
-							<div
-								key={category.id}
-								className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-								onClick={() => handleCategoryClick(category.id)}
-							>
-								{/* Add background image based on category */}
+				{/* Categories grid */}
+				{!loading && !error && (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						{categories
+							.filter((category) => !category.name.startsWith("Hidden Category"))
+							.map((category) => (
 								<div
-									className="relative h-48 w-full bg-cover bg-center"
-									style={{
-										backgroundImage: getCategoryBackgroundImage(category.slug),
-									}}
+									key={category.id}
+									className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+									onClick={() => handleCategoryClick(category.id)}
 								>
-									<div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-4">
-										<span className="text-3xl mb-2">
-											{categoryDetails[category.slug]?.icon || (
-												<Tag className="h-8 w-8 text-white" />
-											)}
-										</span>
-										<h2 className="text-white text-2xl font-bold text-center">
-											{category.name}
-										</h2>
-										<span className="mt-2 bg-white bg-opacity-20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full">
-											{category.productCount}{" "}
-											{category.productCount === 1 ? "product" : "products"}
-										</span>
+									{/* Add background image based on category */}
+									<div
+										className="relative h-48 w-full bg-cover bg-center"
+										style={{
+											backgroundImage: getCategoryBackgroundImage(category.slug),
+										}}
+									>
+										<div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center p-4">
+											<span className="text-3xl mb-2">
+												{categoryDetails[category.slug]?.icon || (
+													<Tag className="h-8 w-8 text-white" />
+												)}
+											</span>
+											<h2 className="text-white text-2xl font-bold text-center">
+												{category.name}
+											</h2>
+											<span className="mt-2 bg-white bg-opacity-20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full">
+												{category.productCount}{" "}
+												{category.productCount === 1 ? "product" : "products"}
+											</span>
+										</div>
+									</div>
+									<div className="p-4">
+										<p className="text-gray-600 mb-4">
+											{categoryDetails[category.slug]?.description ||
+												`Browse all ${category.name.toLowerCase()} products in our marketplace.`}
+										</p>
+										<div className="flex justify-end">
+											<Link
+												href={`/products?categoryId=${category.id}`}
+												className="text-[#48ccbc] hover:text-blue-800 font-medium inline-flex items-center"
+												onClick={(e) => e.stopPropagation()}
+											>
+												View Products
+												<ArrowRight className="ml-1 h-4 w-4" />
+											</Link>
+										</div>
 									</div>
 								</div>
-								<div className="p-4">
-									<p className="text-gray-600 mb-4">
-										{categoryDetails[category.slug]?.description ||
-											`Browse all ${category.name.toLowerCase()} products in our marketplace.`}
-									</p>
-									<div className="flex justify-end">
-										<Link
-											href={`/products?categoryId=${category.id}`}
-											className="text-[#48ccbc] hover:text-blue-800 font-medium inline-flex items-center"
-											onClick={(e) => e.stopPropagation()}
-										>
-											View Products
-											<ArrowRight className="ml-1 h-4 w-4" />
-										</Link>
-									</div>
-								</div>
-							</div>
-						))}
-				</div>
-			)}
+							))}
+					</div>
+				)}
 
-			{/* Empty state */}
-			{!loading && !error && categories.length === 0 && (
-				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<p className="text-gray-600 mb-4">No categories found.</p>
-					<Link
-						href="/products"
-						className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-					>
-						Browse All Products
-					</Link>
-				</div>
-			)}
-		</div>
+				{/* Empty state */}
+				{!loading && !error && categories.length === 0 && (
+					<div className="bg-white rounded-lg shadow-md p-8 text-center">
+						<p className="text-gray-600 mb-4">No categories found.</p>
+						<Link
+							href="/products"
+							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+						>
+							Browse All Products
+						</Link>
+					</div>
+				)}
+			</div>
+		</PageLayout>
 	);
 }

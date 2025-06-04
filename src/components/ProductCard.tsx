@@ -39,12 +39,7 @@ export default function ProductCard({
 	const cartItem = isHydrated ? items.find((item) => item.id === id) : null;
 	const quantity = cartItem ? cartItem.quantity : 0;
 
-	// Debug cart state
-	console.log(
-		`Product ${id} - isHydrated: ${isHydrated}, cartItem:`,
-		cartItem,
-		`quantity: ${quantity}`
-	);
+	// Cart state tracking
 	const [showReviewForm, setShowReviewForm] = useState(false);
 	const { settings } = useSettings();
 	const { isLoggedIn } = useAuth();
@@ -78,15 +73,6 @@ export default function ProductCard({
 		// Use discounted price for logged-in users
 		const finalPrice = isLoggedIn ? discountedPrice : price;
 
-		// Log before adding to cart
-		console.log("Adding to cart:", {
-			id,
-			title,
-			price: finalPrice,
-			thumbnail,
-			isDiscounted: isLoggedIn && discountPercentage > 0,
-		});
-
 		addItem({
 			id,
 			title,
@@ -94,15 +80,7 @@ export default function ProductCard({
 			thumbnail: thumbnail || "/images/dummy.jpeg",
 		});
 
-		// Get updated cart state
-		const updatedItems = useCartStore.getState().items;
-		const updatedCartItem = updatedItems.find((item) => item.id === id);
-		const updatedQuantity = updatedCartItem ? updatedCartItem.quantity : 0;
-
-		// Log cart state after adding item
-		console.log("Cart state after adding item:", updatedItems);
-		console.log("Total items:", useCartStore.getState().getTotalItems());
-		console.log("Updated quantity for this product:", updatedQuantity);
+		// Add item to cart
 
 		setAddedToCart(true);
 

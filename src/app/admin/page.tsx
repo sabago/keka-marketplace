@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { PlusCircle, Edit, Trash2, Search } from "lucide-react";
+import { PlusCircle, Edit, Trash2 } from "lucide-react";
+import { useAdminAccess } from "@/lib/adminUtils";
+import AdminDashboard from "@/components/AdminDashboard";
+import AdminPageLayout from "@/components/AdminPageLayout";
 
 // Define product type
 interface Product {
@@ -19,10 +22,12 @@ interface Product {
 }
 
 export default function AdminPage() {
+	// Check if user has admin access (either logged in as admin or on localhost)
+	const { isLocalhost, isLoggedIn, user } = useAdminAccess();
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [searchQuery, setSearchQuery] = useState("");
+	const [searchQuery] = useState("");
 
 	// Fetch products from API
 	useEffect(() => {
@@ -80,188 +85,190 @@ export default function AdminPage() {
 	};
 
 	return (
-		<div className="container mx-auto px-4 py-8">
-			<div className="flex justify-between items-center mb-8">
-				<h1 className="text-3xl font-bold">Admin Dashboard</h1>
-				<Link
-					href="/admin/products/new"
-					className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
-				>
-					<PlusCircle className="h-5 w-5 mr-2" />
-					Add New Product
-				</Link>
-			</div>
-
-			{/* Search and Filter */}
-			<div className="bg-white rounded-lg shadow-md p-6 mb-8">
-				<div className="flex items-center">
-					<div className="relative flex-grow">
-						<input
-							type="text"
-							placeholder="Search products..."
-							className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-						/>
-						<Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+		<AdminPageLayout>
+			<div className="container mx-auto px-4 py-8">
+				{/* Dev mode indicator */}
+				{isLocalhost && (
+					<div className="bg-yellow-100 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mb-6 text-sm">
+						<strong>Development Mode:</strong> Admin access enabled on localhost
+						{!isLoggedIn || !user?.roles?.includes("administrator")
+							? " without authentication."
+							: " (you are also logged in as admin)."}
 					</div>
-				</div>
-			</div>
-
-			{/* Loading and Error States */}
-			{loading && (
-				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-					<p className="text-gray-600">Loading products...</p>
-				</div>
-			)}
-
-			{error && (
-				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-						<p>{error}</p>
-					</div>
-					<button
-						onClick={() => window.location.reload()}
-						className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+				)}
+				<div className="flex justify-between items-center mb-8">
+					<h1 className="text-3xl font-bold">Admin Dashboard</h1>
+					<Link
+						href="/admin/products/new"
+						className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
 					>
-						Try Again
-					</button>
+						<PlusCircle className="h-5 w-5 mr-2" />
+						Add New Product
+					</Link>
 				</div>
-			)}
 
-			{/* Products Table */}
-			{!loading && !error && (
-				<div className="bg-white rounded-lg shadow-md overflow-hidden">
-					<div className="overflow-x-auto">
-						<table className="min-w-full divide-y divide-gray-200">
-							<thead className="bg-gray-50">
-								<tr>
-									<th
-										scope="col"
-										className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-									>
-										Product
-									</th>
-									<th
-										scope="col"
-										className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-									>
-										Price
-									</th>
-									<th
-										scope="col"
-										className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-									>
-										Sales
-									</th>
-									<th
-										scope="col"
-										className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-									>
-										Created
-									</th>
-									<th
-										scope="col"
-										className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-									>
-										Actions
-									</th>
-								</tr>
-							</thead>
-							<tbody className="bg-white divide-y divide-gray-200">
-								{filteredProducts.map((product) => (
-									<tr key={product.id} className="hover:bg-gray-50">
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="flex items-center">
-												<div className="h-10 w-10 flex-shrink-0 relative">
-													<Image
-														src={product.thumbnail}
-														alt={product.title}
-														fill
-														sizes="40px"
-														className="rounded object-cover"
-													/>
-												</div>
-												<div className="ml-4">
-													<div className="text-sm font-medium text-gray-900">
-														{product.title}
-													</div>
-													<div className="text-sm text-gray-500">ID: {product.id}</div>
-												</div>
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-900">
-												{formatPrice(product.price)}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-900">{product.sales}</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-500">{product.createdAt}</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-											<div className="flex justify-end space-x-2">
-												<Link
-													href={`/admin/products/edit/${product.id}`}
-													className="text-blue-600 hover:text-blue-900"
-												>
-													<Edit className="h-5 w-5" />
-												</Link>
-												<button
-													onClick={() => handleDeleteProduct(product.id)}
-													className="text-red-600 hover:text-red-900"
-												>
-													<Trash2 className="h-5 w-5" />
-												</button>
-											</div>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+				{/* Loading and Error States */}
+				{loading && (
+					<div className="bg-white rounded-lg shadow-md p-8 text-center">
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+						<p className="text-gray-600">Loading products...</p>
 					</div>
-					{filteredProducts.length === 0 && (
-						<div className="text-center py-8 text-gray-500">
-							No products found. Try a different search term or add a new product.
-						</div>
-					)}
-				</div>
-			)}
+				)}
 
-			{/* Admin Navigation */}
-			<div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-				<Link
-					href="/admin/orders"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-				>
-					<h2 className="text-xl font-semibold mb-2">Orders</h2>
-					<p className="text-gray-600">View and manage customer orders</p>
-				</Link>
-				<Link
-					href="/admin/analytics"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-				>
-					<h2 className="text-xl font-semibold mb-2">Analytics</h2>
-					<p className="text-gray-600">View sales and performance metrics</p>
-				</Link>
-				<Link
-					href="/admin/settings"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-				>
-					<h2 className="text-xl font-semibold mb-2">Settings</h2>
-					<p className="text-gray-600">Configure marketplace settings</p>
-				</Link>
-				<Link
-					href="/admin/reviews"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-				>
-					<h2 className="text-xl font-semibold mb-2">Reviews</h2>
-					<p className="text-gray-600">Manage customer reviews</p>
-				</Link>
+				{error && (
+					<div className="bg-white rounded-lg shadow-md p-8 text-center">
+						<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+							<p>{error}</p>
+						</div>
+						<button
+							onClick={() => window.location.reload()}
+							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+						>
+							Try Again
+						</button>
+					</div>
+				)}
+
+				{/* Dashboard */}
+				{!loading && !error && (
+					<div className="mb-8">
+						<AdminDashboard />
+					</div>
+				)}
+
+				{/* Products Table */}
+				{!loading && !error && (
+					<div className="bg-white rounded-lg shadow-md overflow-hidden">
+						<div className="overflow-x-auto">
+							<table className="min-w-full divide-y divide-gray-200">
+								<thead className="bg-gray-50">
+									<tr>
+										<th
+											scope="col"
+											className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Product
+										</th>
+										<th
+											scope="col"
+											className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Price
+										</th>
+										<th
+											scope="col"
+											className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Sales
+										</th>
+										<th
+											scope="col"
+											className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Created
+										</th>
+										<th
+											scope="col"
+											className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody className="bg-white divide-y divide-gray-200">
+									{filteredProducts.map((product) => (
+										<tr key={product.id} className="hover:bg-gray-50">
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="flex items-center">
+													<div className="h-10 w-10 flex-shrink-0 relative">
+														<Image
+															src={product.thumbnail}
+															alt={product.title}
+															fill
+															sizes="40px"
+															className="rounded object-cover"
+														/>
+													</div>
+													<div className="ml-4">
+														<div className="text-sm font-medium text-gray-900">
+															{product.title}
+														</div>
+														<div className="text-sm text-gray-500">ID: {product.id}</div>
+													</div>
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-900">
+													{formatPrice(product.price)}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-900">{product.sales}</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-500">{product.createdAt}</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+												<div className="flex justify-end space-x-2">
+													<Link
+														href={`/admin/products/edit/${product.id}`}
+														className="text-blue-600 hover:text-blue-900"
+													>
+														<Edit className="h-5 w-5" />
+													</Link>
+													<button
+														onClick={() => handleDeleteProduct(product.id)}
+														className="text-red-600 hover:text-red-900"
+													>
+														<Trash2 className="h-5 w-5" />
+													</button>
+												</div>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+						{filteredProducts.length === 0 && (
+							<div className="text-center py-8 text-gray-500">
+								No products found. Try a different search term or add a new product.
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Admin Navigation */}
+				<div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+					<Link
+						href="/admin/orders"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+					>
+						<h2 className="text-xl font-semibold mb-2">Orders</h2>
+						<p className="text-gray-600">View and manage customer orders</p>
+					</Link>
+					<Link
+						href="/admin/analytics"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+					>
+						<h2 className="text-xl font-semibold mb-2">Analytics</h2>
+						<p className="text-gray-600">View sales and performance metrics</p>
+					</Link>
+					<Link
+						href="/admin/settings"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+					>
+						<h2 className="text-xl font-semibold mb-2">Settings</h2>
+						<p className="text-gray-600">Configure marketplace settings</p>
+					</Link>
+					<Link
+						href="/admin/reviews"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+					>
+						<h2 className="text-xl font-semibold mb-2">Reviews</h2>
+						<p className="text-gray-600">Manage customer reviews</p>
+					</Link>
+				</div>
 			</div>
-		</div>
+		</AdminPageLayout>
 	);
 }

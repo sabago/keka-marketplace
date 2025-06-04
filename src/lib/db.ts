@@ -11,10 +11,9 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 const connectionString = getConnectionString();
 
 // If we're in a production environment, log the connection string (without password)
-if (process.env.NODE_ENV === 'production') {
-  const sanitizedUrl = connectionString.replace(/\/\/[^:]+:[^@]+@/, '//[REDACTED]:[REDACTED]@');
-  console.log('Using database connection:', sanitizedUrl);
-}
+// if (process.env.NODE_ENV === 'production') {
+//   const sanitizedUrl = connectionString.replace(/\/\/[^:]+:[^@]+@/, '//[REDACTED]:[REDACTED]@');
+// }
 
 export const prisma =
   globalForPrisma.prisma ||

@@ -17,6 +17,8 @@ export default function NewProductPage() {
 	const [description, setDescription] = useState("");
 	const [price, setPrice] = useState("");
 	const [categories, setCategories] = useState<string[]>([]);
+	const [seoTags, setSeoTags] = useState<string[]>([]);
+	const [currentTag, setCurrentTag] = useState("");
 
 	// File state
 	const [productFile, setProductFile] = useState<File | null>(null);
@@ -24,9 +26,19 @@ export default function NewProductPage() {
 	const [productFilePreview, setProductFilePreview] = useState<string>("");
 	const [thumbnailPreview, setThumbnailPreview] = useState<string>("");
 
+	// Additional images and video state
+	const [additionalImageFiles, setAdditionalImageFiles] = useState<File[]>([]);
+	const [additionalImagePreviews, setAdditionalImagePreviews] = useState<
+		string[]
+	>([]);
+	const [videoFile, setVideoFile] = useState<File | null>(null);
+	const [videoPreview, setVideoPreview] = useState<string>("");
+
 	// Refs for file inputs
 	const productFileInputRef = useRef<HTMLInputElement>(null);
 	const thumbnailInputRef = useRef<HTMLInputElement>(null);
+	const additionalImagesInputRef = useRef<HTMLInputElement>(null);
+	const videoInputRef = useRef<HTMLInputElement>(null);
 
 	// Categories state
 	const [availableCategories, setAvailableCategories] = useState<
@@ -49,8 +61,7 @@ export default function NewProductPage() {
 					}))
 				);
 				setIsLoading(false);
-			} catch (err) {
-				console.error("Error fetching categories:", err);
+			} catch {
 				setError("Failed to load categories. Please try again later.");
 				setIsLoading(false);
 			}
@@ -80,6 +91,43 @@ export default function NewProductPage() {
 			const reader = new FileReader();
 			reader.onload = () => {
 				setThumbnailPreview(reader.result as string);
+			};
+			reader.readAsDataURL(file);
+		}
+	};
+
+	// Handle additional images selection
+	const handleAdditionalImagesChange = (e: ChangeEvent<HTMLInputElement>) => {
+		if (e.target.files && e.target.files.length > 0) {
+			// Convert FileList to array and limit to 9 images
+			const files = Array.from(e.target.files).slice(0, 9);
+			setAdditionalImageFiles(files);
+
+			// Create preview URLs for each file
+			const previews: string[] = [];
+			files.forEach((file) => {
+				const reader = new FileReader();
+				reader.onload = () => {
+					previews.push(reader.result as string);
+					if (previews.length === files.length) {
+						setAdditionalImagePreviews(previews);
+					}
+				};
+				reader.readAsDataURL(file);
+			});
+		}
+	};
+
+	// Handle video selection
+	const handleVideoChange = (e: ChangeEvent<HTMLInputElement>) => {
+		if (e.target.files && e.target.files[0]) {
+			const file = e.target.files[0];
+			setVideoFile(file);
+
+			// Create a preview URL
+			const reader = new FileReader();
+			reader.onload = () => {
+				setVideoPreview(reader.result as string);
 			};
 			reader.readAsDataURL(file);
 		}
@@ -170,9 +218,26 @@ export default function NewProductPage() {
 				formData.append("thumbnailFile", blob, "dummy-thumbnail.png");
 			}
 
+			// Add additional images if any
+			if (additionalImageFiles.length > 0) {
+				additionalImageFiles.forEach((file) => {
+					formData.append("additionalImages", file);
+				});
+			}
+
+			// Add video if exists
+			if (videoFile) {
+				formData.append("videoFile", videoFile);
+			}
+
 			// Add categories
 			categories.forEach((categoryId) => {
 				formData.append("categories[]", categoryId);
+			});
+
+			// Add SEO tags
+			seoTags.forEach((tag) => {
+				formData.append("seoTags[]", tag);
 			});
 
 			// Send the request to the API
@@ -186,8 +251,10 @@ export default function NewProductPage() {
 				throw new Error(errorData.error || "Failed to create product");
 			}
 
-			const data = await response.json();
-			console.log("meh", data);
+			// Commented out to avoid console logs and unused variable warnings
+			// const data = await response.json();
+			// console.log("meh", data);
+			await response.json(); // Still parse the response but don't store it
 
 			setSuccess("Product created successfully!");
 
@@ -336,7 +403,7 @@ export default function NewProductPage() {
 						{/* Thumbnail Upload */}
 						<div className="mb-6">
 							<label className="block text-sm font-medium text-gray-700 mb-1">
-								Thumbnail Image
+								Thumbnail Image (Main Product Image)
 							</label>
 							<div
 								className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
@@ -367,6 +434,147 @@ export default function NewProductPage() {
 									</div>
 								)}
 							</div>
+						</div>
+
+						{/* Additional Images Upload */}
+						<div className="mb-6">
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Additional Images (Up to 9)
+							</label>
+							<div
+								className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
+								onClick={() => additionalImagesInputRef.current?.click()}
+							>
+								<input
+									type="file"
+									ref={additionalImagesInputRef}
+									className="hidden"
+									accept="image/*"
+									multiple
+									onChange={handleAdditionalImagesChange}
+									disabled={isSubmitting}
+								/>
+
+								{additionalImagePreviews.length > 0 ? (
+									<div>
+										<div className="grid grid-cols-3 gap-2 mb-4">
+											{additionalImagePreviews.map((preview, index) => (
+												<div key={index} className="relative h-24">
+													<img
+														src={preview}
+														alt={`Additional image ${index + 1}`}
+														className="h-full w-full object-cover rounded"
+													/>
+												</div>
+											))}
+										</div>
+										<p className="text-sm text-gray-500">Click to change images</p>
+									</div>
+								) : (
+									<div className="text-gray-500">
+										<Upload className="h-10 w-10 mx-auto mb-2" />
+										<p className="font-medium">Click to upload additional images</p>
+										<p className="text-sm mt-1">or drag and drop (up to 9 images)</p>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Video Upload */}
+						<div className="mb-6">
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Product Video (Optional)
+							</label>
+							<div
+								className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50"
+								onClick={() => videoInputRef.current?.click()}
+							>
+								<input
+									type="file"
+									ref={videoInputRef}
+									className="hidden"
+									accept="video/*"
+									onChange={handleVideoChange}
+									disabled={isSubmitting}
+								/>
+
+								{videoPreview ? (
+									<div>
+										<video
+											controls
+											className="w-full h-40 object-contain mb-2"
+											poster={thumbnailPreview}
+										>
+											<source src={videoPreview} type="video/mp4" />
+											Your browser does not support the video tag.
+										</video>
+										<p className="text-sm text-gray-500">Click to change video</p>
+									</div>
+								) : (
+									<div className="text-gray-500">
+										<Upload className="h-10 w-10 mx-auto mb-2" />
+										<p className="font-medium">Click to upload product video</p>
+										<p className="text-sm mt-1">or drag and drop</p>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* SEO Tags */}
+						<div className="mb-6">
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								SEO Tags (Up to 13)
+							</label>
+							<p className="text-xs text-gray-500 mb-2">
+								Add up to 13 tags to help people search for your listings.
+							</p>
+							<div className="flex flex-wrap gap-2 mb-3">
+								{seoTags.map((tag, index) => (
+									<div
+										key={index}
+										className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center"
+									>
+										<span className="mr-1">{tag}</span>
+										<button
+											type="button"
+											onClick={() => {
+												setSeoTags(seoTags.filter((_, i) => i !== index));
+											}}
+											className="text-blue-600 hover:text-blue-800"
+										>
+											×
+										</button>
+									</div>
+								))}
+							</div>
+							<div className="flex">
+								<input
+									type="text"
+									value={currentTag}
+									onChange={(e) => setCurrentTag(e.target.value)}
+									placeholder="Add a tag (e.g., healthcare, template)"
+									className="flex-grow px-4 py-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+									disabled={isSubmitting || seoTags.length >= 13}
+								/>
+								<button
+									type="button"
+									onClick={() => {
+										if (currentTag.trim() && seoTags.length < 13) {
+											setSeoTags([...seoTags, currentTag.trim()]);
+											setCurrentTag("");
+										}
+									}}
+									disabled={!currentTag.trim() || seoTags.length >= 13 || isSubmitting}
+									className="bg-blue-600 text-white px-4 py-2 rounded-r-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+								>
+									Add
+								</button>
+							</div>
+							{seoTags.length >= 13 && (
+								<p className="text-amber-600 text-xs mt-1">
+									Maximum number of tags reached (13).
+								</p>
+							)}
 						</div>
 
 						{/* Categories */}

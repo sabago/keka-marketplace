@@ -34,8 +34,7 @@ async function main() {
       }
     },
   })
-  
-  console.log('Created product:', product)
+
 }
 
 main()

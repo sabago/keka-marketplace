@@ -43,8 +43,6 @@ export async function createCheckoutSession(
     quantity: product.quantity,
   }));
   
-  console.log('Creating Stripe checkout session with line items:', JSON.stringify(lineItems));
-
   // Create checkout session
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],

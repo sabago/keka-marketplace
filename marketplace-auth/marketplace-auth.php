@@ -407,6 +407,63 @@ function mpauth_handle_logout() {
 }
 
 /**
+ * Modify WordPress logout URL to use our custom logout process
+ */
+add_filter('logout_url', 'mpauth_custom_logout_url', 10, 2);
+function mpauth_custom_logout_url($logout_url, $redirect) {
+    // Get marketplace URL from options
+    $marketplace_url = get_option('mpauth_marketplace_url', '');
+    
+    if (!empty($marketplace_url)) {
+        // Construct the logout endpoint URL
+        $custom_logout_url = rtrim($marketplace_url, '/') . '/api/auth/logout';
+        
+        // Add redirect parameter if provided
+        if (!empty($redirect)) {
+            $custom_logout_url .= '?redirect=' . urlencode($redirect);
+        }
+        
+        return $custom_logout_url;
+    }
+    
+    // Fallback to default WordPress logout URL
+    return $logout_url;
+}
+
+/**
+ * Add a custom endpoint to handle logout requests
+ */
+add_action('init', 'mpauth_register_custom_logout_endpoint');
+function mpauth_register_custom_logout_endpoint() {
+    add_rewrite_rule(
+        '^marketplace-logout/?$',
+        'index.php?marketplace_logout=1',
+        'top'
+    );
+    
+    add_rewrite_tag('%marketplace_logout%', '([^&]+)');
+}
+
+/**
+ * Handle custom logout endpoint
+ */
+add_action('template_redirect', 'mpauth_handle_custom_logout_endpoint');
+function mpauth_handle_custom_logout_endpoint() {
+    if (get_query_var('marketplace_logout') == '1') {
+        // Set the logout cookie
+        setcookie('wp_marketplace_logout', '1', time() + 3600, '/', '', is_ssl(), true);
+        
+        // Clear WordPress session
+        wp_logout();
+        
+        // Redirect to home page or specified redirect URL
+        $redirect = isset($_GET['redirect']) ? $_GET['redirect'] : home_url();
+        wp_redirect($redirect);
+        exit;
+    }
+}
+
+/**
  * Add JavaScript to clear session storage on the logout page
  */
 function mpauth_add_clear_session_script() {
