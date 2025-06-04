@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     
     // Calculate date range based on timeframe
     const now = new Date();
-    const startDate = new Date();
+    let startDate: Date | null = new Date();
     
     switch (timeframe) {
       case '7days':
@@ -19,6 +19,9 @@ export async function GET(request: Request) {
       case '90days':
         startDate.setDate(now.getDate() - 90);
         break;
+      case 'all':
+        startDate = null; // No start date filter for "all"
+        break;
       case '30days':
       default:
         startDate.setDate(now.getDate() - 30);
@@ -26,9 +29,17 @@ export async function GET(request: Request) {
     }
     
     // Format dates for database queries
-    const startDateStr = startDate.toISOString();
+    const startDateStr = startDate ? startDate.toISOString() : null;
     const endDateStr = now.toISOString();
     
+    // Build where clause for date filtering
+    const dateFilter = startDateStr ? {
+      gte: startDateStr,
+      lte: endDateStr,
+    } : {
+      lte: endDateStr,
+    };
+
     // Get total orders and revenue
     const orderStats = await prisma.order.aggregate({
       _count: {
@@ -38,10 +49,7 @@ export async function GET(request: Request) {
         totalAmount: true,
       },
       where: {
-        createdAt: {
-          gte: startDateStr,
-          lte: endDateStr,
-        },
+        createdAt: dateFilter,
         status: 'PAID',
       },
     });
@@ -50,10 +58,7 @@ export async function GET(request: Request) {
     const customersCount = await prisma.order.groupBy({
       by: ['customerEmail'],
       where: {
-        createdAt: {
-          gte: startDateStr,
-          lte: endDateStr,
-        },
+        createdAt: dateFilter,
         status: 'PAID',
       },
       _count: {
@@ -67,18 +72,15 @@ export async function GET(request: Request) {
         downloadCount: true,
       },
       where: {
-        createdAt: {
-          gte: startDateStr,
-          lte: endDateStr,
-        },
+        createdAt: dateFilter,
       },
     });
     
     // Get daily sales data
-    const dailySales = await getDailySalesData(startDateStr, endDateStr);
+    const dailySales = startDateStr ? await getDailySalesData(startDateStr, endDateStr) : [];
     
     // Get top products
-    const topProducts = await getTopProducts(startDateStr, endDateStr);
+    const topProducts = startDateStr ? await getTopProducts(startDateStr, endDateStr) : await getTopProductsAll();
     
     // Calculate average order value
     const totalOrders = orderStats._count.id || 0;
@@ -174,6 +176,50 @@ async function getTopProducts(startDate: string, endDate: string) {
           gte: startDate,
           lte: endDate,
         },
+        status: 'PAID',
+      },
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+    },
+  });
+  
+  // Group by product and calculate sales and revenue
+  const productMap: Record<string, { id: string; title: string; sales: number; revenue: number }> = {};
+  
+  orderItems.forEach((item: { productId: string; price: unknown; product: { title: string } }) => {
+    const productId = item.productId;
+    if (!productMap[productId]) {
+      productMap[productId] = {
+        id: productId,
+        title: item.product.title,
+        sales: 0,
+        revenue: 0,
+      };
+    }
+    
+    productMap[productId].sales += 1;
+    // Convert Decimal to number for accurate calculations
+    productMap[productId].revenue += Number(item.price);
+  });
+  
+  // Convert to array and sort by revenue
+  return Object.values(productMap)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10); // Top 10 products
+}
+
+// Helper function to get top products for all time
+async function getTopProductsAll() {
+  // Get all order items
+  const orderItems = await prisma.orderItem.findMany({
+    where: {
+      order: {
         status: 'PAID',
       },
     },

@@ -9,6 +9,7 @@ import {
 	Download,
 	Star,
 	ArrowRight,
+	Trash2,
 } from "lucide-react";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 
@@ -53,6 +54,7 @@ export default function AdminDashboard() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [timeframe, setTimeframe] = useState("30days");
+	const [cleanupLoading, setCleanupLoading] = useState(false);
 	const { settings } = useSettings();
 
 	// Fetch analytics from API
@@ -108,6 +110,51 @@ export default function AdminDashboard() {
 			day: "numeric",
 			year: "numeric",
 		}).format(date);
+	};
+
+	// Handle cleanup of test orders
+	const handleCleanupTestOrders = async () => {
+		if (
+			!window.confirm(
+				"Are you sure you want to delete ALL test orders? This action cannot be undone.\n\n" +
+					"This will remove all orders with Stripe payment IDs starting with 'cs_test_'."
+			)
+		) {
+			return;
+		}
+
+		setCleanupLoading(true);
+		try {
+			const response = await fetch("/api/admin/cleanup-test-orders", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+
+			const result = await response.json();
+
+			if (result.success) {
+				alert(
+					`✅ Test data cleanup completed!\n\n` +
+						`• Orders deleted: ${result.data.deletedOrders}\n` +
+						`• Order items deleted: ${result.data.deletedOrderItems}\n` +
+						`• Downloads deleted: ${result.data.deletedDownloads}`
+				);
+
+				// Refresh the analytics data
+				window.location.reload();
+			} else {
+				throw new Error(result.message || "Failed to cleanup test orders");
+			}
+		} catch (error) {
+			console.error("Error cleaning up test orders:", error);
+			alert(
+				"❌ Failed to cleanup test orders. Please try again or check the console for details."
+			);
+		} finally {
+			setCleanupLoading(false);
+		}
 	};
 
 	if (loading) {
@@ -175,6 +222,33 @@ export default function AdminDashboard() {
 							}`}
 						>
 							90 Days
+						</button>
+						<button
+							onClick={() => setTimeframe("all")}
+							className={`px-4 py-2 rounded-lg text-sm font-medium ${
+								timeframe === "all"
+									? "bg-blue-600 text-white"
+									: "bg-gray-100 text-gray-700 hover:bg-gray-200"
+							}`}
+						>
+							All
+						</button>
+						<button
+							onClick={handleCleanupTestOrders}
+							disabled={cleanupLoading}
+							className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed flex items-center"
+						>
+							{cleanupLoading ? (
+								<>
+									<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+									Cleaning...
+								</>
+							) : (
+								<>
+									<Trash2 className="h-4 w-4 mr-2" />
+									Clear Test Data
+								</>
+							)}
 						</button>
 					</div>
 				</div>

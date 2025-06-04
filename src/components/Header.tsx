@@ -54,43 +54,50 @@ export default function Header() {
 		<header className="bg-white shadow-md">
 			<div className="container mx-auto px-4 py-4">
 				<div className="flex items-center justify-between">
-					{/* Logo */}
-					<Link href="/" className="text-2xl font-bold text-[#48ccbc]">
-						{settings.siteName}
-					</Link>
-
-					{/* Desktop Navigation */}
-					<nav className="hidden md:flex items-center space-x-8">
+					{/* Logo and Navigation */}
+					<div className="flex items-center space-x-8">
 						<Link
-							href="/categories"
-							className={`hover:text-[#48ccbc] ${
-								pathname === "/categories"
-									? "text-[#48ccbc] font-medium"
-									: "text-gray-600"
+							href="/"
+							className={`text-lg ${
+								pathname === "/" ? "text-[#48ccbc] font-medium" : "text-gray-600"
 							}`}
 						>
-							Categories
+							{settings.siteName}
 						</Link>
-						{/* Show Admin link for users with Administrator role or when on localhost */}
-						{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
-						(typeof window !== "undefined" &&
-							window.location.hostname === "localhost") ? (
+
+						{/* Desktop Navigation */}
+						<nav className="hidden md:flex items-center space-x-8">
 							<Link
-								href="/admin"
+								href="/categories"
 								className={`hover:text-[#48ccbc] ${
-									pathname?.startsWith("/admin")
+									pathname === "/categories"
 										? "text-[#48ccbc] font-medium"
 										: "text-gray-600"
 								}`}
 							>
-								Admin{" "}
-								{typeof window !== "undefined" &&
-									window.location.hostname === "localhost" &&
-									(!isLoggedIn || !user?.roles?.includes("administrator")) &&
-									"(Dev Mode)"}
+								Categories
 							</Link>
-						) : null}
-					</nav>
+							{/* Show Admin link for users with Administrator role or when on localhost */}
+							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
+							(typeof window !== "undefined" &&
+								window.location.hostname === "localhost") ? (
+								<Link
+									href="/admin"
+									className={`hover:text-[#48ccbc] ${
+										pathname?.startsWith("/admin")
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Admin{" "}
+									{typeof window !== "undefined" &&
+										window.location.hostname === "localhost" &&
+										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
+										"(Dev Mode)"}
+								</Link>
+							) : null}
+						</nav>
+					</div>
 
 					{/* Search, Cart, and Auth */}
 					<div className="hidden md:flex items-center space-x-4">
