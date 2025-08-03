@@ -4,20 +4,45 @@
     $(document).ready(function() {
         var container = $("#marketplace-container");
         
-        // Check for logout cookie
-        function getCookie(name) {
-            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-            return match ? match[2] : null;
-        }
-        
-        // If logout cookie exists, clear token and remove the cookie
-        if (getCookie('wp_marketplace_logout') === '1') {
-            sessionStorage.removeItem("wp_marketplace_token");
-            document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        }
-        
         // Always load the marketplace, but with or without token based on login status
         var marketplaceUrl = mpauthData.marketplaceUrl;
+        
+        // Function to refresh iframe with new auth state
+        function refreshMarketplaceAuth() {
+            var iframe = document.getElementById('marketplace-iframe');
+            if (iframe) {
+                // Get fresh token if user is logged in
+                if (mpauthData.isLoggedIn) {
+                    $.ajax({
+                        url: mpauthData.apiUrl,
+                        method: "GET",
+                        beforeSend: function(xhr) {
+                            xhr.setRequestHeader('X-WP-Nonce', mpauthData.nonce);
+                        },
+                        success: function(data) {
+                            if (data.token) {
+                                // Build new URL with token
+                                var newUrl = marketplaceUrl;
+                                if (newUrl.indexOf("?") > -1) {
+                                    newUrl += "&token=" + encodeURIComponent(data.token);
+                                } else {
+                                    newUrl += "?token=" + encodeURIComponent(data.token);
+                                }
+                                iframe.src = newUrl;
+                            } else {
+                                iframe.src = marketplaceUrl;
+                            }
+                        },
+                        error: function() {
+                            iframe.src = marketplaceUrl;
+                        }
+                    });
+                } else {
+                    // User logged out, reload without token
+                    iframe.src = marketplaceUrl;
+                }
+            }
+        }
         
         // If user is logged in, get auth token and add it to the URL
         if (mpauthData.isLoggedIn) {
@@ -29,7 +54,7 @@
                 },
                 success: function(data) {
                     if (data.token) {
-                        // Store token in sessionStorage (more secure than localStorage)
+                        // Store token in sessionStorage
                         sessionStorage.setItem("wp_marketplace_token", data.token);
                         
                         // Add token to marketplace URL
@@ -40,6 +65,9 @@
                         }
                         
                         // Load marketplace in iframe with token
+                        loadMarketplaceIframe(marketplaceUrl);
+                    } else {
+                        // No token received, load without token
                         loadMarketplaceIframe(marketplaceUrl);
                     }
                 },
@@ -73,9 +101,15 @@
                 var marketplaceOrigin = new URL(mpauthData.marketplaceUrl).origin;
                 if (event.origin !== marketplaceOrigin) return;
                 
-                // Handle login required message
+                // Handle login request from iframe
                 if (event.data.action === 'requireLogin') {
                     window.location.href = mpauthData.loginUrl;
+                }
+                
+                // Handle logout request from iframe
+                if (event.data.action === 'requestLogout') {
+                    // Redirect to WordPress logout URL
+                    window.location.href = mpauthData.loginUrl.replace('wp-login.php', 'wp-login.php?action=logout&_wpnonce=' + mpauthData.nonce);
                 }
                 
                 // Handle resize iframe
@@ -83,25 +117,12 @@
                     $('#marketplace-iframe').height(event.data.height);
                 }
             });
-            
-            // Check for logout cookie
-            function getCookie(name) {
-                var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-                return match ? match[2] : null;
-            }
-            
-            // If logout cookie exists, clear token and reload iframe
-            if (getCookie('wp_marketplace_logout') === '1') {
-                console.log('Logout cookie detected, clearing token and reloading iframe');
-                sessionStorage.removeItem("wp_marketplace_token");
-                document.cookie = "wp_marketplace_logout=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                
-                // Force reload of the iframe
-                var iframe = document.getElementById('marketplace-iframe');
-                if (iframe) {
-                    iframe.src = iframe.src;
-                }
-            }
         }
+        
+        // Listen for WordPress auth state changes (page refresh after login/logout)
+        $(window).on('focus', function() {
+            // When window regains focus (after potential login/logout), refresh iframe auth
+            setTimeout(refreshMarketplaceAuth, 500);
+        });
     });
 })(jQuery);

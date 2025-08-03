@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/authContext";
 import { useSettings } from "@/lib/useSettings";
 import { LogIn } from "lucide-react";
 import Header from "@/components/Header";
+import { isInIframe, requestLogin } from "@/lib/iframeUtils";
 
 export default function PageLayout({
 	children,
@@ -12,6 +13,17 @@ export default function PageLayout({
 }) {
 	const { isLoggedIn } = useAuth();
 	const { settings } = useSettings();
+
+	// Handle login with iframe communication
+	const handleLogin = () => {
+		if (isInIframe()) {
+			// In iframe mode, request login from parent WordPress
+			requestLogin();
+		} else {
+			// Direct access mode, redirect to WordPress login
+			window.location.href = "https://masteringhomecare.com/login-custom/";
+		}
+	};
 
 	return (
 		<>
@@ -25,14 +37,12 @@ export default function PageLayout({
 							<p className="text-blue-600">
 								Log in to receive a {settings.memberDiscountPercentage}% discount on all
 								products.{" "}
-								<a
-									href="https://masteringhomecare.com/login-custom/"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="font-medium underline hover:text-blue-800"
+								<button
+									onClick={handleLogin}
+									className="font-medium underline hover:text-blue-800 text-blue-600"
 								>
 									Login now
-								</a>
+								</button>
 							</p>
 						</div>
 					</div>

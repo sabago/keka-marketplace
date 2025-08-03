@@ -7,6 +7,7 @@ import { ShoppingCart, Menu, X, Search, User, LogOut } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
+import { isInIframe, requestLogin, requestLogout } from "@/lib/iframeUtils";
 
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -22,10 +23,25 @@ export default function Header() {
 
 	// Handle logout
 	const handleLogout = () => {
-		// Remove token from sessionStorage
-		sessionStorage.removeItem("wp_marketplace_token");
-		// Reload the page to reset auth state
-		window.location.reload();
+		if (isInIframe()) {
+			// In iframe mode, request logout from parent WordPress
+			requestLogout();
+		} else {
+			// Direct access mode, handle logout locally
+			sessionStorage.removeItem("wp_marketplace_token");
+			window.location.reload();
+		}
+	};
+
+	// Handle login
+	const handleLogin = () => {
+		if (isInIframe()) {
+			// In iframe mode, request login from parent WordPress
+			requestLogin();
+		} else {
+			// Direct access mode, redirect to WordPress login
+			window.location.href = "https://masteringhomecare.com/login-custom/";
+		}
 	};
 
 	// Effect to track cart hydration
@@ -140,14 +156,12 @@ export default function Header() {
 								</button>
 							</div>
 						) : (
-							<a
-								href="https://masteringhomecare.com/login-custom/"
-								target="_blank"
-								rel="noopener noreferrer"
+							<button
+								onClick={handleLogin}
 								className="text-blue-600 hover:text-blue-800 text-sm font-medium"
 							>
 								Login
-							</a>
+							</button>
 						)}
 
 						<Link href="/cart" className="relative">
@@ -244,16 +258,16 @@ export default function Header() {
 									</button>
 								</>
 							) : (
-								<a
-									href="https://masteringhomecare.com/login-custom/"
-									target="_blank"
-									rel="noopener noreferrer"
+								<button
+									onClick={() => {
+										handleLogin();
+										setIsMenuOpen(false);
+									}}
 									className="flex items-center text-blue-600 hover:text-blue-800"
-									onClick={() => setIsMenuOpen(false)}
 								>
 									<User className="h-5 w-5 mr-2" />
 									<span>Login</span>
-								</a>
+								</button>
 							)}
 
 							<Link
