@@ -70,6 +70,7 @@ export default function Header() {
 	const handleLogin = () => {
 		if (isInIframe()) {
 			parent.postMessage({ type: "LOGIN_REQUEST" }, "*");
+			window.location.href = loginUrl;
 		} else {
 			window.location.href = loginUrl;
 		}
@@ -94,7 +95,6 @@ export default function Header() {
 				console.log("[iframe] Received logout from parent");
 				sessionStorage.removeItem("wp_marketplace_token");
 				// window.location.href = "/logged-out"; // Or trigger a logout route or state
-				window.location.reload();
 			}
 
 			// Optional: handle login sync
