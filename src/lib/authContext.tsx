@@ -246,6 +246,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		});
 	}, []);
 
+	useEffect(() => {
+		const listener = (event: MessageEvent) => {
+			if (event.origin !== "https://masteringhomecare.com") return;
+			if (event.data?.action === "loginStatus") {
+				if (!event.data.isLoggedIn) {
+					// Clear all tokens and reload
+					sessionStorage.removeItem("wp_marketplace_token");
+					localStorage.removeItem("wp_marketplace_token");
+
+					setState({
+						isLoggedIn: false,
+						user: null,
+						loading: false,
+						token: null,
+					});
+
+					window.location.reload();
+				}
+			}
+		};
+
+		window.addEventListener("message", listener);
+
+		// Ask parent for login status if inside iframe
+		if (window.self !== window.top) {
+			window.parent.postMessage({ action: "checkLoginStatus" }, "*");
+		}
+
+		return () => window.removeEventListener("message", listener);
+	}, []);
+
 	return (
 		<AuthContext.Provider value={state}>
 			<Suspense fallback={null}>
