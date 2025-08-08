@@ -293,7 +293,7 @@ export default function Header() {
 										className="flex items-center text-gray-600 hover:text-red-600"
 									>
 										<LogOut className="h-5 w-5 mr-2" />
-										<a href="<?php echo esc_url(wp_logout_url(home_url())); ?>">Logout</a>
+										<span>Logout</span>
 									</button>
 								</>
 							) : (
