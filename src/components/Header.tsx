@@ -22,14 +22,26 @@ export default function Header() {
 	const cartItemCount = isHydrated ? getTotalItems() : 0;
 
 	// Handle logout
+	// const handleLogout = () => {
+	// 	if (isInIframe()) {
+	// 		// In iframe mode, request logout from parent WordPress
+	// 		requestLogout();
+	// 	} else {
+	// 		// Direct access mode, handle logout locally
+	// 		sessionStorage.removeItem("wp_marketplace_token");
+	// 		window.location.reload();
+	// 	}
+	// };
+
 	const handleLogout = () => {
 		if (isInIframe()) {
-			// In iframe mode, request logout from parent WordPress
+			// Ask parent WP site to log out via postMessage
 			requestLogout();
 		} else {
-			// Direct access mode, handle logout locally
-			sessionStorage.removeItem("wp_marketplace_token");
-			window.location.reload();
+			// For direct access, redirect to MemberPress/WordPress logout
+			const logoutUrl =
+				"https://masteringhomecare.com/wp-login.php?action=logout&redirect_to=https://masteringhomecare.com";
+			window.location.href = logoutUrl;
 		}
 	};
 
