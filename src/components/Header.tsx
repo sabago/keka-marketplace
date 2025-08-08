@@ -7,7 +7,7 @@ import { ShoppingCart, Menu, X, Search, User, LogOut } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
-import { isInIframe, requestLogin, requestLogout } from "@/lib/iframeUtils";
+import { isInIframe } from "@/lib/iframeUtils";
 
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -33,30 +33,53 @@ export default function Header() {
 	// 	}
 	// };
 
-	const logoutUrl =
-		"https://masteringhomecare.com/wp-login.php?action=logout&redirect_to=https://masteringhomecare.com";
-	const handleLogout = () => {
-		if (isInIframe()) {
-			// Ask parent WP site to log out via postMessage
-			requestLogout();
-			window.location.href = logoutUrl;
-		} else {
-			// For direct access, redirect to MemberPress/WordPress logout
+	// 	const loginUrl =
+	// 	"https://masteringhomecare.com/login/?redirect_to=/marketplace/";
+	// const logoutUrl =
+	// 	"https://masteringhomecare.com/logout/?redirect_to=/marketplace/";
+	// const logoutUrl =
+	// 	"https://masteringhomecare.com/wp-login.php?action=logout&redirect_to=https://masteringhomecare.com";
+	// const handleLogout = () => {
+	// 	if (isInIframe()) {
+	// 		// Ask parent WP site to log out via postMessage
+	// 		requestLogout();
+	// 		window.location.href = logoutUrl;
+	// 	} else {
+	// 		// For direct access, redirect to MemberPress/WordPress logout
 
-			window.location.href = logoutUrl;
+	// 		window.location.href = logoutUrl;
+	// 	}
+	// };
+
+	// // Handle login
+	// const loginUrl = "https://masteringhomecare.com/login-custom/";
+	// const handleLogin = () => {
+	// 	if (isInIframe()) {
+	// 		// In iframe mode, request login from parent WordPress
+	// 		requestLogin();
+	// 		window.location.href = loginUrl;
+	// 	} else {
+	// 		// Direct access mode, redirect to WordPress login
+	// 		window.location.href = loginUrl;
+	// 	}
+	// };
+
+	const loginUrl = "https://masteringhomecare.com/login-custom/";
+	const logoutUrl = "https://masteringhomecare.com/logout/"; // Confirm this exists
+
+	const handleLogin = () => {
+		if (isInIframe()) {
+			parent.postMessage({ type: "LOGIN_REQUEST" }, "*");
+		} else {
+			window.location.href = loginUrl;
 		}
 	};
 
-	// Handle login
-	const loginUrl = "https://masteringhomecare.com/login-custom/";
-	const handleLogin = () => {
+	const handleLogout = () => {
 		if (isInIframe()) {
-			// In iframe mode, request login from parent WordPress
-			requestLogin();
-			window.location.href = loginUrl;
+			parent.postMessage({ type: "LOGOUT_REQUEST" }, "*");
 		} else {
-			// Direct access mode, redirect to WordPress login
-			window.location.href = loginUrl;
+			window.location.href = logoutUrl;
 		}
 	};
 

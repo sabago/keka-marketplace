@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/authContext";
 import ReviewForm from "@/components/ReviewForm";
 import ProductCard from "@/components/ProductCard";
 import PageLayout from "@/components/PageLayout";
+import { useAdminAccess } from "@/lib/adminUtils";
 
 // Component that uses useSearchParams
 function ProductsWithParams({
@@ -321,6 +322,42 @@ export default function Home() {
 			setLoading(false);
 		}
 	};
+
+	// const { isLocalhost } = useAdminAccess();
+	// useEffect(() => {
+	// 	if (isLocalhost) return;
+	// 	const checkAuthToken = () => {
+	// 		// Replace this with your actual JWT or session check logic
+	// 		const token = localStorage.getItem("authToken");
+	// 		return !!token;
+	// 	};
+
+	// 	const isLoggedIn = checkAuthToken();
+
+	// 	if (!isLoggedIn && !isLocalhost) {
+	// 		window.location.href = "https://masteringhomecare.com/login-custom/";
+	// 	}
+	// }, []);
+
+	useEffect(() => {
+		const handleMessage = (event: MessageEvent) => {
+			if (event.data?.type === "AUTH_STATUS") {
+				const isLoggedIn = event.data?.isLoggedIn;
+				if (!isLoggedIn) {
+					window.location.href = "https://masteringhomecare.com/login-custom/";
+				}
+			}
+		};
+
+		window.addEventListener("message", handleMessage);
+
+		// Ask parent for status
+		if (window.parent !== window) {
+			window.parent.postMessage({ type: "REQUEST_AUTH_STATUS" }, "*");
+		}
+
+		return () => window.removeEventListener("message", handleMessage);
+	}, []);
 
 	// Fetch categories and initial products
 	useEffect(() => {
