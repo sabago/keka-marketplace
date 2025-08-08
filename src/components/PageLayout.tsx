@@ -19,6 +19,7 @@ export default function PageLayout({
 		if (isInIframe()) {
 			// In iframe mode, request login from parent WordPress
 			requestLogin();
+			window.location.href = "https://masteringhomecare.com/login-custom/";
 		} else {
 			// Direct access mode, redirect to WordPress login
 			window.location.href = "https://masteringhomecare.com/login-custom/";

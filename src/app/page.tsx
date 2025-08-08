@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
+// import Link from "next/link";
 import Image from "next/image";
 import { Tag, X, Star } from "lucide-react";
 import { useCartStore } from "@/lib/useCart";
@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/authContext";
 import ReviewForm from "@/components/ReviewForm";
 import ProductCard from "@/components/ProductCard";
 import PageLayout from "@/components/PageLayout";
-import { useAdminAccess } from "@/lib/adminUtils";
+// import { useAdminAccess } from "@/lib/adminUtils";
 
 // Component that uses useSearchParams
 function ProductsWithParams({
@@ -342,10 +342,10 @@ export default function Home() {
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
 			if (event.data?.type === "AUTH_STATUS") {
-				const isLoggedIn = event.data?.isLoggedIn;
-				if (!isLoggedIn) {
-					window.location.href = "https://masteringhomecare.com/login-custom/";
-				}
+				// const isLoggedIn = event.data?.isLoggedIn;
+				// if (!isLoggedIn) {
+				// 	window.location.href = "https://masteringhomecare.com/login-custom/";
+				// }
 			}
 		};
 

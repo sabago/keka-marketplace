@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ShoppingCart, Menu, X, Search, User, LogOut } from "lucide-react";
+import { ShoppingCart, Menu, X, Search, User } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
-import { isInIframe } from "@/lib/iframeUtils";
+// import { isInIframe } from "@/lib/iframeUtils";
 
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -64,25 +64,25 @@ export default function Header() {
 	// 	}
 	// };
 
-	const loginUrl = "https://masteringhomecare.com/login-custom/";
-	const logoutUrl = "https://masteringhomecare.com/logout/"; // Confirm this exists
+	// const loginUrl = "https://masteringhomecare.com/login-custom/";
+	// const logoutUrl = "https://masteringhomecare.com/logout/"; // Confirm this exists
 
-	const handleLogin = () => {
-		if (isInIframe()) {
-			parent.postMessage({ type: "LOGIN_REQUEST" }, "*");
-			window.location.href = loginUrl;
-		} else {
-			window.location.href = loginUrl;
-		}
-	};
+	// const handleLogin = () => {
+	// 	if (isInIframe()) {
+	// 		parent.postMessage({ type: "LOGIN_REQUEST" }, "*");
+	// 		window.location.href = loginUrl;
+	// 	} else {
+	// 		window.location.href = loginUrl;
+	// 	}
+	// };
 
-	const handleLogout = () => {
-		if (isInIframe()) {
-			parent.postMessage({ type: "LOGOUT_REQUEST" }, "*");
-		} else {
-			window.location.href = logoutUrl;
-		}
-	};
+	// const handleLogout = () => {
+	// 	if (isInIframe()) {
+	// 		parent.postMessage({ type: "LOGOUT_REQUEST" }, "*");
+	// 	} else {
+	// 		window.location.href = logoutUrl;
+	// 	}
+	// };
 
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
@@ -202,34 +202,37 @@ export default function Header() {
 						</form>
 
 						{/* Auth Section */}
-						{isLoggedIn ? (
-							<div className="flex items-center">
-								<div className="mr-4 flex items-center">
-									<User className="h-5 w-5 text-blue-600 mr-1" />
-									<span className="text-sm font-medium">
-										{user?.display_name || "Member"}
-									</span>
-									{settings.memberDiscountPercentage > 0 && (
-										<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-											{settings.memberDiscountPercentage}% off
+						{
+							isLoggedIn ? (
+								<div className="flex items-center">
+									<div className="mr-4 flex items-center">
+										<User className="h-5 w-5 text-blue-600 mr-1" />
+										<span className="text-sm font-medium">
+											{user?.display_name || "Member"}
 										</span>
-									)}
+										{settings.memberDiscountPercentage > 0 && (
+											<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+												{settings.memberDiscountPercentage}% off
+											</span>
+										)}
+									</div>
+									{/* <button
+										onClick={handleLogout}
+										className="flex items-center text-gray-600 hover:text-red-600"
+									>
+										<LogOut className="h-5 w-5" />
+									</button> */}
 								</div>
-								<button
-									onClick={handleLogout}
-									className="flex items-center text-gray-600 hover:text-red-600"
-								>
-									<LogOut className="h-5 w-5" />
-								</button>
-							</div>
-						) : (
-							<button
-								onClick={handleLogin}
-								className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-							>
-								Login
-							</button>
-						)}
+							) : null
+							// (
+							// 	<button
+							// 		onClick={handleLogin}
+							// 		className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+							// 	>
+							// 		Login
+							// 	</button>
+							// )
+						}
 
 						<Link href="/cart" className="relative">
 							<ShoppingCart className="h-6 w-6 text-gray-600 hover:text-blue-600" />
@@ -305,37 +308,40 @@ export default function Header() {
 								</Link>
 							) : null}
 							{/* Auth Section for Mobile */}
-							{isLoggedIn ? (
-								<>
-									<div className="flex items-center text-gray-600">
-										<User className="h-5 w-5 text-blue-600 mr-2" />
-										<span className="font-medium">{user?.display_name || "Member"}</span>
-										{settings.memberDiscountPercentage > 0 && (
-											<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-												{settings.memberDiscountPercentage}% off
-											</span>
-										)}
-									</div>
-									<button
-										onClick={handleLogout}
-										className="flex items-center text-gray-600 hover:text-red-600"
-									>
-										<LogOut className="h-5 w-5 mr-2" />
-										<span>Logout</span>
-									</button>
-								</>
-							) : (
-								<button
-									onClick={() => {
-										handleLogin();
-										setIsMenuOpen(false);
-									}}
-									className="flex items-center text-blue-600 hover:text-blue-800"
-								>
-									<User className="h-5 w-5 mr-2" />
-									<span>Login</span>
-								</button>
-							)}
+							{
+								isLoggedIn ? (
+									<>
+										<div className="flex items-center text-gray-600">
+											<User className="h-5 w-5 text-blue-600 mr-2" />
+											<span className="font-medium">{user?.display_name || "Member"}</span>
+											{settings.memberDiscountPercentage > 0 && (
+												<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+													{settings.memberDiscountPercentage}% off
+												</span>
+											)}
+										</div>
+										{/* <button
+											onClick={handleLogout}
+											className="flex items-center text-gray-600 hover:text-red-600"
+										>
+											<LogOut className="h-5 w-5 mr-2" />
+											<span>Logout</span>
+										</button> */}
+									</>
+								) : null
+								// (
+								// 	<button
+								// 		onClick={() => {
+								// 			handleLogin();
+								// 			setIsMenuOpen(false);
+								// 		}}
+								// 		className="flex items-center text-blue-600 hover:text-blue-800"
+								// 	>
+								// 		<User className="h-5 w-5 mr-2" />
+								// 		<span>Login</span>
+								// 	</button>
+								// )
+							}
 
 							<Link
 								href="/cart"
