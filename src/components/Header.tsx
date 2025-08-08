@@ -93,7 +93,8 @@ export default function Header() {
 			if (action === "userLoggedOut") {
 				console.log("[iframe] Received logout from parent");
 				sessionStorage.removeItem("wp_marketplace_token");
-				window.location.href = "/logged-out"; // Or trigger a logout route or state
+				// window.location.href = "/logged-out"; // Or trigger a logout route or state
+				window.location.reload();
 			}
 
 			// Optional: handle login sync
