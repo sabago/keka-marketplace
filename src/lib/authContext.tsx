@@ -208,6 +208,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		token: null,
 	});
 
+	useEffect(() => {
+		const checkAuthStatus = () => {
+			if (window.self !== window.top) {
+				// Inside iframe — ask parent again
+				window.parent.postMessage({ action: "checkLoginStatus" }, "*");
+			}
+		};
+
+		document.addEventListener("visibilitychange", () => {
+			if (!document.hidden) {
+				checkAuthStatus();
+			}
+		});
+
+		window.addEventListener("focus", checkAuthStatus);
+
+		return () => {
+			document.removeEventListener("visibilitychange", checkAuthStatus);
+			window.removeEventListener("focus", checkAuthStatus);
+		};
+	}, []);
+
 	// Check for token in sessionStorage on initial load (client-side only)
 	useEffect(() => {
 		const storedToken = sessionStorage.getItem("wp_marketplace_token");
