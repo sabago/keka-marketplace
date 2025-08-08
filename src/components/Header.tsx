@@ -33,26 +33,30 @@ export default function Header() {
 	// 	}
 	// };
 
+	const logoutUrl =
+		"https://masteringhomecare.com/wp-login.php?action=logout&redirect_to=https://masteringhomecare.com";
 	const handleLogout = () => {
 		if (isInIframe()) {
 			// Ask parent WP site to log out via postMessage
 			requestLogout();
+			window.location.href = logoutUrl;
 		} else {
 			// For direct access, redirect to MemberPress/WordPress logout
-			const logoutUrl =
-				"https://masteringhomecare.com/wp-login.php?action=logout&redirect_to=https://masteringhomecare.com";
+
 			window.location.href = logoutUrl;
 		}
 	};
 
 	// Handle login
+	const loginUrl = "https://masteringhomecare.com/login-custom/";
 	const handleLogin = () => {
 		if (isInIframe()) {
 			// In iframe mode, request login from parent WordPress
 			requestLogin();
+			window.location.href = loginUrl;
 		} else {
 			// Direct access mode, redirect to WordPress login
-			window.location.href = "https://masteringhomecare.com/login-custom/";
+			window.location.href = loginUrl;
 		}
 	};
 
