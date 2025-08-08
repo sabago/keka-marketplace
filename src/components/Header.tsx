@@ -44,6 +44,33 @@ export default function Header() {
 		}
 	};
 
+	useEffect(() => {
+		const handleMessage = (event: MessageEvent) => {
+			if (!event.data || typeof event.data !== "object") return;
+
+			const { action } = event.data;
+
+			// Handle logout from WordPress parent
+			if (action === "userLoggedOut") {
+				console.log("[iframe] Received logout from parent");
+				sessionStorage.removeItem("wp_marketplace_token");
+				window.location.href = "/logged-out"; // Or trigger a logout route or state
+			}
+
+			// Optional: handle login sync
+			if (action === "userLoggedIn") {
+				console.log("[iframe] Received login from parent");
+				window.location.reload(); // Or refresh user state
+			}
+		};
+
+		window.addEventListener("message", handleMessage);
+
+		return () => {
+			window.removeEventListener("message", handleMessage);
+		};
+	}, []);
+
 	// Effect to track cart hydration
 	useEffect(() => {
 		// Cart is now hydrated and ready
@@ -254,7 +281,7 @@ export default function Header() {
 										className="flex items-center text-gray-600 hover:text-red-600"
 									>
 										<LogOut className="h-5 w-5 mr-2" />
-										<span>Logout</span>
+										<a href="<?php echo esc_url(wp_logout_url(home_url())); ?>">Logout</a>
 									</button>
 								</>
 							) : (
