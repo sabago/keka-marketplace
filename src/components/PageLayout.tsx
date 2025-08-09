@@ -30,17 +30,19 @@ export default function PageLayout({
 		<>
 			{/* Login banner for non-logged in users */}
 			{!isLoggedIn && settings.memberDiscountPercentage > 0 && (
-				<div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-0 container mx-auto mt-4 rounded-md shadow-sm">
+				<div className="bg-blue-50 border-l-4 border-blue-500 p-4 mx-auto my-0 rounded-md shadow-sm">
 					<div className="flex items-center">
 						<LogIn className="h-6 w-6 text-blue-500 mr-3" />
 						<div>
-							<h3 className="font-medium text-blue-800">Member Discount Available!</h3>
-							<p className="text-blue-600">
+							<h3 className="font-medium text-blue-800 min-w-[0]">
+								Member Discount Available!
+							</h3>
+							<p className="text-[#0B4F96]">
 								Log in to receive a {settings.memberDiscountPercentage}% discount on all
 								products.{" "}
 								<button
 									onClick={handleLogin}
-									className="font-medium underline hover:text-blue-800 text-blue-600"
+									className="font-medium underline hover:text-blue-800 text-[#0B4F96]"
 								>
 									Login now
 								</button>

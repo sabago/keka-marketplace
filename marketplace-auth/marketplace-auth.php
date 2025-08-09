@@ -297,15 +297,28 @@ function mpauth_shortcode($atts) {
         'height' => '800px',
     ], $atts);
     
-    // Enqueue script
-    wp_enqueue_script('mpauth-script');
+    // Get marketplace URL
+    $marketplace_url = 'https://keka-marketplace-production.up.railway.app';
+    
+    // If user is logged in, add token to URL
+    if (is_user_logged_in()) {
+        $token = mpauth_generate_jwt();
+        if ($token) {
+            $marketplace_url .= '?token=' . urlencode($token);
+        }
+    }
     
     ob_start();
     ?>
     <div id="marketplace-container" style="width:100%; min-height:<?php echo esc_attr($atts['height']); ?>; max-width:100%; margin:0 auto;">
-        <div class="loading" style="text-align:center; padding:20px;">
-            <p>Loading marketplace...</p>
-        </div>
+        <iframe src="<?php echo esc_url($marketplace_url); ?>" 
+                id="marketplace-iframe" 
+                width="100%" 
+                height="800" 
+                style="border:none; min-height:800px; width:100%; max-width:100%; overflow:hidden;" 
+                allow="clipboard-read; clipboard-write" 
+                scrolling="yes">
+        </iframe>
     </div>
     <?php
     return ob_get_clean();
@@ -331,10 +344,12 @@ function mpauth_enqueue_scripts() {
         'mpauthData',
         [
             'apiUrl' => esc_url_raw(rest_url('marketplace/v1/auth')),
-            'marketplaceUrl' => get_option('mpauth_marketplace_url', ''),
+            'marketplaceUrl' => get_option('mpauth_marketplace_url', 'https://keka-marketplace-production.up.railway.app'),
             'loginUrl' => wp_login_url(get_permalink()),
             'isLoggedIn' => is_user_logged_in(),
-            'nonce' => wp_create_nonce('wp_rest')
+            'user' => is_user_logged_in() ? wp_get_current_user() : null,
+            'nonce' => wp_create_nonce('wp_rest'),
+            'visitTs' => time()
         ]
     );
     
@@ -365,3 +380,16 @@ function mpauth_enqueue_scripts() {
         }
     ');
 }
+
+add_action('wp_footer', function () {
+    if (!is_user_logged_in()) {
+        echo '<script>
+            window.addEventListener("load", function() {
+                const iframes = document.getElementsByTagName("iframe");
+                for (let i = 0; i < iframes.length; i++) {
+                    iframes[i].contentWindow?.postMessage({ action: "userLoggedOut" }, "*");
+                }
+            });
+        </script>';
+    }
+});

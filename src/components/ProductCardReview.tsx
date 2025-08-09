@@ -21,7 +21,7 @@ export default function ProductCardReview({
 							size={16}
 							className={`${
 								star <= Math.round(averageRating)
-									? "text-yellow-400 fill-yellow-400"
+									? "text-[#48ccbc] fill-[#48ccbc]"
 									: "text-gray-300"
 							}`}
 						/>

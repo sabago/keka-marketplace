@@ -105,7 +105,7 @@ export default function AdminReviewsPage() {
 		return (
 			<div className="container mx-auto px-4 py-8">
 				<div className="flex justify-center items-center h-64">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96"></div>
 				</div>
 			</div>
 		);
@@ -117,7 +117,7 @@ export default function AdminReviewsPage() {
 			<div className="mb-6">
 				<Link
 					href="/admin"
-					className="text-blue-600 hover:text-blue-800 flex items-center"
+					className="text-[#0B4F96] hover:text-blue-800 flex items-center"
 				>
 					<ArrowLeft className="h-4 w-4 mr-1" />
 					Back to Dashboard
@@ -137,7 +137,7 @@ export default function AdminReviewsPage() {
 				<button
 					className={`py-2 px-4 font-medium ${
 						filter === "pending"
-							? "text-blue-600 border-b-2 border-blue-600"
+							? "text-[#0B4F96] border-b-2 border-[#0B4F96]"
 							: "text-gray-500 hover:text-gray-700"
 					}`}
 					onClick={() => setFilter("pending")}
@@ -147,7 +147,7 @@ export default function AdminReviewsPage() {
 				<button
 					className={`py-2 px-4 font-medium ${
 						filter === "approved"
-							? "text-blue-600 border-b-2 border-blue-600"
+							? "text-[#0B4F96] border-b-2 border-[#0B4F96]"
 							: "text-gray-500 hover:text-gray-700"
 					}`}
 					onClick={() => setFilter("approved")}
@@ -157,7 +157,7 @@ export default function AdminReviewsPage() {
 				<button
 					className={`py-2 px-4 font-medium ${
 						filter === "all"
-							? "text-blue-600 border-b-2 border-blue-600"
+							? "text-[#0B4F96] border-b-2 border-[#0B4F96]"
 							: "text-gray-500 hover:text-gray-700"
 					}`}
 					onClick={() => setFilter("all")}
@@ -226,7 +226,7 @@ export default function AdminReviewsPage() {
 										<td className="px-6 py-4 whitespace-nowrap">
 											<Link
 												href={`/products/${review.productId}`}
-												className="text-blue-600 hover:text-blue-800"
+												className="text-[#0B4F96] hover:text-blue-800"
 											>
 												{review.productTitle || review.productId}
 											</Link>
@@ -245,7 +245,7 @@ export default function AdminReviewsPage() {
 														size={16}
 														className={`${
 															star <= review.rating
-																? "text-yellow-400 fill-yellow-400"
+																? "text-[#48ccbc] fill-[#48ccbc]"
 																: "text-gray-300"
 														}`}
 													/>

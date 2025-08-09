@@ -4,6 +4,13 @@ import { useState, useRef, FormEvent, ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, Loader2 } from "lucide-react";
+import RichTextEditor from "@/components/RichTextEditor";
+
+const htmlToPlain = (html: string) =>
+	html
+		.replace(/<[^>]+>/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
 
 export default function NewProductPage() {
 	const router = useRouter();
@@ -154,7 +161,7 @@ export default function NewProductPage() {
 			return;
 		}
 
-		if (!description.trim()) {
+		if (!htmlToPlain(description)) {
 			setError("Description is required");
 			return;
 		}
@@ -275,7 +282,7 @@ export default function NewProductPage() {
 			<div className="mb-6">
 				<Link
 					href="/admin"
-					className="text-blue-600 hover:text-blue-800 flex items-center"
+					className="text-[#0B4F96] hover:text-blue-800 flex items-center"
 				>
 					<ArrowLeft className="h-4 w-4 mr-1" />
 					Back to Dashboard
@@ -301,7 +308,7 @@ export default function NewProductPage() {
 			{/* Loading state */}
 			{isLoading ? (
 				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 					<p className="text-gray-600">Loading categories...</p>
 				</div>
 			) : (
@@ -334,7 +341,14 @@ export default function NewProductPage() {
 							>
 								Description
 							</label>
-							<textarea
+							<RichTextEditor
+								value={description}
+								onChange={(html) => setDescription(html)}
+							/>
+							<p className="text-xs text-gray-500 mt-2">
+								Tip: You can add headings, lists, links, tables, and images.
+							</p>
+							{/* <textarea
 								id="description"
 								rows={5}
 								className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -342,7 +356,7 @@ export default function NewProductPage() {
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
 								disabled={isSubmitting}
-							/>
+							/> */}
 						</div>
 
 						{/* Product Price */}
@@ -540,7 +554,7 @@ export default function NewProductPage() {
 											onClick={() => {
 												setSeoTags(seoTags.filter((_, i) => i !== index));
 											}}
-											className="text-blue-600 hover:text-blue-800"
+											className="text-[#0B4F96] hover:text-blue-800"
 										>
 											×
 										</button>
@@ -565,7 +579,7 @@ export default function NewProductPage() {
 										}
 									}}
 									disabled={!currentTag.trim() || seoTags.length >= 13 || isSubmitting}
-									className="bg-blue-600 text-white px-4 py-2 rounded-r-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+									className="bg-[#0B4F96] text-white px-4 py-2 rounded-r-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300"
 								>
 									Add
 								</button>
@@ -590,7 +604,7 @@ export default function NewProductPage() {
 											id={`category-${category.id}`}
 											checked={categories.includes(category.id)}
 											onChange={() => handleCategoryChange(category.id)}
-											className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+											className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 											disabled={isSubmitting}
 										/>
 										<label
@@ -609,7 +623,7 @@ export default function NewProductPage() {
 							<button
 								type="submit"
 								disabled={isSubmitting}
-								className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
+								className="bg-[#0B4F96] text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
 							>
 								{isSubmitting ? (
 									<>

@@ -10,6 +10,7 @@ import React, {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, Loader2 } from "lucide-react";
+import RichTextEditor from "@/components/RichTextEditor";
 
 // Define product type
 interface Product {
@@ -21,6 +22,13 @@ interface Product {
 	filePath?: string;
 	categories?: { categoryId: string }[];
 }
+
+// helper to validate rich text has actual content
+const htmlToPlain = (html: string) =>
+	html
+		.replace(/<[^>]+>/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
 
 export default function EditProductPage({
 	params,
@@ -37,14 +45,12 @@ export default function EditProductPage({
 
 	// Properly unwrap params using React.use() as recommended by Next.js
 	// Using a type assertion to handle TypeScript compatibility
-	// We need to suppress the ESLint warning about using 'any' since the proper types
-	// for React.use with params are not yet fully supported in TypeScript
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const { id } = React.use(params as any) as { id: string };
 
 	// Form state
 	const [title, setTitle] = useState("");
-	const [description, setDescription] = useState("");
+	const [description, setDescription] = useState(""); // HTML from RichTextEditor
 	const [price, setPrice] = useState("");
 	const [categories, setCategories] = useState<string[]>([]);
 	const [seoTags, setSeoTags] = useState<string[]>([]);
@@ -134,7 +140,6 @@ export default function EditProductPage({
 
 				// Set additional images if available
 				if (data.additionalImages && Array.isArray(data.additionalImages)) {
-					// Create preview URLs from existing images
 					const imagePreviews = data.additionalImages.map(
 						(img: { imageUrl: string }) => img.imageUrl
 					);
@@ -162,8 +167,6 @@ export default function EditProductPage({
 		if (e.target.files && e.target.files[0]) {
 			const file = e.target.files[0];
 			setProductFile(file);
-
-			// Show file name as preview
 			setProductFilePreview(file.name);
 		}
 	};
@@ -174,7 +177,6 @@ export default function EditProductPage({
 			const file = e.target.files[0];
 			setThumbnailFile(file);
 
-			// Create a preview URL
 			const reader = new FileReader();
 			reader.onload = () => {
 				setThumbnailPreview(reader.result as string);
@@ -186,11 +188,9 @@ export default function EditProductPage({
 	// Handle additional images selection
 	const handleAdditionalImagesChange = (e: ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files && e.target.files.length > 0) {
-			// Convert FileList to array and limit to 9 images
 			const files = Array.from(e.target.files).slice(0, 9);
 			setAdditionalImageFiles(files);
 
-			// Create preview URLs for each file
 			const previews: string[] = [];
 			files.forEach((file) => {
 				const reader = new FileReader();
@@ -211,7 +211,6 @@ export default function EditProductPage({
 			const file = e.target.files[0];
 			setVideoFile(file);
 
-			// Create a preview URL
 			const reader = new FileReader();
 			reader.onload = () => {
 				setVideoPreview(reader.result as string);
@@ -235,13 +234,13 @@ export default function EditProductPage({
 	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
 
-		// Validate form
 		if (!title.trim()) {
 			setError("Title is required");
 			return;
 		}
 
-		if (!description.trim()) {
+		// validate RichTextEditor HTML contains actual text
+		if (!htmlToPlain(description)) {
 			setError("Description is required");
 			return;
 		}
@@ -255,13 +254,11 @@ export default function EditProductPage({
 		setError(null);
 
 		try {
-			// Create FormData for file uploads
 			const formData = new FormData();
 			formData.append("title", title);
-			formData.append("description", description);
+			formData.append("description", description); // HTML from editor
 			formData.append("price", price);
 
-			// Add files if they exist
 			if (productFile) {
 				formData.append("productFile", productFile);
 			}
@@ -270,29 +267,24 @@ export default function EditProductPage({
 				formData.append("thumbnailFile", thumbnailFile);
 			}
 
-			// Add additional images if any
 			if (additionalImageFiles.length > 0) {
 				additionalImageFiles.forEach((file) => {
 					formData.append("additionalImages", file);
 				});
 			}
 
-			// Add video if exists
 			if (videoFile) {
 				formData.append("videoFile", videoFile);
 			}
 
-			// Add categories
 			categories.forEach((categoryId) => {
 				formData.append("categories[]", categoryId);
 			});
 
-			// Add SEO tags
 			seoTags.forEach((tag) => {
 				formData.append("seoTags[]", tag);
 			});
 
-			// Send the request to the API
 			const response = await fetch(`/api/products/${id}`, {
 				method: "PUT",
 				body: formData,
@@ -305,7 +297,6 @@ export default function EditProductPage({
 
 			setSuccess("Product updated successfully!");
 
-			// Redirect to the admin page after a short delay
 			setTimeout(() => {
 				router.push(`/admin`);
 			}, 2000);
@@ -322,7 +313,7 @@ export default function EditProductPage({
 			<div className="mb-6">
 				<Link
 					href="/admin"
-					className="text-blue-600 hover:text-blue-800 flex items-center"
+					className="text-[#0B4F96] hover:text-blue-800 flex items-center"
 				>
 					<ArrowLeft className="h-4 w-4 mr-1" />
 					Back to Dashboard
@@ -348,7 +339,7 @@ export default function EditProductPage({
 			{/* Loading state */}
 			{isLoading ? (
 				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 					<p className="text-gray-600">Loading product data...</p>
 				</div>
 			) : (
@@ -373,23 +364,15 @@ export default function EditProductPage({
 							/>
 						</div>
 
-						{/* Product Description */}
+						{/* Product Description (Rich Text) */}
 						<div className="mb-6">
-							<label
-								htmlFor="description"
-								className="block text-sm font-medium text-gray-700 mb-1"
-							>
+							<label className="block text-sm font-medium text-gray-700 mb-1">
 								Description
 							</label>
-							<textarea
-								id="description"
-								rows={5}
-								className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-								placeholder="Enter product description"
-								value={description}
-								onChange={(e) => setDescription(e.target.value)}
-								disabled={isSubmitting}
-							/>
+							<RichTextEditor value={description} onChange={setDescription} />
+							<p className="text-xs text-gray-500 mt-2">
+								Tip: You can add headings, lists, links, tables, and images.
+							</p>
 						</div>
 
 						{/* Product Price */}
@@ -587,7 +570,7 @@ export default function EditProductPage({
 											onClick={() => {
 												setSeoTags(seoTags.filter((_, i) => i !== index));
 											}}
-											className="text-blue-600 hover:text-blue-800"
+											className="text-[#0B4F96] hover:text-blue-800"
 										>
 											×
 										</button>
@@ -612,7 +595,7 @@ export default function EditProductPage({
 										}
 									}}
 									disabled={!currentTag.trim() || seoTags.length >= 13 || isSubmitting}
-									className="bg-blue-600 text-white px-4 py-2 rounded-r-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+									className="bg-[#0B4F96] text-white px-4 py-2 rounded-r-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-blue-300"
 								>
 									Add
 								</button>
@@ -637,7 +620,7 @@ export default function EditProductPage({
 											id={`category-${category.id}`}
 											checked={categories.includes(category.id)}
 											onChange={() => handleCategoryChange(category.id)}
-											className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+											className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 											disabled={isSubmitting}
 										/>
 										<label
@@ -656,7 +639,7 @@ export default function EditProductPage({
 							<button
 								type="submit"
 								disabled={isSubmitting}
-								className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
+								className="bg-[#0B4F96] text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center disabled:bg-blue-300"
 							>
 								{isSubmitting ? (
 									<>

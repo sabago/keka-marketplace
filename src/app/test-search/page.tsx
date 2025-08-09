@@ -28,7 +28,7 @@ export default function TestSearchPage() {
 				/>
 				<button
 					type="submit"
-					className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					className="bg-[#0B4F96] text-white px-4 py-2 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
 				>
 					Search
 				</button>

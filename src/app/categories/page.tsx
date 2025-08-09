@@ -128,7 +128,7 @@ export default function CategoriesPage() {
 				{/* Loading state */}
 				{loading && (
 					<div className="flex items-center justify-center py-12">
-						<Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+						<Loader2 className="h-8 w-8 animate-spin text-[#0B4F96]" />
 						<span className="ml-2 text-gray-600">Loading categories...</span>
 					</div>
 				)}
@@ -200,7 +200,7 @@ export default function CategoriesPage() {
 						<p className="text-gray-600 mb-4">No categories found.</p>
 						<Link
 							href="/products"
-							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+							className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 						>
 							Browse All Products
 						</Link>

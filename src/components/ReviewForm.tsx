@@ -140,7 +140,7 @@ export default function ReviewForm({
 								size={compact ? 18 : 24}
 								className={`cursor-pointer ${
 									star <= (hoverRating || rating)
-										? "text-yellow-400 fill-yellow-400"
+										? "text-[#48ccbc] fill-[#48ccbc]"
 										: "text-gray-300"
 								}`}
 								onClick={() => setRating(star)}
@@ -231,7 +231,7 @@ export default function ReviewForm({
 					)}
 					<button
 						type="submit"
-						className={`bg-blue-600 text-white px-${compact ? "3" : "4"} py-${
+						className={`bg-[#0B4F96] text-white px-${compact ? "3" : "4"} py-${
 							compact ? "1" : "2"
 						} rounded-lg hover:bg-blue-700 disabled:bg-blue-300 ${
 							compact ? "text-sm" : ""

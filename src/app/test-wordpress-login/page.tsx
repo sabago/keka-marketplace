@@ -172,7 +172,7 @@ export default function TestWordPressLoginPage() {
 						<button
 							onClick={generateToken}
 							disabled={loading}
-							className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+							className="w-full bg-[#0B4F96] text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
 						>
 							{loading ? "Generating..." : "Generate Token"}
 						</button>
@@ -263,7 +263,7 @@ export default function TestWordPressLoginPage() {
 			</div>
 
 			<div className="mt-8">
-				<Link href="/" className="text-blue-600 hover:underline">
+				<Link href="/" className="text-[#0B4F96] hover:underline">
 					Back to Home
 				</Link>
 			</div>

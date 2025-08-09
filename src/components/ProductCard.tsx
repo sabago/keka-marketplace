@@ -5,15 +5,16 @@ import { ShoppingCart, LogIn } from "lucide-react";
 import ProductCardReview from "./ProductCardReview";
 import { useCartStore, useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
 import ReviewForm from "./ReviewForm";
+import SafeHtml from "./SafeHtml";
 
 type ProductCardProps = {
 	id: string;
 	title: string;
-	description: string;
+	description: string; // HTML from TinyMCE
 	price: number;
 	thumbnail: string;
 	averageRating?: number;
@@ -47,11 +48,16 @@ export default function ProductCard({
 	// Check if we're on the products page
 	const isProductsPage = pathname === "/products";
 
-	// Truncate description if it's too long
-	const truncatedDescription =
-		description.length > 100
-			? `${description.substring(0, 100)}...`
-			: description;
+	// --- Helpers: strip HTML and truncate text safely (to avoid broken tags) ---
+	const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "");
+	const truncateText = (text: string, max: number) =>
+		text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
+
+	// Compute a safe, truncated preview from the HTML description
+	const truncatedDescription = useMemo(() => {
+		const plain = stripHtml(description || "");
+		return truncateText(plain, 100);
+	}, [description]);
 
 	// Calculate discounted price for logged-in users
 	const discountPercentage = settings.memberDiscountPercentage || 0;
@@ -80,8 +86,6 @@ export default function ProductCard({
 			thumbnail: thumbnail || "/images/dummy.jpeg",
 		});
 
-		// Add item to cart
-
 		setAddedToCart(true);
 
 		// Reset the added to cart state after 2 seconds
@@ -107,10 +111,12 @@ export default function ProductCard({
 							target.style.display = "none";
 							const parent = target.parentElement;
 							if (parent) {
-								parent.classList.add("bg-gray-200");
-								parent.classList.add("flex");
-								parent.classList.add("items-center");
-								parent.classList.add("justify-center");
+								parent.classList.add(
+									"bg-gray-200",
+									"flex",
+									"items-center",
+									"justify-center"
+								);
 								const fallback = document.createElement("span");
 								fallback.className = "text-gray-500";
 								fallback.textContent = "No image";
@@ -188,7 +194,11 @@ export default function ProductCard({
 
 			<Link href={`/products/${id}`} className="block">
 				<div className="px-4">
-					<p className="text-gray-600 text-sm mb-3">{truncatedDescription}</p>
+					{/* Render truncated, sanitized description safely */}
+					<SafeHtml
+						className="text-gray-600 text-sm mb-3"
+						html={truncatedDescription}
+					/>
 				</div>
 
 				<div className="flex items-center justify-between mt-auto m-4">
@@ -251,7 +261,7 @@ export default function ProductCard({
 								<Link
 									href="/?login=true"
 									onClick={(e) => e.stopPropagation()}
-									className="text-xs text-blue-600 hover:underline mt-1 flex items-center"
+									className="text-xs text-[#0B4F96] hover:underline mt-1 flex items-center"
 								>
 									<LogIn size={12} className="mr-1" />
 									Login for {discountPercentage}% off

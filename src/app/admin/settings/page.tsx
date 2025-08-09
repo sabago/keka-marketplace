@@ -106,7 +106,7 @@ export default function SettingsPage() {
 			{/* Loading State */}
 			{loading && (
 				<div className="bg-white rounded-lg shadow-md p-8 text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 					<p className="text-gray-600">Loading settings...</p>
 				</div>
 			)}
@@ -285,7 +285,7 @@ export default function SettingsPage() {
 									name="allowGuestCheckout"
 									checked={settings.allowGuestCheckout}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="allowGuestCheckout"
@@ -302,7 +302,7 @@ export default function SettingsPage() {
 									name="requireEmailVerification"
 									checked={settings.requireEmailVerification}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="requireEmailVerification"
@@ -319,7 +319,7 @@ export default function SettingsPage() {
 									name="enableReviews"
 									checked={settings.enableReviews}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="enableReviews"
@@ -336,7 +336,7 @@ export default function SettingsPage() {
 									name="enableRatings"
 									checked={settings.enableRatings}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="enableRatings"
@@ -353,7 +353,7 @@ export default function SettingsPage() {
 									name="enableWishlist"
 									checked={settings.enableWishlist}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="enableWishlist"
@@ -370,7 +370,7 @@ export default function SettingsPage() {
 									name="enableNewsletter"
 									checked={settings.enableNewsletter}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="enableNewsletter"
@@ -398,7 +398,7 @@ export default function SettingsPage() {
 									name="maintenanceMode"
 									checked={settings.maintenanceMode}
 									onChange={handleChange}
-									className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+									className="h-4 w-4 text-[#0B4F96] focus:ring-blue-500 border-gray-300 rounded"
 								/>
 								<label
 									htmlFor="maintenanceMode"
@@ -415,7 +415,7 @@ export default function SettingsPage() {
 						<button
 							type="submit"
 							disabled={saving}
-							className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+							className="inline-flex items-center px-6 py-3 bg-[#0B4F96] text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
 						>
 							{saving ? (
 								<>

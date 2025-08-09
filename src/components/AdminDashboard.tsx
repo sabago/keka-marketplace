@@ -9,7 +9,7 @@ import {
 	Download,
 	Star,
 	ArrowRight,
-	Trash2,
+	// Trash2,
 } from "lucide-react";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
 
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [timeframe, setTimeframe] = useState("30days");
-	const [cleanupLoading, setCleanupLoading] = useState(false);
+	// const [cleanupLoading, setCleanupLoading] = useState(false);
 	const { settings } = useSettings();
 
 	// Fetch analytics from API
@@ -113,54 +113,54 @@ export default function AdminDashboard() {
 	};
 
 	// Handle cleanup of test orders
-	const handleCleanupTestOrders = async () => {
-		if (
-			!window.confirm(
-				"Are you sure you want to delete ALL test orders? This action cannot be undone.\n\n" +
-					"This will remove all orders with Stripe payment IDs starting with 'cs_test_'."
-			)
-		) {
-			return;
-		}
+	// const handleCleanupTestOrders = async () => {
+	// 	if (
+	// 		!window.confirm(
+	// 			"Are you sure you want to delete ALL test orders? This action cannot be undone.\n\n" +
+	// 				"This will remove all orders with Stripe payment IDs starting with 'cs_test_'."
+	// 		)
+	// 	) {
+	// 		return;
+	// 	}
 
-		setCleanupLoading(true);
-		try {
-			const response = await fetch("/api/admin/cleanup-test-orders", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-			});
+	// 	setCleanupLoading(true);
+	// 	try {
+	// 		const response = await fetch("/api/admin/cleanup-test-orders", {
+	// 			method: "POST",
+	// 			headers: {
+	// 				"Content-Type": "application/json",
+	// 			},
+	// 		});
 
-			const result = await response.json();
+	// 		const result = await response.json();
 
-			if (result.success) {
-				alert(
-					`✅ Test data cleanup completed!\n\n` +
-						`• Orders deleted: ${result.data.deletedOrders}\n` +
-						`• Order items deleted: ${result.data.deletedOrderItems}\n` +
-						`• Downloads deleted: ${result.data.deletedDownloads}`
-				);
+	// 		if (result.success) {
+	// 			alert(
+	// 				`✅ Test data cleanup completed!\n\n` +
+	// 					`• Orders deleted: ${result.data.deletedOrders}\n` +
+	// 					`• Order items deleted: ${result.data.deletedOrderItems}\n` +
+	// 					`• Downloads deleted: ${result.data.deletedDownloads}`
+	// 			);
 
-				// Refresh the analytics data
-				window.location.reload();
-			} else {
-				throw new Error(result.message || "Failed to cleanup test orders");
-			}
-		} catch (error) {
-			console.error("Error cleaning up test orders:", error);
-			alert(
-				"❌ Failed to cleanup test orders. Please try again or check the console for details."
-			);
-		} finally {
-			setCleanupLoading(false);
-		}
-	};
+	// 			// Refresh the analytics data
+	// 			window.location.reload();
+	// 		} else {
+	// 			throw new Error(result.message || "Failed to cleanup test orders");
+	// 		}
+	// 	} catch (error) {
+	// 		console.error("Error cleaning up test orders:", error);
+	// 		alert(
+	// 			"❌ Failed to cleanup test orders. Please try again or check the console for details."
+	// 		);
+	// 	} finally {
+	// 		setCleanupLoading(false);
+	// 	}
+	// };
 
 	if (loading) {
 		return (
 			<div className="bg-white rounded-lg shadow-md p-8 text-center">
-				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 				<p className="text-gray-600">Loading dashboard data...</p>
 			</div>
 		);
@@ -174,7 +174,7 @@ export default function AdminDashboard() {
 				</div>
 				<button
 					onClick={() => window.location.reload()}
-					className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+					className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 				>
 					Try Again
 				</button>
@@ -197,7 +197,7 @@ export default function AdminDashboard() {
 							onClick={() => setTimeframe("7days")}
 							className={`px-4 py-2 rounded-lg text-sm font-medium ${
 								timeframe === "7days"
-									? "bg-blue-600 text-white"
+									? "bg-[#0B4F96] text-white"
 									: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 							}`}
 						>
@@ -207,7 +207,7 @@ export default function AdminDashboard() {
 							onClick={() => setTimeframe("30days")}
 							className={`px-4 py-2 rounded-lg text-sm font-medium ${
 								timeframe === "30days"
-									? "bg-blue-600 text-white"
+									? "bg-[#0B4F96] text-white"
 									: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 							}`}
 						>
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
 							onClick={() => setTimeframe("90days")}
 							className={`px-4 py-2 rounded-lg text-sm font-medium ${
 								timeframe === "90days"
-									? "bg-blue-600 text-white"
+									? "bg-[#0B4F96] text-white"
 									: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 							}`}
 						>
@@ -227,13 +227,13 @@ export default function AdminDashboard() {
 							onClick={() => setTimeframe("all")}
 							className={`px-4 py-2 rounded-lg text-sm font-medium ${
 								timeframe === "all"
-									? "bg-blue-600 text-white"
+									? "bg-[#0B4F96] text-white"
 									: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 							}`}
 						>
 							All
 						</button>
-						<button
+						{/* <button
 							onClick={handleCleanupTestOrders}
 							disabled={cleanupLoading}
 							className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed flex items-center"
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
 									Clear Test Data
 								</>
 							)}
-						</button>
+						</button> */}
 					</div>
 				</div>
 			</div>
@@ -311,7 +311,7 @@ export default function AdminDashboard() {
 						<h2 className="text-xl font-semibold">Top Products</h2>
 						<Link
 							href="/admin/analytics"
-							className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+							className="text-[#0B4F96] hover:text-blue-800 text-sm flex items-center"
 						>
 							View All <ArrowRight className="h-4 w-4 ml-1" />
 						</Link>
@@ -379,7 +379,7 @@ export default function AdminDashboard() {
 						<h2 className="text-xl font-semibold">Recent Reviews</h2>
 						<Link
 							href="/admin/reviews"
-							className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+							className="text-[#0B4F96] hover:text-blue-800 text-sm flex items-center"
 						>
 							View All <ArrowRight className="h-4 w-4 ml-1" />
 						</Link>
@@ -398,7 +398,7 @@ export default function AdminDashboard() {
 													key={i}
 													className={`h-4 w-4 ${
 														i < review.rating
-															? "text-yellow-400 fill-yellow-400"
+															? "text-[#48ccbc] fill-[#48ccbc]"
 															: "text-gray-300"
 													}`}
 												/>
@@ -413,7 +413,7 @@ export default function AdminDashboard() {
 									</div>
 									<Link
 										href={`/admin/reviews/${review.id}`}
-										className="text-blue-600 hover:text-blue-800 text-xs"
+										className="text-[#0B4F96] hover:text-blue-800 text-xs"
 									>
 										View
 									</Link>
@@ -425,7 +425,7 @@ export default function AdminDashboard() {
 									Product:{" "}
 									<Link
 										href={`/admin/products/edit/${review.productId}`}
-										className="text-blue-600 hover:text-blue-800"
+										className="text-[#0B4F96] hover:text-blue-800"
 									>
 										{review.productTitle}
 									</Link>

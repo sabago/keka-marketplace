@@ -100,7 +100,7 @@ export default function AdminPage() {
 					<h1 className="text-3xl font-bold">Admin Dashboard</h1>
 					<Link
 						href="/admin/products/new"
-						className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
+						className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
 					>
 						<PlusCircle className="h-5 w-5 mr-2" />
 						Add New Product
@@ -110,7 +110,7 @@ export default function AdminPage() {
 				{/* Loading and Error States */}
 				{loading && (
 					<div className="bg-white rounded-lg shadow-md p-8 text-center">
-						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 						<p className="text-gray-600">Loading products...</p>
 					</div>
 				)}
@@ -122,7 +122,7 @@ export default function AdminPage() {
 						</div>
 						<button
 							onClick={() => window.location.reload()}
-							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+							className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 						>
 							Try Again
 						</button>
@@ -212,7 +212,7 @@ export default function AdminPage() {
 												<div className="flex justify-end space-x-2">
 													<Link
 														href={`/admin/products/edit/${product.id}`}
-														className="text-blue-600 hover:text-blue-900"
+														className="text-[#0B4F96] hover:text-blue-900"
 													>
 														<Edit className="h-5 w-5" />
 													</Link>

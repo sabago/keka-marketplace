@@ -83,7 +83,7 @@ export default function AddToCartButton({ product }: { product: Product }) {
 				<div className="mb-4">
 					<Link
 						href="/?login=true"
-						className="text-sm text-blue-600 hover:underline flex items-center"
+						className="text-sm text-[#0B4F96] hover:underline flex items-center"
 					>
 						<LogIn size={14} className="mr-1" />
 						Login for {discountPercentage}% off
@@ -99,7 +99,7 @@ export default function AddToCartButton({ product }: { product: Product }) {
 					</div>
 					<button
 						onClick={handleAddToCart}
-						className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full"
+						className="bg-[#0B4F96] hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full"
 					>
 						<Plus className="h-5 w-5 mr-2" />
 						Add Another
@@ -110,8 +110,8 @@ export default function AddToCartButton({ product }: { product: Product }) {
 					onClick={handleAddToCart}
 					className={`${
 						addedToCart
-							? "bg-green-600 hover:bg-green-700"
-							: "bg-blue-600 hover:bg-blue-700"
+							? "hover:bg-green-700 bg-green-600"
+							: "hover:bg-blue-700 bg-[#0B4F96]"
 					} text-white py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center w-full`}
 				>
 					<ShoppingCart className="h-5 w-5 mr-2" />

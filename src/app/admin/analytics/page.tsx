@@ -98,7 +98,7 @@ export default function AnalyticsPage() {
 								onClick={() => setTimeframe("7days")}
 								className={`px-4 py-2 rounded-lg text-sm font-medium ${
 									timeframe === "7days"
-										? "bg-blue-600 text-white"
+										? "bg-[#0B4F96] text-white"
 										: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 								}`}
 							>
@@ -108,7 +108,7 @@ export default function AnalyticsPage() {
 								onClick={() => setTimeframe("30days")}
 								className={`px-4 py-2 rounded-lg text-sm font-medium ${
 									timeframe === "30days"
-										? "bg-blue-600 text-white"
+										? "bg-[#0B4F96] text-white"
 										: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 								}`}
 							>
@@ -118,7 +118,7 @@ export default function AnalyticsPage() {
 								onClick={() => setTimeframe("90days")}
 								className={`px-4 py-2 rounded-lg text-sm font-medium ${
 									timeframe === "90days"
-										? "bg-blue-600 text-white"
+										? "bg-[#0B4F96] text-white"
 										: "bg-gray-100 text-gray-700 hover:bg-gray-200"
 								}`}
 							>
@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
 				{/* Loading and Error States */}
 				{loading && (
 					<div className="bg-white rounded-lg shadow-md p-8 text-center">
-						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 						<p className="text-gray-600">Loading analytics...</p>
 					</div>
 				)}
@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
 						</div>
 						<button
 							onClick={() => window.location.reload()}
-							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+							className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 						>
 							Try Again
 						</button>

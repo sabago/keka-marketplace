@@ -162,7 +162,7 @@ export default function CheckoutSuccessPage() {
 		return (
 			<PageLayout>
 				<div className="container mx-auto px-4 py-16 text-center">
-					<div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full mx-auto mb-4"></div>
+					<div className="animate-spin h-12 w-12 border-b-2 border-[#0B4F96] rounded-full mx-auto mb-4"></div>
 					<p className="text-gray-600">Loading order details...</p>
 				</div>
 			</PageLayout>
@@ -178,7 +178,7 @@ export default function CheckoutSuccessPage() {
 							<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
 								<p>{error}</p>
 							</div>
-							<Link href="/products" className="text-blue-600 hover:text-blue-800">
+							<Link href="/products" className="text-[#0B4F96] hover:text-blue-800">
 								Return to Products
 							</Link>
 						</div>
@@ -255,7 +255,7 @@ export default function CheckoutSuccessPage() {
 												<td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
 													Total
 												</td>
-												<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-blue-600">
+												<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-[#0B4F96]">
 													{formatPrice(orderDetails.totalAmount)}
 												</td>
 											</tr>
@@ -288,7 +288,7 @@ export default function CheckoutSuccessPage() {
 														</span>
 														<a
 															href={`/api/download/${download.downloadToken}`}
-															className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+															className="inline-flex items-center px-3 py-1 bg-[#0B4F96] text-white text-sm font-medium rounded hover:bg-blue-700"
 															target="_blank"
 															rel="noopener noreferrer"
 														>
@@ -305,7 +305,7 @@ export default function CheckoutSuccessPage() {
 					)}
 
 					<div className="text-center">
-						<Link href="/products" className="text-blue-600 hover:text-blue-800">
+						<Link href="/products" className="text-[#0B4F96] hover:text-blue-800">
 							Continue Shopping
 						</Link>
 					</div>

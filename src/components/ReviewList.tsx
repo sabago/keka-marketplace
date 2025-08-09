@@ -78,7 +78,7 @@ export default function ReviewList({ productId }: ReviewListProps) {
 							<Star
 								key={star}
 								size={24}
-								className="text-gray-300 hover:text-yellow-400"
+								className="text-gray-300 hover:text-[#48ccbc]"
 							/>
 						))}
 						<span className="ml-2 text-sm text-gray-600">Click to rate</span>
@@ -118,7 +118,7 @@ export default function ReviewList({ productId }: ReviewListProps) {
 								size={24}
 								className={`${
 									star <= Math.round(averageRating)
-										? "text-yellow-400 fill-yellow-400"
+										? "text-[#48ccbc] fill-[#48ccbc]"
 										: "text-gray-300"
 								}`}
 							/>
@@ -154,7 +154,7 @@ export default function ReviewList({ productId }: ReviewListProps) {
 									size={16}
 									className={`${
 										star <= review.rating
-											? "text-yellow-400 fill-yellow-400"
+											? "text-[#48ccbc] fill-[#48ccbc]"
 											: "text-gray-300"
 									}`}
 								/>

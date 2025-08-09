@@ -10,6 +10,7 @@ import AddToCartButton from "@/components/AddToCartButton";
 import ReviewList from "@/components/ReviewList";
 import { Metadata, ResolvingMetadata } from "next";
 import PageLayout from "@/components/PageLayout";
+import SafeHtml from "@/components/SafeHtml";
 
 // Generate metadata for SEO
 export async function generateMetadata(
@@ -196,7 +197,7 @@ export default async function ProductDetailPage({
 				<div className="mb-6">
 					<Link
 						href="/products"
-						className="text-blue-600 hover:text-blue-800 flex items-center"
+						className="hover:text-blue-800 text-[#0B4F96] flex items-center"
 					>
 						<ArrowLeft className="h-4 w-4 mr-1" />
 						Back to Products
@@ -251,7 +252,7 @@ export default async function ProductDetailPage({
 							{product.categories && product.categories.length > 0 && (
 								<Link
 									href={`/categories/${product.categories[0].category.slug}`}
-									className="text-blue-600 hover:text-blue-800 text-sm mb-4"
+									className="hover:text-blue-800 text-[#0B4F96] text-sm mb-4"
 								>
 									{product.categories[0].category.name}
 								</Link>
@@ -259,7 +260,7 @@ export default async function ProductDetailPage({
 
 							{/* Price */}
 							<div className="mb-6">
-								<span className="text-3xl font-bold text-blue-600">
+								<span className="text-3xl font-bold text-[#0B4F96]">
 									{formatCurrency(Number(product.price), "USD")}
 								</span>
 
@@ -270,7 +271,7 @@ export default async function ProductDetailPage({
 							</div>
 
 							{/* Description */}
-							<div className="text-gray-700 mb-8 flex-grow">
+							{/* <div className="text-gray-700 mb-8 flex-grow">
 								{product.description
 									.split("\n\n")
 									.map((paragraph: string, index: number) => (
@@ -278,7 +279,11 @@ export default async function ProductDetailPage({
 											{paragraph}
 										</p>
 									))}
-							</div>
+							</div> */}
+							<SafeHtml
+								html={product.description ?? ""}
+								className="prose max-w-none"
+							/>
 
 							{/* SEO Tags */}
 							{tags && tags.length > 0 && (
@@ -337,7 +342,7 @@ export default async function ProductDetailPage({
 										<h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
 											{relatedProduct.title}
 										</h3>
-										<p className="text-blue-600 font-bold mt-2">
+										<p className="text-[#0B4F96] font-bold mt-2">
 											{formatCurrency(Number(relatedProduct.price), "USD")}
 										</p>
 									</div>

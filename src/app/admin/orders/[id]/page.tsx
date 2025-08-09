@@ -110,7 +110,7 @@ export default function OrderDetailPage({
 				{/* Loading and Error States */}
 				{loading && (
 					<div className="bg-white rounded-lg shadow-md p-8 text-center">
-						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0B4F96] mx-auto mb-4"></div>
 						<p className="text-gray-600">Loading order details...</p>
 					</div>
 				)}
@@ -122,7 +122,7 @@ export default function OrderDetailPage({
 						</div>
 						<button
 							onClick={() => window.location.reload()}
-							className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+							className="bg-[#0B4F96] text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 						>
 							Try Again
 						</button>
@@ -173,7 +173,7 @@ export default function OrderDetailPage({
 									</div>
 									<div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
 										<p className="font-semibold">Total</p>
-										<p className="text-xl font-bold text-blue-600">
+										<p className="text-xl font-bold text-[#0B4F96]">
 											{formatPrice(order.totalAmount)}
 										</p>
 									</div>
@@ -200,7 +200,7 @@ export default function OrderDetailPage({
 													</span>
 													<a
 														href={`/api/download/${download.downloadToken}`}
-														className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+														className="inline-flex items-center px-3 py-1 bg-[#0B4F96] text-white text-sm font-medium rounded hover:bg-blue-700"
 														target="_blank"
 														rel="noopener noreferrer"
 													>
@@ -233,7 +233,7 @@ export default function OrderDetailPage({
 								<div className="space-y-3">
 									<a
 										href={`/api/admin/orders/${order.id}/invoice`}
-										className="w-full inline-flex justify-center items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+										className="w-full inline-flex justify-center items-center px-4 py-2 bg-[#0B4F96] text-white text-sm font-medium rounded hover:bg-blue-700"
 										target="_blank"
 										rel="noopener noreferrer"
 									>

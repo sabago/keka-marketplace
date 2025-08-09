@@ -108,7 +108,7 @@ export default function CartPage() {
 				<div className="mb-6">
 					<Link
 						href="/products"
-						className="text-blue-600 hover:text-blue-800 flex items-center"
+						className="text-[#0B4F96] hover:text-blue-800 flex items-center"
 					>
 						<ArrowLeft className="h-4 w-4 mr-1" />
 						Continue Shopping
@@ -136,7 +136,7 @@ export default function CartPage() {
 											</div>
 											<div className="ml-4 flex-grow">
 												<h3 className="text-lg font-medium text-gray-900">{item.title}</h3>
-												<p className="text-blue-600 font-bold mt-1">
+												<p className="text-[#0B4F96] font-bold mt-1">
 													{formatPrice(item.price)}
 												</p>
 
@@ -163,7 +163,7 @@ export default function CartPage() {
 												</div>
 											</div>
 											<div className="flex flex-col items-end">
-												<p className="font-bold text-blue-600 mb-2">
+												<p className="font-bold text-[#0B4F96] mb-2">
 													{formatPrice(item.price * item.quantity)}
 												</p>
 												<button
@@ -192,7 +192,7 @@ export default function CartPage() {
 									</div>
 									<div className="border-t border-gray-200 pt-3 flex justify-between font-bold">
 										<span>Total</span>
-										<span className="text-blue-600">{formatPrice(subtotal)}</span>
+										<span className="text-[#0B4F96]">{formatPrice(subtotal)}</span>
 									</div>
 								</div>
 
@@ -227,7 +227,7 @@ export default function CartPage() {
 									<button
 										type="submit"
 										disabled={isCheckingOut || items.length === 0}
-										className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center disabled:bg-blue-300"
+										className="w-full bg-[#0B4F96] text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center disabled:bg-blue-300"
 									>
 										{isCheckingOut ? (
 											<>
@@ -256,7 +256,7 @@ export default function CartPage() {
 						</p>
 						<Link
 							href="/products"
-							className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-flex items-center"
+							className="bg-[#0B4F96] text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-flex items-center"
 						>
 							Browse Products
 						</Link>
