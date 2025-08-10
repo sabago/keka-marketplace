@@ -1,5 +1,4 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
-import nodemailer from 'nodemailer';
 
 // Initialize SES client
 const sesClient = new SESClient({
@@ -9,34 +8,6 @@ const sesClient = new SESClient({
     secretAccessKey: process.env.SECRET_ACCESS_KEY || '',
   },
 });
-
-// Create a transporter object based on environment
-let transporter: nodemailer.Transporter;
-
-if (process.env.NODE_ENV === 'production') {
-  // Use AWS SES in production
-  transporter = nodemailer.createTransport({
-    SES: { 
-      client: sesClient,
-      aws: { SendEmailCommand }
-    }
-  });
-} else {
-  // Use a test account in development
-  // This will log the email content to the console
-  transporter = {
-    sendMail: async (mailOptions: nodemailer.SendMailOptions) => {
-      console.log('========== DEVELOPMENT MODE EMAIL ==========');
-      console.log(`From: ${mailOptions.from}`);
-      console.log(`To: ${mailOptions.to}`);
-      console.log(`Subject: ${mailOptions.subject}`);
-      console.log('Text content:', mailOptions.text);
-      console.log('HTML content:', typeof mailOptions.html === 'string' ? `${mailOptions.html.substring(0, 100)}...` : '[Not a string]');
-      console.log('============================================');
-      return { messageId: 'test-message-id' };
-    }
-  } as nodemailer.Transporter;
-}
 
 /**
  * Send an order confirmation email with download links
@@ -164,17 +135,35 @@ export async function sendOrderConfirmationEmail(
     </html>
   `;
 
-  // Send the email
+  // Create text version of the email
+  const textContent = `Thank you for your purchase! Order ID: ${order.id.substring(0, 8)}. Total: ${formattedTotal}. Your downloads are available at: ${downloads.map(d => `${process.env.NEXT_PUBLIC_SITE_URL}/api/download/${d.downloadToken}`).join(', ')}. Download links will expire in 30 days.`;
+
+  // Send the email using AWS SES directly
   try {
-    await transporter.sendMail({
-      from: `"Digital Marketplace" <${process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com'}>`,
-      to: order.customerEmail,
-      subject: `Your Purchase Receipt - Order #${order.id.substring(0, 8)}`,
-      html: htmlContent,
-      text: `Thank you for your purchase! Order ID: ${order.id.substring(0, 8)}. Total: ${formattedTotal}. Your downloads are available at: ${downloads.map(d => `${process.env.NEXT_PUBLIC_SITE_URL}/api/download/${d.downloadToken}`).join(', ')}. Download links will expire in 30 days.`,
+    const command = new SendEmailCommand({
+      Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
+      Destination: {
+        ToAddresses: [order.customerEmail],
+      },
+      Message: {
+        Subject: {
+          Data: `Your Purchase Receipt - Order #${order.id.substring(0, 8)}`,
+          Charset: 'UTF-8',
+        },
+        Body: {
+          Html: {
+            Data: htmlContent,
+            Charset: 'UTF-8',
+          },
+          Text: {
+            Data: textContent,
+            Charset: 'UTF-8',
+          },
+        },
+      },
     });
-    
-    console.log(`Order confirmation email sent to ${order.customerEmail}`);
+
+    await sesClient.send(command);
     return true;
   } catch (error) {
     console.error('Error sending order confirmation email:', error);

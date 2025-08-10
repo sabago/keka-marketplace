@@ -135,7 +135,6 @@ export async function POST(request: Request) {
           );
 
           // Send order confirmation email with download links
-          // Send emails in both production and development mode
           try {
             // Create a map of product IDs to titles for easy lookup
             const productTitlesMap = products.reduce((map: Record<string, string>, product: any) => {
