@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Trash2, ArrowLeft, ShoppingBag, Plus, Minus } from "lucide-react";
 import { useCart } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
+import { useAuth } from "@/lib/authContext";
 import PageLayout from "@/components/PageLayout";
 
 export default function CartPage() {
@@ -18,12 +19,17 @@ export default function CartPage() {
 		clearCart,
 	} = useCart();
 	const { settings } = useSettings();
+	const { isLoggedIn } = useAuth();
 	const [email, setEmail] = useState("");
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
 	const [checkoutError, setCheckoutError] = useState("");
 
 	// Calculate subtotal
 	const subtotal = getTotalPrice();
+
+	// Calculate discount for logged-in users
+	const discount = isLoggedIn ? subtotal * 0.1 : 0; // 10% discount
+	const total = subtotal - discount;
 
 	// Format price using the helper function
 	const formatPrice = (price: number) => {
@@ -65,6 +71,7 @@ export default function CartPage() {
 				body: JSON.stringify({
 					items: items,
 					customerEmail: email,
+					isLoggedIn: isLoggedIn,
 				}),
 			});
 
@@ -190,9 +197,15 @@ export default function CartPage() {
 										<span className="text-gray-600">Subtotal</span>
 										<span className="font-medium">{formatPrice(subtotal)}</span>
 									</div>
+									{isLoggedIn && discount > 0 && (
+										<div className="flex justify-between text-green-600">
+											<span>Member Discount (10%)</span>
+											<span>-{formatPrice(discount)}</span>
+										</div>
+									)}
 									<div className="border-t border-gray-200 pt-3 flex justify-between font-bold">
 										<span>Total</span>
-										<span className="text-[#0B4F96]">{formatPrice(subtotal)}</span>
+										<span className="text-[#0B4F96]">{formatPrice(total)}</span>
 									</div>
 								</div>
 
