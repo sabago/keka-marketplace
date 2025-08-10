@@ -117,7 +117,7 @@ export async function sendOrderConfirmationEmail(
           ${downloads.map(download => `
             <div class="download-item">
               <p><strong>${download.productTitle}</strong></p>
-              <a href="${process.env.NEXT_PUBLIC_SITE_URL}/api/download/${download.downloadToken}" class="download-link">Download</a>
+              <a href="https://keka-marketplace-production.up.railway.app/api/download/${download.downloadToken}" class="download-link">Download</a>
             </div>
           `).join('')}
           
@@ -136,7 +136,7 @@ export async function sendOrderConfirmationEmail(
   `;
 
   // Create text version of the email
-  const textContent = `Thank you for your purchase! Order ID: ${order.id.substring(0, 8)}. Total: ${formattedTotal}. Your downloads are available at: ${downloads.map(d => `${process.env.NEXT_PUBLIC_SITE_URL}/api/download/${d.downloadToken}`).join(', ')}. Download links will expire in 30 days.`;
+  const textContent = `Thank you for your purchase! Order ID: ${order.id.substring(0, 8)}. Total: ${formattedTotal}. Your downloads are available at: ${downloads.map(d => `https://keka-marketplace-production.up.railway.app/api/download/${d.downloadToken}`).join(', ')}. Download links will expire in 30 days.`;
 
   // Send the email using AWS SES directly
   try {
