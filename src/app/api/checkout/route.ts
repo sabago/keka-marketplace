@@ -18,7 +18,7 @@ interface Product {
 
 export async function POST(request: Request) {
   try {
-    const { items, customerEmail, isLoggedIn } = await request.json();
+    const { items, customerEmail } = await request.json();
     
     // Validate the request
     if (!items || !items.length) {
@@ -43,20 +43,11 @@ export async function POST(request: Request) {
       };
     });
     
-    // Convert prices to numbers and apply discount for logged-in users
-    const lineItemsWithNumberPrices = lineItems.map((item: Product & { quantity: number }) => {
-      let price = Number(item.price);
-      
-      // Apply 10% discount for logged-in users
-      if (isLoggedIn) {
-        price = price * 0.9; // 10% discount
-      }
-      
-      return {
-        ...item,
-        price: price
-      };
-    });
+    // Convert prices to numbers for Stripe
+    const lineItemsWithNumberPrices = lineItems.map((item: Product & { quantity: number }) => ({
+      ...item,
+      price: Number(item.price)
+    }));
     
     // Create a Stripe checkout session
     // Make sure lineItemsWithNumberPrices is not empty

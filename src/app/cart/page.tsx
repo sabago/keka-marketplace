@@ -71,7 +71,6 @@ export default function CartPage() {
 				body: JSON.stringify({
 					items: items,
 					customerEmail: email,
-					isLoggedIn: isLoggedIn,
 				}),
 			});
 
