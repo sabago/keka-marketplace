@@ -8,14 +8,22 @@ import { sendOrderConfirmationEmail } from '@/lib/email';
 // POST /api/webhook - Handle Stripe webhook events
 export async function POST(request: Request) {
   try {
-    // Get the request body as text
-    const payload = await request.text();
+    // Get the request body as raw bytes (important for signature verification)
+    const body = await request.arrayBuffer();
+    const payload = Buffer.from(body);
     
     // Get the Stripe signature from headers
-    const headersList = headers();
-    const signature = (await headersList).get('stripe-signature');
+    const headersList = await headers();
+    const signature = headersList.get('stripe-signature');
+    
+    console.log('Webhook received:', {
+      hasSignature: !!signature,
+      payloadLength: payload.length,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
+    });
     
     if (!signature) {
+      console.error('Missing Stripe signature in webhook request');
       return NextResponse.json(
         { error: 'Missing Stripe signature' },
         { status: 400 }
@@ -23,7 +31,8 @@ export async function POST(request: Request) {
     }
 
     // Verify the webhook signature
-    const event = constructWebhookEvent(payload, signature);
+    const event = constructWebhookEvent(payload.toString(), signature);
+    console.log('Webhook signature verified successfully, event type:', event.type);
 
     // Handle different event types
     switch (event.type) {
@@ -195,10 +204,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-// Disable body parsing, we need the raw body for Stripe signature verification
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

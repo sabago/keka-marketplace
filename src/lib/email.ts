@@ -5,8 +5,8 @@ import nodemailer from 'nodemailer';
 const sesClient = new SESClient({
   region: process.env.SES_REGION || process.env.AWS_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY || '',
+    accessKeyId: process.env.ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.SECRET_ACCESS_KEY || '',
   },
 });
 
