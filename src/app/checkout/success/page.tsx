@@ -3,7 +3,6 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle } from "lucide-react";
-import Link from "next/link";
 import { useCartStore } from "@/lib/useCart";
 import PageLayout from "@/components/PageLayout";
 
@@ -178,9 +177,13 @@ export default function CheckoutSuccessPage() {
 							<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
 								<p>{error}</p>
 							</div>
-							<Link href="/products" className="text-[#0B4F96] hover:text-blue-800">
+							<a
+								href="https://masteringhomecare.com/marketplace"
+								className="text-[#0B4F96] hover:text-blue-800"
+								target="_parent"
+							>
 								Return to Products
-							</Link>
+							</a>
 						</div>
 					</div>
 				</div>
@@ -305,9 +308,13 @@ export default function CheckoutSuccessPage() {
 					)}
 
 					<div className="text-center">
-						<Link href="/products" className="text-[#0B4F96] hover:text-blue-800">
+						<a
+							href="https://masteringhomecare.com/marketplace"
+							className="text-[#0B4F96] hover:text-blue-800"
+							target="_parent"
+						>
 							Continue Shopping
-						</Link>
+						</a>
 					</div>
 				</div>
 			</div>
