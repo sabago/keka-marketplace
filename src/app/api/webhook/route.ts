@@ -91,8 +91,8 @@ export async function POST(request: Request) {
             });
           }
 
-          // Calculate total amount
-          const totalAmount = products.reduce((sum: number, product: { price: any; }) => sum + Number(product.price), 0);
+          // Use the actual amount paid from Stripe (includes any discounts)
+          const totalAmount = session.amount_total ? session.amount_total / 100 : 0; // Convert from cents to dollars
 
           // Create order
           const order = await prisma.order.create({
