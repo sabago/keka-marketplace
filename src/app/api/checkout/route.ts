@@ -45,14 +45,8 @@ export async function POST(request: Request) {
       };
     });
     
-    // Convert prices to numbers for Stripe
-    const lineItemsWithNumberPrices = lineItems.map((item: any) => ({
-      ...item,
-      price: Number(item.price)
-    }));
-    
-    // Ensure each item has a quantity property
-    const itemsWithQuantity = lineItemsWithNumberPrices.map((item: any) => ({
+    // Ensure each item has a quantity property (prices should remain as strings for Stripe)
+    const itemsWithQuantity = lineItems.map((item: any) => ({
       ...item,
       quantity: item.quantity || 1
     }));
