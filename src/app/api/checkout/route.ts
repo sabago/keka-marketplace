@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const lineItems = items.map((item: CartItem) => ({
       id: item.id,
       title: item.title,
-      description: '', // We'll get this from database if needed
+      description: item.title, // Use title as description for now
       price: Number(item.price), // Cart already has discounted price
       thumbnail: item.thumbnail,
       quantity: item.quantity || 1
