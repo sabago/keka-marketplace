@@ -30,8 +30,13 @@ export default function AddToCartButton({ product }: { product: Product }) {
 
 	// Calculate discounted price for logged-in users
 	const discountPercentage = settings.memberDiscountPercentage || 0;
+	const calculatedDiscountedPrice =
+		priceAsNumber * (1 - discountPercentage / 100);
+
+	// Ensure discounted price meets Stripe's minimum of $0.50
+	const STRIPE_MINIMUM = 0.5;
 	const discountedPrice = isLoggedIn
-		? priceAsNumber * (1 - discountPercentage / 100)
+		? Math.max(calculatedDiscountedPrice, STRIPE_MINIMUM)
 		: priceAsNumber;
 
 	// Format prices using the helper function
