@@ -46,13 +46,18 @@ export async function POST(request: Request) {
     }
     
     // Use cart items with their stored prices (already discounted for logged-in users)
-    const lineItems = validCartItems.map((cartItem: CartItem) => ({
-      id: cartItem.id,
-      title: cartItem.title,
-      price: cartItem.price, // Use the price from cart (already discounted)
-      thumbnail: cartItem.thumbnail,
-      quantity: cartItem.quantity
-    }));
+    // but get description from database products
+    const lineItems = validCartItems.map((cartItem: CartItem) => {
+      const product = products.find(p => p.id === cartItem.id);
+      return {
+        id: cartItem.id,
+        title: cartItem.title,
+        description: product?.description || '', // Get description from database
+        price: cartItem.price, // Use the price from cart (already discounted)
+        thumbnail: cartItem.thumbnail,
+        quantity: cartItem.quantity
+      };
+    });
     
     // Convert prices to numbers for Stripe
     const lineItemsWithNumberPrices = lineItems.map((item: CartItem) => ({
