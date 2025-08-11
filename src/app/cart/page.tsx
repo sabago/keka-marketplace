@@ -24,11 +24,8 @@ export default function CartPage() {
 	const [isCheckingOut, setIsCheckingOut] = useState(false);
 	const [checkoutError, setCheckoutError] = useState("");
 
-	// Calculate subtotal and apply discount for logged-in users
-	const originalSubtotal = getTotalPrice();
-	const subtotal = isLoggedIn ? originalSubtotal * 0.9 : originalSubtotal; // Apply 10% discount to subtotal
-	const discount = isLoggedIn ? originalSubtotal - subtotal : 0;
-	const total = subtotal;
+	// Calculate total - no additional discount needed since products are already discounted when added to cart
+	const total = getTotalPrice();
 
 	// Format price using the helper function
 	const formatPrice = (price: number) => {
@@ -70,7 +67,6 @@ export default function CartPage() {
 				body: JSON.stringify({
 					items: items,
 					customerEmail: email,
-					isLoggedIn: isLoggedIn,
 				}),
 			});
 
@@ -192,10 +188,10 @@ export default function CartPage() {
 								<h2 className="text-lg font-semibold mb-4">Order Summary</h2>
 
 								<div className="space-y-3 mb-6">
-									{isLoggedIn && discount > 0 && (
+									{isLoggedIn && (
 										<div className="flex justify-between text-green-600 text-sm">
-											<span>✓ Member discount applied (10% off)</span>
-											<span>You save {formatPrice(discount)}</span>
+											<span>✓ Member discount already applied</span>
+											<span>10% off</span>
 										</div>
 									)}
 									<div className="border-t border-gray-200 pt-3 flex justify-between font-bold">
