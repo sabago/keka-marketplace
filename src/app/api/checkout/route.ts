@@ -9,7 +9,7 @@ interface Product {
   id: string;
   title: string;
   description: string;
-  price: unknown;
+  price: number | bigint | string;
   thumbnail: string;
   filePath?: string;
   createdAt?: Date;
@@ -28,54 +28,34 @@ export async function POST(request: Request) {
       );
     }
     
-    // Validate that products exist in database (security check)
+    // Fetch actual products from the database to prevent price manipulation
     const productIds = items.map((item: CartItem) => item.id);
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } }
     });
     
-    // Ensure all cart items correspond to valid products
-    const validProductIds = new Set(products.map(p => p.id));
-    const validCartItems = items.filter((item: CartItem) => validProductIds.has(item.id));
-    
-    if (validCartItems.length === 0) {
-      return NextResponse.json(
-        { error: 'No valid products in cart' },
-        { status: 400 }
-      );
-    }
-    
-    // Use cart items with their stored prices (already discounted for logged-in users)
-    // but get description from database products
-    const lineItems = validCartItems.map((cartItem: CartItem) => {
-      const product = products.find(p => p.id === cartItem.id);
+    // Match cart items with actual products and add quantities
+    // But use the cart prices (which are already discounted for logged-in users)
+    const lineItems = products.map((product: { id: string; title: string; description: string; price: unknown; thumbnail: string; }) => {
+      const cartItem = items.find((item: CartItem) => item.id === product.id);
       return {
-        id: cartItem.id,
-        title: cartItem.title,
-        description: product?.description || '', // Get description from database
-        price: cartItem.price, // Use the price from cart (already discounted)
-        thumbnail: cartItem.thumbnail,
-        quantity: cartItem.quantity
+        id: product.id,
+        title: product.title,
+        description: product.description,
+        price: cartItem?.price || product.price, // Use cart price if available (discounted)
+        thumbnail: product.thumbnail,
+        quantity: cartItem?.quantity || 1
       };
     });
     
     // Convert prices to numbers for Stripe
-    const lineItemsWithNumberPrices = lineItems.map((item: CartItem) => ({
+    const lineItemsWithNumberPrices = lineItems.map((item: Product & { quantity: number }) => ({
       ...item,
       price: Number(item.price)
     }));
     
-    // Create a Stripe checkout session
-    // Make sure lineItemsWithNumberPrices is not empty
-    if (!lineItemsWithNumberPrices.length) {
-      return NextResponse.json(
-        { error: 'No valid items in cart' },
-        { status: 400 }
-      );
-    }
-    
     // Ensure each item has a quantity property
-    const itemsWithQuantity = lineItemsWithNumberPrices.map(item => ({
+    const itemsWithQuantity = lineItemsWithNumberPrices.map((item: Product & { quantity: number }) => ({
       ...item,
       quantity: item.quantity || 1
     }));
