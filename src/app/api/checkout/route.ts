@@ -28,40 +28,18 @@ export async function POST(request: Request) {
       );
     }
     
-    // Fetch actual products from the database to prevent price manipulation
-    const productIds = items.map((item: CartItem) => item.id);
-    const products = await prisma.product.findMany({
-      where: { id: { in: productIds } }
-    });
-    
-    // Match cart items with actual products and add quantities
-    // But use the cart prices (which are already discounted for logged-in users)
-    const lineItems = products.map((product: { id: string; title: string; description: string; price: unknown; thumbnail: string; }) => {
-      const cartItem = items.find((item: CartItem) => item.id === product.id);
-      return {
-        id: product.id,
-        title: product.title,
-        description: product.description,
-        price: cartItem?.price || product.price, // Use cart price if available (discounted)
-        thumbnail: product.thumbnail,
-        quantity: cartItem?.quantity || 1
-      };
-    });
-    
-    // Convert prices to numbers for Stripe
-    const lineItemsWithNumberPrices = lineItems.map((item: Product & { quantity: number }) => ({
-      ...item,
-      price: Number(item.price)
-    }));
-    
-    // Ensure each item has a quantity property
-    const itemsWithQuantity = lineItemsWithNumberPrices.map((item: Product & { quantity: number }) => ({
-      ...item,
+    // Simple approach: use cart items directly (they already have discounted prices)
+    const lineItems = items.map((item: CartItem) => ({
+      id: item.id,
+      title: item.title,
+      description: '', // We'll get this from database if needed
+      price: Number(item.price), // Cart already has discounted price
+      thumbnail: item.thumbnail,
       quantity: item.quantity || 1
     }));
     
-    console.log('Creating checkout session with line items:', JSON.stringify(itemsWithQuantity));
-    const session = await createCheckoutSession(itemsWithQuantity, customerEmail);
+    console.log('Creating checkout session with line items:', JSON.stringify(lineItems));
+    const session = await createCheckoutSession(lineItems, customerEmail);
     
     // For development: Create a test order in the database
     // In production, this would be handled by the webhook
