@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       return {
         ...product,
         // Use cart price if available (already discounted), otherwise use database price
-        price: cartItem?.price !== undefined ? cartItem.price : product.price,
+        price: cartItem?.price !== undefined ? String(cartItem.price) : product.price,
         quantity: cartItem?.quantity || 1
       };
     });
