@@ -28,18 +28,37 @@ export async function POST(request: Request) {
       );
     }
     
-    // Simple approach: use cart items directly (they already have discounted prices)
-    const lineItems = items.map((item: CartItem) => ({
-      id: item.id,
-      title: item.title,
-      description: item.title, // Use title as description for now
-      price: Number(item.price), // Cart already has discounted price
-      thumbnail: item.thumbnail,
+    // Fetch actual products from the database to prevent price manipulation
+    const productIds = items.map((item: CartItem) => item.id);
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } }
+    });
+    
+    // Match cart items with actual products and add quantities
+    const lineItems = products.map((product: any) => {
+      const cartItem = items.find((item: CartItem) => item.id === product.id);
+      return {
+        ...product,
+        // Use cart price if available (already discounted), otherwise use database price
+        price: cartItem?.price !== undefined ? cartItem.price : product.price,
+        quantity: cartItem?.quantity || 1
+      };
+    });
+    
+    // Convert prices to numbers for Stripe
+    const lineItemsWithNumberPrices = lineItems.map((item: any) => ({
+      ...item,
+      price: Number(item.price)
+    }));
+    
+    // Ensure each item has a quantity property
+    const itemsWithQuantity = lineItemsWithNumberPrices.map((item: any) => ({
+      ...item,
       quantity: item.quantity || 1
     }));
     
-    console.log('Creating checkout session with line items:', JSON.stringify(lineItems));
-    const session = await createCheckoutSession(lineItems, customerEmail);
+    console.log('Creating checkout session with line items:', JSON.stringify(itemsWithQuantity));
+    const session = await createCheckoutSession(itemsWithQuantity, customerEmail);
     
     // For development: Create a test order in the database
     // In production, this would be handled by the webhook
