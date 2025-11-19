@@ -44,6 +44,11 @@ next-env.d.ts
 # OS
 Thumbs.db
 
-# README and docs
+# README and docs (exclude only top-level docs, not content files)
 README.md
-*.md
+DEPLOYMENT.md
+DOCKER_TESTING.md
+PRODUCTION-SETUP.md
+WORDPRESS-LOGIN-TESTING.md
+WORDPRESS-MARKETPLACE-INTEGRATION.md
+WORDPRESS-PLUGIN-SETUP.md
