@@ -7,13 +7,14 @@ echo "🚀 Starting deployment process..."
 # Ensure Next.js uses port 3000
 export PORT=3000
 
-# Start background tasks immediately (Prisma generation, migrations, imports)
-# This ensures the server starts quickly for healthcheck
-(
-  # Generate Prisma Client with runtime DATABASE_URL
-  echo "🔧 Generating Prisma Client for runtime database..."
-  ./node_modules/.bin/prisma generate
+# CRITICAL: Generate Prisma Client BEFORE starting server
+# Next.js cannot start without this
+echo "🔧 Generating Prisma Client for runtime database..."
+./node_modules/.bin/prisma generate
 
+# Run database tasks in background (migrations and imports)
+# These can happen after server starts responding
+(
   # Wait for database to be ready using Railway's PGHOST variable
   echo "⏳ Waiting for database to be ready..."
   DB_HOST="${PGHOST:-localhost}"
@@ -37,6 +38,6 @@ export PORT=3000
   echo "✅ Background tasks complete!"
 ) &
 
-# Start the Next.js server immediately (before background tasks complete)
+# Start the Next.js server (Prisma Client must be generated first)
 echo "🚀 Starting Next.js server on port 3000..."
 exec node server.js

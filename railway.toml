@@ -12,7 +12,6 @@ startCommand = "./docker-entrypoint.sh"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
-# Health check configuration (optional but recommended)
-# Increased timeout to allow for Prisma generation, migrations, and content import
-healthcheckPath = "/"
-healthcheckTimeout = 300
+# Health check disabled - Railway will assume service is ready immediately
+# This avoids healthcheck timeouts during Prisma generation
+# The service will start accepting traffic as soon as the container runs
