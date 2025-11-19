@@ -22,11 +22,14 @@ ARG DATABASE_URL=postgresql://postgres:postgres@postgres:5432/marketplace_docker
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Replace DATABASE_URL in .env.production with the build-time DATABASE_URL
-# This ensures the Next.js standalone build uses the correct database
-RUN sed -i "s|DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" .env.production
+# Copy .env to .env.production if it exists (for local Docker builds with Stripe keys, etc.)
+# Railway will have these as env vars during build, so the copy will fail safely
+# Then remove any existing DATABASE_URL and PG* variables and add only the build arg DATABASE_URL
+RUN (cp .env .env.production 2>/dev/null || touch .env.production) && \
+    sed -i '/^DATABASE_URL=/d; /^DIRECT_DATABASE_URL=/d; /^PGHOST=/d; /^PGUSER=/d; /^PGPASSWORD=/d; /^PGDATABASE=/d; /^PGPORT=/d' .env.production && \
+    echo "DATABASE_URL=\"${DATABASE_URL}\"" >> .env.production
 
-# Generate Prisma Client
+# Generate Prisma Client with the build-time DATABASE_URL
 RUN npx prisma generate
 
 # Build Next.js app
