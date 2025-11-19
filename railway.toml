@@ -13,5 +13,6 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
 # Health check configuration (optional but recommended)
+# Increased timeout to allow for Prisma generation, migrations, and content import
 healthcheckPath = "/"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
