@@ -10,10 +10,21 @@ type Product = {
   thumbnail: string;
 };
 
-// Initialize Stripe client
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
-});
+// Lazy initialization of Stripe client to avoid build-time errors
+let stripeInstance: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not set');
+    }
+    stripeInstance = new Stripe(apiKey, {
+      apiVersion: '2025-02-24.acacia',
+    });
+  }
+  return stripeInstance;
+}
 
 /**
  * Create a Stripe checkout session for the given products
@@ -44,7 +55,7 @@ export async function createCheckoutSession(
   }));
   
   // Create checkout session
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     payment_method_types: ['card'],
     line_items: lineItems,
     mode: 'payment',
@@ -67,7 +78,7 @@ export async function createCheckoutSession(
 export async function getCheckoutSession(
   sessionId: string
 ): Promise<Stripe.Checkout.Session> {
-  return await stripe.checkout.sessions.retrieve(sessionId);
+  return await getStripe().checkout.sessions.retrieve(sessionId);
 }
 
 /**
@@ -80,9 +91,13 @@ export function constructWebhookEvent(
   payload: string,
   signature: string
 ): Stripe.Event {
-  return stripe.webhooks.constructEvent(
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    throw new Error('STRIPE_WEBHOOK_SECRET is not set');
+  }
+  return getStripe().webhooks.constructEvent(
     payload,
     signature,
-    process.env.STRIPE_WEBHOOK_SECRET || ''
+    webhookSecret
   );
 }
