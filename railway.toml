@@ -2,10 +2,12 @@
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
-# Pass DATABASE_URL as build argument so Next.js standalone build
-# uses Railway's PostgreSQL connection string instead of the one in .env.production
+# Pass build arguments to Dockerfile
 [build.buildArgs]
 DATABASE_URL = "${{Postgres.DATABASE_URL}}"
+# IMPORTANT: Set this to your actual Railway domain
+# Railway will replace ${{RAILWAY_PUBLIC_DOMAIN}} with your deployment URL
+NEXT_PUBLIC_SITE_URL = "https://${{RAILWAY_PUBLIC_DOMAIN}}"
 
 [deploy]
 startCommand = "./docker-entrypoint.sh"

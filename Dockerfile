@@ -14,9 +14,11 @@ RUN npm ci
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Accept DATABASE_URL as build argument (Railway will provide this)
-# Default to Docker PostgreSQL for local builds
+# Accept build arguments
+# DATABASE_URL: Railway will provide this, default to Docker PostgreSQL for local builds
 ARG DATABASE_URL=postgresql://postgres:postgres@postgres:5432/marketplace_docker
+# NEXT_PUBLIC_SITE_URL: Must be set at build time for Next.js
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3002
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -31,6 +33,9 @@ RUN (cp .env .env.production 2>/dev/null || touch .env.production) && \
 
 # Generate Prisma Client with the build-time DATABASE_URL
 RUN npx prisma generate
+
+# Set NEXT_PUBLIC_SITE_URL for Next.js build (baked into client bundle)
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 
 # Build Next.js app
 ENV NEXT_TELEMETRY_DISABLED 1
