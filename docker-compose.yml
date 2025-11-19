@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: marketplace-db-docker
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: marketplace_docker
+    ports:
+      - "5433:5432"  # Using 5433 to avoid conflict with local postgres on 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Next.js App
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: marketplace-app-docker
+    ports:
+      - "3002:3000"  # Using 3002 to avoid conflict with local dev server
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/marketplace_docker
+      - NODE_ENV=production
+      # Add any other env vars your app needs
+      - NEXTAUTH_SECRET=your-secret-for-testing
+      - NEXTAUTH_URL=http://localhost:3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

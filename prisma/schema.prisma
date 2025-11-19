@@ -124,3 +124,23 @@ model ProductTag {
   @@index([productId])
   @@index([tag])
 }
+
+model KnowledgeBaseArticle {
+  id         String   @id @default(uuid())
+  slug       String   @unique
+  title      String
+  state      String   // Two-letter state code (e.g., "MA")
+  category   String?  // Category name (e.g., "hospitals-health-systems")
+  isOverview Boolean  @default(false) // True for category overview articles
+  tags       String[] // Array of tags like "State Portal", "Free", etc.
+  content    String   @db.Text // Markdown content
+  excerpt    String?  // Short description for list view
+  published  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([state])
+  @@index([category])
+  @@index([published])
+  @@index([slug])
+}

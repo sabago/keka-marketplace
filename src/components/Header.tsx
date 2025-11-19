@@ -12,14 +12,23 @@ import { useAuth } from "@/lib/authContext";
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [isClient, setIsClient] = useState(false);
 	const pathname = usePathname();
 	const router = useRouter();
 	const { getTotalItems, isHydrated } = useCart();
 	const { settings } = useSettings();
 	const { isLoggedIn, user } = useAuth();
 
+	// Track if we're on the client to avoid hydration mismatch
+	useEffect(() => {
+		setIsClient(true);
+	}, []);
+
 	// Get the cart item count
 	const cartItemCount = isHydrated ? getTotalItems() : 0;
+
+	// Check if we're on localhost (only on client)
+	const isLocalhost = isClient && window.location.hostname === "localhost";
 
 	// Handle logout
 	// const handleLogout = () => {
@@ -127,9 +136,7 @@ export default function Header() {
 			router.push(searchUrl);
 
 			// Force a hard navigation as a fallback
-			if (typeof window !== "undefined") {
-				window.location.href = searchUrl;
-			}
+			window.location.href = searchUrl;
 		}
 	};
 
@@ -141,15 +148,33 @@ export default function Header() {
 					<div className="flex items-center space-x-8">
 						<Link
 							href="/"
-							className={`text-lg ${
-								pathname === "/" ? "text-[#48ccbc] font-medium" : "text-gray-600"
-							}`}
+							className="text-xl font-bold text-[#0B4F96] hover:text-[#48ccbc]"
 						>
 							{settings.siteName}
 						</Link>
 
 						{/* Desktop Navigation */}
 						<nav className="hidden md:flex items-center space-x-8">
+							<Link
+								href="/"
+								className={`hover:text-[#48ccbc] ${
+									pathname === "/"
+										? "text-[#48ccbc] font-medium"
+										: "text-gray-600"
+								}`}
+							>
+								Marketplace
+							</Link>
+							<Link
+								href="/knowledge-base"
+								className={`hover:text-[#48ccbc] ${
+									pathname?.startsWith("/knowledge-base")
+										? "text-[#48ccbc] font-medium"
+										: "text-gray-600"
+								}`}
+							>
+								Knowledge Base
+							</Link>
 							<Link
 								href="/categories"
 								className={`hover:text-[#48ccbc] ${
@@ -162,8 +187,7 @@ export default function Header() {
 							</Link>
 							{/* Show Admin link for users with Administrator role or when on localhost */}
 							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
-							(typeof window !== "undefined" &&
-								window.location.hostname === "localhost") ? (
+							isLocalhost ? (
 								<Link
 									href="/admin"
 									className={`hover:text-[#48ccbc] ${
@@ -173,8 +197,7 @@ export default function Header() {
 									}`}
 								>
 									Admin{" "}
-									{typeof window !== "undefined" &&
-										window.location.hostname === "localhost" &&
+									{isLocalhost &&
 										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
 										"(Dev Mode)"}
 								</Link>
@@ -277,6 +300,28 @@ export default function Header() {
 						</form>
 						<nav className="flex flex-col space-y-4">
 							<Link
+								href="/"
+								className={`hover:text-blue-600 ${
+									pathname === "/"
+										? "text-[#0B4F96] font-medium"
+										: "text-gray-600"
+								}`}
+								onClick={() => setIsMenuOpen(false)}
+							>
+								Marketplace
+							</Link>
+							<Link
+								href="/knowledge-base"
+								className={`hover:text-blue-600 ${
+									pathname?.startsWith("/knowledge-base")
+										? "text-[#0B4F96] font-medium"
+										: "text-gray-600"
+								}`}
+								onClick={() => setIsMenuOpen(false)}
+							>
+								Knowledge Base
+							</Link>
+							<Link
 								href="/categories"
 								className={`hover:text-blue-600 ${
 									pathname === "/categories"
@@ -289,8 +334,7 @@ export default function Header() {
 							</Link>
 							{/* Show Admin link for users with Administrator role or when on localhost */}
 							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
-							(typeof window !== "undefined" &&
-								window.location.hostname === "localhost") ? (
+							isLocalhost ? (
 								<Link
 									href="/admin"
 									className={`hover:text-blue-600 ${
@@ -301,8 +345,7 @@ export default function Header() {
 									onClick={() => setIsMenuOpen(false)}
 								>
 									Admin{" "}
-									{typeof window !== "undefined" &&
-										window.location.hostname === "localhost" &&
+									{isLocalhost &&
 										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
 										"(Dev Mode)"}
 								</Link>

@@ -1,0 +1,17 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+# Pass DATABASE_URL as build argument so Next.js standalone build
+# uses Railway's PostgreSQL connection string instead of the one in .env.production
+[build.buildArgs]
+DATABASE_URL = "${{Postgres.DATABASE_URL}}"
+
+[deploy]
+startCommand = "./docker-entrypoint.sh"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+# Health check configuration (optional but recommended)
+healthcheckPath = "/"
+healthcheckTimeout = 100
