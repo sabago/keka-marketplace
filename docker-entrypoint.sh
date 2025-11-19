@@ -3,9 +3,9 @@ set -e
 
 echo "🚀 Starting deployment process..."
 
-# Railway sets PGPORT=5432 which conflicts with Next.js PORT
-# Ensure Next.js uses port 3000
-export PORT=3000
+# Set default PORT if not provided (for local docker-compose)
+# Railway will provide its own PORT, so don't override if it exists
+export PORT=${PORT:-3000}
 export HOSTNAME="0.0.0.0"
 
 # CRITICAL: Generate Prisma Client BEFORE starting server
