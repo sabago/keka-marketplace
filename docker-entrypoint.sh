@@ -7,12 +7,19 @@ echo "🚀 Starting deployment process..."
 echo "🔧 Generating Prisma Client for runtime database..."
 ./node_modules/.bin/prisma generate
 
+# Railway sets PGPORT=5432 which conflicts with Next.js PORT
+# Ensure Next.js uses port 3000
+export PORT=3000
+
 # Start the server immediately to pass healthcheck
 # Then run migrations and imports in background
 (
-  # Wait for database to be ready
+  # Wait for database to be ready using Railway's PGHOST variable
   echo "⏳ Waiting for database to be ready..."
-  until pg_isready -h $(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p') -U $(echo $DATABASE_URL | sed -n 's/.*\/\/\([^:]*\).*/\1/p') 2>/dev/null; do
+  DB_HOST="${PGHOST:-localhost}"
+  DB_USER="${PGUSER:-postgres}"
+  
+  until pg_isready -h "$DB_HOST" -U "$DB_USER" 2>/dev/null; do
     echo "Database is unavailable - sleeping"
     sleep 2
   done
@@ -31,5 +38,5 @@ echo "🔧 Generating Prisma Client for runtime database..."
 ) &
 
 # Start the Next.js server immediately
-echo "🚀 Starting Next.js server..."
+echo "🚀 Starting Next.js server on port 3000..."
 exec node server.js
