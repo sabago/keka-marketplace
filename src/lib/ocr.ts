@@ -11,9 +11,6 @@
  */
 
 import { getFileFromS3 } from './s3';
-import { createWorker } from 'tesseract.js';
-// @ts-expect-error - pdf-parse has incorrect type definitions
-import pdfParse from 'pdf-parse';
 
 // OCR Provider interface
 export interface OCRProvider {
@@ -73,6 +70,9 @@ export class PDFParserProvider implements OCRProvider {
     }
 
     try {
+      // Dynamically import pdf-parse to avoid build-time issues with pdfjs-dist
+      // @ts-expect-error - pdf-parse has incorrect type definitions
+      const pdfParse = (await import('pdf-parse')).default;
       const data = await pdfParse(buffer);
       return data.text;
     } catch (error) {
@@ -113,6 +113,8 @@ export class TesseractProvider implements OCRProvider {
     }
 
     try {
+      // Dynamically import tesseract to avoid build-time loading
+      const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng');
 
       const result = await worker.recognize(buffer);
