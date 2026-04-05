@@ -19,13 +19,19 @@ import OpenAI from 'openai';
 import { getOCRProvider, isOCRSupported } from './ocr';
 import { shouldRequireReview } from './credentialHelpers';
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required for credential parsing');
-}
+// Lazy initialize OpenAI to avoid build-time errors
+let openaiInstance: OpenAI | null = null;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI(): OpenAI {
+  if (!openaiInstance) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is required for credential parsing');
+    }
+    openaiInstance = new OpenAI({ apiKey });
+  }
+  return openaiInstance;
+}
 
 // Configuration
 const CHAT_MODEL = 'gpt-4-turbo';
@@ -184,6 +190,7 @@ async function extractMetadataWithLLM(
     const systemPrompt = buildSystemPrompt(documentTypeName);
     const userPrompt = buildUserPrompt(ocrText, fileName);
 
+    const openai = getOpenAI();
     const response = await openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
@@ -442,6 +449,7 @@ export async function validateParserSetup(): Promise<{
     const ocrProvider = getOCRProvider('smart');
 
     // Test OpenAI connection with minimal request
+    const openai = getOpenAI();
     const testResponse = await openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
