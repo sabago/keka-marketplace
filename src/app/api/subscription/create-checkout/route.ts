@@ -12,10 +12,21 @@ import Stripe from 'stripe';
 import { getOrCreateStripeCustomer, getPlanAndSizeFromPriceId } from '@/lib/subscriptionHelpers';
 import { prisma } from '@/lib/db';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
-});
+// Lazy initialize Stripe to avoid build-time errors
+let stripeInstance: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured');
+    }
+    stripeInstance = new Stripe(apiKey, {
+      apiVersion: '2025-02-24.acacia',
+    });
+  }
+  return stripeInstance;
+}
 
 export async function POST(request: Request) {
   try {
@@ -77,6 +88,7 @@ export async function POST(request: Request) {
     }
 
     // Get or create Stripe customer for the agency
+    const stripe = getStripe();
     const customerId = await getOrCreateStripeCustomer(agencyId, stripe);
 
     // Create the checkout session
