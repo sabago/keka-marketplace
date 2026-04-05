@@ -6,12 +6,10 @@
 import OpenAI from 'openai';
 import { index } from './vectorDb';
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required');
-}
-
+// Note: We don't throw an error at module load time to allow Next.js build to complete
+// The error will be thrown at runtime when attempting to use the OpenAI API
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
 });
 
 // Configuration
@@ -42,6 +40,10 @@ interface RetrievedChunk {
  * Generate embedding for a query
  */
 async function generateQueryEmbedding(query: string): Promise<number[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY environment variable is required');
+  }
+  
   try {
     const response = await openai.embeddings.create({
       model: EMBEDDING_MODEL,
@@ -229,7 +231,12 @@ export async function ragQuery(
 export async function validateRAGSetup(): Promise<{
   success: boolean;
   message: string;
-  details?: any;
+  details?: {
+    testQuery: string;
+    retrievedChunks: number;
+    sources: string[];
+    responseTime: number;
+  };
 }> {
   try {
     // Test query

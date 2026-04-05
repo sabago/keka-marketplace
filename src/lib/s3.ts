@@ -188,3 +188,42 @@ startxref
     throw new Error('Failed to get file from S3');
   }
 }
+
+// Alias for backward compatibility
+export const getS3DownloadUrl = async (
+  key: string,
+  expiresIn: number = 300,
+  fileName?: string
+): Promise<{ success: boolean; url?: string; error?: string }> => {
+  try {
+    const url = await getSignedDownloadUrl(key, expiresIn, fileName);
+    return { success: true, url };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};
+
+// Alias for backward compatibility
+export const uploadToS3 = async (
+  buffer: Buffer,
+  key: string,
+  contentType: string
+): Promise<{ success: boolean; key?: string; error?: string }> => {
+  try {
+    // Extract folder from key path
+    const pathParts = key.split('/');
+    const fileName = pathParts.pop() || key;
+    const folder = pathParts.join('/') || 'uploads';
+    
+    const uploadedKey = await uploadFileToS3(buffer, fileName, contentType, folder);
+    return { success: true, key: uploadedKey };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};

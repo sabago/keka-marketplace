@@ -12,6 +12,7 @@
 
 import { getFileFromS3 } from './s3';
 import { createWorker } from 'tesseract.js';
+// @ts-expect-error - pdf-parse has incorrect type definitions
 import pdfParse from 'pdf-parse';
 
 // OCR Provider interface
