@@ -9,7 +9,7 @@ import { SiteSettings } from "@/lib/useSettings";
 
 export default function SettingsPage() {
 	const [settings, setSettings] = useState<SiteSettings>({
-		siteName: "Digital Marketplace",
+		siteName: "Home",
 		siteDescription: "Your one-stop shop for digital products",
 		contactEmail: "contact@example.com",
 		currency: "USD",

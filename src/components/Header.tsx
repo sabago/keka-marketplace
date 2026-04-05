@@ -2,30 +2,30 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { ShoppingCart, Menu, X, Search, User } from "lucide-react";
-import { useCart } from "@/lib/useCart";
+import { usePathname } from "next/navigation";
+import { Menu, X, User, LogOut } from "lucide-react";
 import { useSettings } from "@/lib/useSettings";
 import { useAuth } from "@/lib/authContext";
+import { useSession, signOut } from "next-auth/react";
 // import { isInIframe } from "@/lib/iframeUtils";
 
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
-	const [searchQuery, setSearchQuery] = useState("");
 	const [isClient, setIsClient] = useState(false);
 	const pathname = usePathname();
-	const router = useRouter();
-	const { getTotalItems, isHydrated } = useCart();
 	const { settings } = useSettings();
 	const { isLoggedIn, user } = useAuth();
+	const { data: session } = useSession();
 
 	// Track if we're on the client to avoid hydration mismatch
 	useEffect(() => {
 		setIsClient(true);
 	}, []);
 
-	// Get the cart item count
-	const cartItemCount = isHydrated ? getTotalItems() : 0;
+	// Handle logout
+	const handleLogout = async () => {
+		await signOut({ callbackUrl: "/" });
+	};
 
 	// Check if we're on localhost (only on client)
 	const isLocalhost = isClient && window.location.hostname === "localhost";
@@ -120,31 +120,52 @@ export default function Header() {
 		};
 	}, []);
 
-	// Effect to track cart hydration
-	useEffect(() => {
-		// Cart is now hydrated and ready
-	}, [isHydrated, cartItemCount]);
-
 	const toggleMenu = () => {
 		setIsMenuOpen(!isMenuOpen);
 	};
 
-	const handleSearch = (e: React.FormEvent) => {
-		e.preventDefault();
-		if (searchQuery.trim()) {
-			const searchUrl = `/?search=${encodeURIComponent(searchQuery)}`;
-			router.push(searchUrl);
+	// Check if we're on a marketplace-related page (show secondary nav)
+	const isMarketplacePage =
+		pathname === "/marketplace" ||
+		pathname === "/categories" ||
+		(pathname?.startsWith("/admin") && !pathname?.startsWith("/admin/agencies"));
 
-			// Force a hard navigation as a fallback
-			window.location.href = searchUrl;
-		}
-	};
+	// Check if we're on a directory-related page (show directory secondary nav)
+	const isDirectoryPage =
+		pathname?.startsWith("/knowledge-base") ||
+		pathname === "/directory" ||
+		pathname?.startsWith("/directory/");
+
+	// Check if we're on an agency-related page (show agency secondary nav)
+	const isAgencyPage = pathname?.startsWith("/agency");
+
+	// Check if user has agency access
+	const hasAgencyAccess =
+		session?.user?.role === "AGENCY_ADMIN" ||
+		session?.user?.role === "AGENCY_USER";
+
+	// Check if user is platform admin or agency admin
+	const isAdmin =
+		session?.user?.role === "PLATFORM_ADMIN" ||
+		session?.user?.role === "AGENCY_ADMIN";
+
+	// Determine agency management URL based on role
+	const agencyManagementUrl =
+		session?.user?.role === "PLATFORM_ADMIN"
+			? "/admin/agencies"
+			: "/agency/settings";
+
+	// Check if we're on agency management pages
+	const isAgencyManagementPage =
+		pathname?.startsWith("/admin/agencies") ||
+		(pathname?.startsWith("/agency") && session?.user?.role === "AGENCY_ADMIN");
 
 	return (
 		<header className="bg-white shadow-md">
+			{/* Top-level Navigation */}
 			<div className="container mx-auto px-4 py-4">
 				<div className="flex items-center justify-between">
-					{/* Logo and Navigation */}
+					{/* Logo and Primary Navigation */}
 					<div className="flex items-center space-x-8">
 						<Link
 							href="/"
@@ -153,14 +174,22 @@ export default function Header() {
 							{settings.siteName}
 						</Link>
 
-						{/* Desktop Navigation */}
+						{/* Desktop Primary Navigation */}
 						<nav className="hidden md:flex items-center space-x-8">
-							<Link
+							{/* <Link
 								href="/"
 								className={`hover:text-[#48ccbc] ${
-									pathname === "/"
+									pathname === "/" && !isDirectoryPage && !isMarketplacePage
 										? "text-[#48ccbc] font-medium"
 										: "text-gray-600"
+								}`}
+							>
+								Home
+							</Link> */}
+							<Link
+								href="/marketplace"
+								className={`hover:text-[#48ccbc] ${
+									isMarketplacePage ? "text-[#48ccbc] font-medium" : "text-gray-600"
 								}`}
 							>
 								Marketplace
@@ -168,103 +197,103 @@ export default function Header() {
 							<Link
 								href="/knowledge-base"
 								className={`hover:text-[#48ccbc] ${
-									pathname?.startsWith("/knowledge-base")
-										? "text-[#48ccbc] font-medium"
-										: "text-gray-600"
+									isDirectoryPage ? "text-[#48ccbc] font-medium" : "text-gray-600"
 								}`}
 							>
-								Knowledge Base
+								Directory
 							</Link>
 							<Link
-								href="/categories"
+								href="/pricing"
 								className={`hover:text-[#48ccbc] ${
-									pathname === "/categories"
+									pathname === "/pricing"
 										? "text-[#48ccbc] font-medium"
 										: "text-gray-600"
 								}`}
 							>
-								Categories
+								Pricing
 							</Link>
-							{/* Show Admin link for users with Administrator role or when on localhost */}
-							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
-							isLocalhost ? (
+							<Link
+								href="/dashboard"
+								className={`hover:text-[#48ccbc] ${
+									pathname?.startsWith("/dashboard")
+										? "text-[#48ccbc] font-medium"
+										: "text-gray-600"
+								}`}
+							>
+								Dashboard
+							</Link>
+							{isAdmin && (
 								<Link
-									href="/admin"
+									href={agencyManagementUrl}
 									className={`hover:text-[#48ccbc] ${
-										pathname?.startsWith("/admin")
+										isAgencyManagementPage
 											? "text-[#48ccbc] font-medium"
 											: "text-gray-600"
 									}`}
 								>
-									Admin{" "}
-									{isLocalhost &&
-										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
-										"(Dev Mode)"}
+									{session?.user?.role === "PLATFORM_ADMIN"
+										? "Agencies"
+										: "My Agency"}
 								</Link>
-							) : null}
+							)}
+							{hasAgencyAccess && session?.user?.role !== "AGENCY_ADMIN" && (
+								<Link
+									href="/agency"
+									className={`hover:text-[#48ccbc] ${
+										isAgencyPage ? "text-[#48ccbc] font-medium" : "text-gray-600"
+									}`}
+								>
+									Agency
+								</Link>
+							)}
+							{session?.user?.role === "PLATFORM_ADMIN" && (
+								<Link
+									href="/admin/superadmins"
+									className={`hover:text-[#48ccbc] ${
+										pathname?.startsWith("/admin/superadmins")
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Superadmins
+								</Link>
+							)}
 						</nav>
 					</div>
 
-					{/* Search, Cart, and Auth */}
+					{/* Auth Section */}
 					<div className="hidden md:flex items-center space-x-4">
-						<form onSubmit={handleSearch} className="relative flex items-center">
-							<input
-								type="text"
-								placeholder="Search products..."
-								className="pl-10 pr-4 py-2 border rounded-l-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-							/>
-							<Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-							<button
-								type="submit"
-								className="bg-[#0B4F96] text-white px-4 py-2 rounded-r-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-							>
-								Search
-							</button>
-						</form>
-
-						{/* Auth Section */}
-						{
-							isLoggedIn ? (
-								<div className="flex items-center">
-									<div className="mr-4 flex items-center">
-										<User className="h-5 w-5 text-[#0B4F96] mr-1" />
-										<span className="text-sm font-medium">
-											{user?.display_name || "Member"}
-										</span>
-										{settings.memberDiscountPercentage > 0 && (
-											<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-												{settings.memberDiscountPercentage}% off
-											</span>
-										)}
+						{session ? (
+							<div className="flex items-center gap-3">
+								{/* Profile Icon */}
+								<Link
+									href="/account"
+									className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+								>
+									<div className="w-8 h-8 bg-[#0B4F96] rounded-full flex items-center justify-center">
+										<User className="h-5 w-5 text-white" />
 									</div>
-									{/* <button
-										onClick={handleLogout}
-										className="flex items-center text-gray-600 hover:text-red-600"
-									>
-										<LogOut className="h-5 w-5" />
-									</button> */}
-								</div>
-							) : null
-							// (
-							// 	<button
-							// 		onClick={handleLogin}
-							// 		className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-							// 	>
-							// 		Login
-							// 	</button>
-							// )
-						}
-
-						<Link href="/cart" className="relative">
-							<ShoppingCart className="h-6 w-6 text-gray-600 hover:text-blue-600" />
-							{cartItemCount > 0 && (
-								<span className="absolute -top-2 -right-2 bg-[#48ccbc] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-									{cartItemCount}
-								</span>
-							)}
-						</Link>
+									<span className="text-sm font-medium text-gray-700">
+										{session.user?.name || session.user?.email || "Account"}
+									</span>
+								</Link>
+								{/* Logout Button */}
+								<button
+									onClick={handleLogout}
+									className="flex items-center gap-1 text-gray-600 hover:text-red-600 transition-colors"
+									title="Logout"
+								>
+									<LogOut className="h-5 w-5" />
+								</button>
+							</div>
+						) : (
+							<Link
+								href="/auth/signin"
+								className="text-[#0B4F96] hover:text-[#48ccbc] text-sm font-medium"
+							>
+								Sign In
+							</Link>
+						)}
 					</div>
 
 					{/* Mobile Menu Button */}
@@ -276,35 +305,22 @@ export default function Header() {
 				{/* Mobile Menu */}
 				{isMenuOpen && (
 					<div className="md:hidden mt-4 pb-4">
-						<form
-							onSubmit={(e) => {
-								handleSearch(e);
-								setIsMenuOpen(false); // Close menu after search
-							}}
-							className="relative mb-4 flex items-center"
-						>
-							<input
-								type="text"
-								placeholder="Search products..."
-								className="w-full pl-10 pr-4 py-2 border rounded-l-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-							/>
-							<Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-							<button
-								type="submit"
-								className="bg-[#0B4F96] text-white px-4 py-2 rounded-r-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-							>
-								Search
-							</button>
-						</form>
 						<nav className="flex flex-col space-y-4">
 							<Link
 								href="/"
 								className={`hover:text-blue-600 ${
-									pathname === "/"
+									pathname === "/" && !isDirectoryPage && !isMarketplacePage
 										? "text-[#0B4F96] font-medium"
 										: "text-gray-600"
+								}`}
+								onClick={() => setIsMenuOpen(false)}
+							>
+								Home
+							</Link>
+							<Link
+								href="/marketplace"
+								className={`hover:text-blue-600 ${
+									isMarketplacePage ? "text-[#0B4F96] font-medium" : "text-gray-600"
 								}`}
 								onClick={() => setIsMenuOpen(false)}
 							>
@@ -313,87 +329,272 @@ export default function Header() {
 							<Link
 								href="/knowledge-base"
 								className={`hover:text-blue-600 ${
-									pathname?.startsWith("/knowledge-base")
-										? "text-[#0B4F96] font-medium"
-										: "text-gray-600"
+									isDirectoryPage ? "text-[#0B4F96] font-medium" : "text-gray-600"
 								}`}
 								onClick={() => setIsMenuOpen(false)}
 							>
-								Knowledge Base
+								Directory
 							</Link>
 							<Link
-								href="/categories"
+								href="/pricing"
 								className={`hover:text-blue-600 ${
-									pathname === "/categories"
+									pathname === "/pricing"
 										? "text-[#0B4F96] font-medium"
 										: "text-gray-600"
 								}`}
 								onClick={() => setIsMenuOpen(false)}
 							>
-								Categories
+								Pricing
 							</Link>
-							{/* Show Admin link for users with Administrator role or when on localhost */}
-							{(isLoggedIn && user?.roles && user.roles.includes("administrator")) ||
-							isLocalhost ? (
+							<Link
+								href="/dashboard"
+								className={`hover:text-blue-600 ${
+									pathname?.startsWith("/dashboard")
+										? "text-[#0B4F96] font-medium"
+										: "text-gray-600"
+								}`}
+								onClick={() => setIsMenuOpen(false)}
+							>
+								Dashboard
+							</Link>
+							{isAdmin && (
 								<Link
-									href="/admin"
+									href={agencyManagementUrl}
 									className={`hover:text-blue-600 ${
-										pathname?.startsWith("/admin")
+										isAgencyManagementPage
 											? "text-[#0B4F96] font-medium"
 											: "text-gray-600"
 									}`}
 									onClick={() => setIsMenuOpen(false)}
 								>
-									Admin{" "}
-									{isLocalhost &&
-										(!isLoggedIn || !user?.roles?.includes("administrator")) &&
-										"(Dev Mode)"}
+									{session?.user?.role === "PLATFORM_ADMIN"
+										? "Agencies"
+										: "My Agency"}
 								</Link>
-							) : null}
-							{/* Auth Section for Mobile */}
-							{
-								isLoggedIn ? (
-									<>
-										<div className="flex items-center text-gray-600">
-											<User className="h-5 w-5 text-[#0B4F96] mr-2" />
-											<span className="font-medium">{user?.display_name || "Member"}</span>
-											{settings.memberDiscountPercentage > 0 && (
-												<span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-													{settings.memberDiscountPercentage}% off
-												</span>
-											)}
-										</div>
-										{/* <button
-											onClick={handleLogout}
-											className="flex items-center text-gray-600 hover:text-red-600"
-										>
-											<LogOut className="h-5 w-5 mr-2" />
-											<span>Logout</span>
-										</button> */}
-									</>
-								) : null
-								// (
-								// 	<button
-								// 		onClick={() => {
-								// 			handleLogin();
-								// 			setIsMenuOpen(false);
-								// 		}}
-								// 		className="flex items-center text-blue-600 hover:text-blue-800"
-								// 	>
-								// 		<User className="h-5 w-5 mr-2" />
-								// 		<span>Login</span>
-								// 	</button>
-								// )
-							}
+							)}
+							{hasAgencyAccess && session?.user?.role !== "AGENCY_ADMIN" && (
+								<Link
+									href="/agency"
+									className={`hover:text-blue-600 ${
+										isAgencyPage ? "text-[#0B4F96] font-medium" : "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Agency
+								</Link>
+							)}
 
-							<Link
-								href="/cart"
-								className="flex items-center text-gray-600 hover:text-blue-600"
-								onClick={() => setIsMenuOpen(false)}
-							>
-								<ShoppingCart className="h-5 w-5 mr-2" />
-								<span>View Cart {cartItemCount > 0 && `(${cartItemCount})`}</span>
-							</Link>
+							{/* Agency Sub-Navigation Items (mobile) */}
+							{hasAgencyAccess && isAgencyPage && (
+								<>
+									<div className="pl-4 border-l-2 border-gray-200 mt-2">
+										<div className="text-xs text-gray-500 mb-2 uppercase">
+											Agency Menu
+										</div>
+										<Link
+											href="/agency"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Overview
+										</Link>
+										<Link
+											href="/agency/employees"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname?.startsWith("/agency/employees")
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Employees
+										</Link>
+										<Link
+											href="/agency/compliance"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency/compliance"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Compliance
+										</Link>
+										<Link
+											href="/agency/document-types"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency/document-types"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Document Types
+										</Link>
+										<Link
+											href="/agency/staff"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency/staff"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Staff
+										</Link>
+										<Link
+											href="/agency/settings"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency/settings"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Settings
+										</Link>
+										<Link
+											href="/agency/subscription"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/agency/subscription"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Subscription
+										</Link>
+									</div>
+								</>
+							)}
+
+							{/* Marketplace Sub-Navigation Items (mobile) */}
+							{isMarketplacePage && (
+								<>
+									<div className="pl-4 border-l-2 border-gray-200 mt-2">
+										<div className="text-xs text-gray-500 mb-2 uppercase">
+											Marketplace Menu
+										</div>
+										<Link
+											href="/marketplace"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/marketplace"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Marketplace
+										</Link>
+										<Link
+											href="/categories"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname === "/categories"
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Categories
+										</Link>
+										{/* Show Admin link for users with Administrator role or when on localhost */}
+										{(isLoggedIn &&
+											user?.roles &&
+											user.roles.includes("administrator")) ||
+										isLocalhost ? (
+											<Link
+												href="/admin"
+												className={`block hover:text-blue-600 ${
+													pathname?.startsWith("/admin")
+														? "text-[#0B4F96] font-medium"
+														: "text-gray-600"
+												}`}
+												onClick={() => setIsMenuOpen(false)}
+											>
+												Admin
+											</Link>
+										) : null}
+									</div>
+								</>
+							)}
+
+							{/* Directory Sub-Navigation Items (mobile) */}
+							{isDirectoryPage && (
+								<>
+									<div className="pl-4 border-l-2 border-gray-200 mt-2">
+										<div className="text-xs text-gray-500 mb-2 uppercase">
+											Directory Menu
+										</div>
+										<Link
+											href="/knowledge-base"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname?.startsWith("/knowledge-base")
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Directory
+										</Link>
+										{/* Show Directory Admin link for users with Administrator role or when on localhost */}
+										{(isLoggedIn &&
+											user?.roles &&
+											user.roles.includes("administrator")) ||
+										isLocalhost ? (
+											<Link
+												href="/directory/admin"
+												className={`block hover:text-blue-600 ${
+													pathname?.startsWith("/directory/admin")
+														? "text-[#0B4F96] font-medium"
+														: "text-gray-600"
+												}`}
+												onClick={() => setIsMenuOpen(false)}
+											>
+												Directory Admin
+											</Link>
+										) : null}
+									</div>
+								</>
+							)}
+
+							{/* Auth Section for Mobile */}
+							{session ? (
+								<>
+									<Link
+										href="/account"
+										className="flex items-center text-gray-600 hover:text-[#0B4F96]"
+										onClick={() => setIsMenuOpen(false)}
+									>
+										<User className="h-5 w-5 text-[#0B4F96] mr-2" />
+										<span className="font-medium">
+											{session.user?.name || session.user?.email || "Account"}
+										</span>
+									</Link>
+									<button
+										onClick={() => {
+											handleLogout();
+											setIsMenuOpen(false);
+										}}
+										className="flex items-center text-gray-600 hover:text-red-600"
+									>
+										<LogOut className="h-5 w-5 mr-2" />
+										<span>Logout</span>
+									</button>
+								</>
+							) : (
+								<Link
+									href="/auth/signin"
+									className="flex items-center text-[#0B4F96] hover:text-[#48ccbc]"
+									onClick={() => setIsMenuOpen(false)}
+								>
+									<User className="h-5 w-5 mr-2" />
+									<span>Sign In</span>
+								</Link>
+							)}
 						</nav>
 					</div>
 				)}

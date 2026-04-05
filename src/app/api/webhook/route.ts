@@ -3,6 +3,14 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { constructWebhookEvent } from '@/lib/stripe';
 import { sendOrderConfirmationEmail } from '@/lib/email';
+import {
+  updateSubscriptionFromStripe,
+  downgradeToFree,
+  resetQueryCount,
+  getPlanTypeFromPriceId,
+  getPlanAndSizeFromPriceId,
+} from '@/lib/subscriptionHelpers';
+import { SubscriptionStatus, PlanType } from '@prisma/client';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // POST /api/webhook - Handle Stripe webhook events
@@ -187,6 +195,242 @@ export async function POST(request: Request) {
       case 'payment_intent.payment_failed': {
         const paymentIntent = event.data.object;
         console.log(`❌ Payment failed: ${paymentIntent.id}`);
+        break;
+      }
+
+      // ============================================================
+      // SUBSCRIPTION EVENTS
+      // ============================================================
+
+      case 'customer.subscription.created': {
+        const subscription = event.data.object;
+        const agencyId = subscription.metadata?.agencyId;
+
+        if (!agencyId) {
+          console.error('No agencyId found in subscription metadata');
+          return NextResponse.json({
+            received: true,
+            error: 'No agencyId found in subscription metadata'
+          });
+        }
+
+        try {
+          // Get plan type and size from price ID
+          const priceId = subscription.items.data[0]?.price.id;
+          const planInfo = getPlanAndSizeFromPriceId(priceId);
+          const planType = planInfo?.planType || getPlanTypeFromPriceId(priceId);
+
+          if (!planType) {
+            console.error(`Unknown price ID: ${priceId}`);
+            return NextResponse.json({
+              received: true,
+              error: 'Unknown price ID'
+            });
+          }
+
+          // Determine subscription status
+          let status = SubscriptionStatus.ACTIVE;
+          if (subscription.status === 'trialing') {
+            status = SubscriptionStatus.TRIAL;
+          } else if (subscription.status === 'incomplete') {
+            status = SubscriptionStatus.INCOMPLETE;
+          }
+
+          // Update agency with subscription details
+          await updateSubscriptionFromStripe(agencyId, {
+            planType,
+            status,
+            stripeCustomerId: subscription.customer as string,
+            stripeSubscriptionId: subscription.id,
+            billingPeriodStart: new Date(subscription.current_period_start * 1000),
+            billingPeriodEnd: new Date(subscription.current_period_end * 1000),
+            ...(planInfo?.agencySize && { agencySize: planInfo.agencySize }),
+          });
+
+          // Reset query count for new billing period
+          await resetQueryCount(agencyId);
+
+          console.log(`✅ Subscription created for agency ${agencyId}: ${planType} plan`);
+        } catch (error) {
+          console.error('Error processing subscription.created event:', error);
+          return NextResponse.json({
+            received: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        const agencyId = subscription.metadata?.agencyId;
+
+        if (!agencyId) {
+          console.error('No agencyId found in subscription metadata');
+          return NextResponse.json({
+            received: true,
+            error: 'No agencyId found in subscription metadata'
+          });
+        }
+
+        try {
+          // Get plan type and size from price ID
+          const priceId = subscription.items.data[0]?.price.id;
+          const planInfo = getPlanAndSizeFromPriceId(priceId);
+          const planType = planInfo?.planType || getPlanTypeFromPriceId(priceId);
+
+          if (!planType) {
+            console.error(`Unknown price ID: ${priceId}`);
+            return NextResponse.json({
+              received: true,
+              error: 'Unknown price ID'
+            });
+          }
+
+          // Map Stripe status to our status
+          let status = SubscriptionStatus.ACTIVE;
+          if (subscription.status === 'trialing') {
+            status = SubscriptionStatus.TRIAL;
+          } else if (subscription.status === 'past_due') {
+            status = SubscriptionStatus.PAST_DUE;
+          } else if (subscription.status === 'canceled') {
+            status = SubscriptionStatus.CANCELED;
+          } else if (subscription.status === 'incomplete') {
+            status = SubscriptionStatus.INCOMPLETE;
+          }
+
+          // Update agency subscription
+          await updateSubscriptionFromStripe(agencyId, {
+            planType,
+            status,
+            billingPeriodStart: new Date(subscription.current_period_start * 1000),
+            billingPeriodEnd: new Date(subscription.current_period_end * 1000),
+            ...(planInfo?.agencySize && { agencySize: planInfo.agencySize }),
+          });
+
+          console.log(`✅ Subscription updated for agency ${agencyId}: ${planType} plan, status: ${status}`);
+        } catch (error) {
+          console.error('Error processing subscription.updated event:', error);
+          return NextResponse.json({
+            received: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object;
+        const agencyId = subscription.metadata?.agencyId;
+
+        if (!agencyId) {
+          console.error('No agencyId found in subscription metadata');
+          return NextResponse.json({
+            received: true,
+            error: 'No agencyId found in subscription metadata'
+          });
+        }
+
+        try {
+          // Downgrade to FREE plan when subscription is deleted
+          await downgradeToFree(agencyId);
+          console.log(`✅ Subscription deleted for agency ${agencyId}, downgraded to FREE`);
+        } catch (error) {
+          console.error('Error processing subscription.deleted event:', error);
+          return NextResponse.json({
+            received: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+
+        // Get subscription from invoice
+        if (!invoice.subscription) {
+          console.log('Invoice is not for a subscription, skipping');
+          break;
+        }
+
+        try {
+          // Retrieve the subscription to get metadata
+          const subscription = await (async () => {
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
+              apiVersion: '2025-02-24.acacia',
+            });
+            return await stripe.subscriptions.retrieve(invoice.subscription);
+          })();
+
+          const agencyId = subscription.metadata?.agencyId;
+
+          if (!agencyId) {
+            console.error('No agencyId found in subscription metadata');
+            break;
+          }
+
+          // Reset query count for new billing period
+          await resetQueryCount(agencyId);
+
+          // Ensure subscription is marked as ACTIVE
+          await updateSubscriptionFromStripe(agencyId, {
+            status: SubscriptionStatus.ACTIVE,
+            billingPeriodStart: new Date(subscription.current_period_start * 1000),
+            billingPeriodEnd: new Date(subscription.current_period_end * 1000),
+          });
+
+          console.log(`✅ Payment succeeded for agency ${agencyId}, query count reset`);
+        } catch (error) {
+          console.error('Error processing invoice.payment_succeeded event:', error);
+          return NextResponse.json({
+            received: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+
+        // Get subscription from invoice
+        if (!invoice.subscription) {
+          console.log('Invoice is not for a subscription, skipping');
+          break;
+        }
+
+        try {
+          // Retrieve the subscription to get metadata
+          const subscription = await (async () => {
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
+              apiVersion: '2025-02-24.acacia',
+            });
+            return await stripe.subscriptions.retrieve(invoice.subscription);
+          })();
+
+          const agencyId = subscription.metadata?.agencyId;
+
+          if (!agencyId) {
+            console.error('No agencyId found in subscription metadata');
+            break;
+          }
+
+          // Mark subscription as PAST_DUE
+          await updateSubscriptionFromStripe(agencyId, {
+            status: SubscriptionStatus.PAST_DUE,
+          });
+
+          console.log(`❌ Payment failed for agency ${agencyId}, marked as PAST_DUE`);
+
+          // TODO: Send email notification to agency about failed payment
+        } catch (error) {
+          console.error('Error processing invoice.payment_failed event:', error);
+          return NextResponse.json({
+            received: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
         break;
       }
 

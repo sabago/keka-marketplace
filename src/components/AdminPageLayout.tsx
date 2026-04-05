@@ -1,6 +1,6 @@
 "use client";
 
-import Header from "@/components/Header";
+import SecondaryNav from "@/components/SecondaryNav";
 import React from "react";
 
 export default function AdminPageLayout({
@@ -21,8 +21,8 @@ export default function AdminPageLayout({
 				</div>
 			</section>
 
-			{/* Navigation Header */}
-			<Header />
+			{/* Secondary Navigation */}
+			<SecondaryNav />
 
 			{/* Page Content */}
 			{children}

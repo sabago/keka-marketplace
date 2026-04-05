@@ -144,3 +144,731 @@ model KnowledgeBaseArticle {
   @@index([published])
   @@index([slug])
 }
+
+// ============================================================================
+// SUBSCRIPTION PLATFORM MODELS
+// ============================================================================
+
+// Enums for the subscription platform
+enum PlanType {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIAL
+  INCOMPLETE
+}
+
+enum AgencySize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum IntakeMethod {
+  PHONE
+  FAX
+  EMAIL
+  PORTAL
+  MANUAL_ENTRY
+}
+
+enum UserRole {
+  AGENCY_USER
+  AGENCY_ADMIN
+  SUPERADMIN
+  PLATFORM_ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum ReferralStatus {
+  SUBMITTED
+  RESPONDED
+  ACCEPTED
+  DECLINED
+  PATIENT_STARTED
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  BONUS
+}
+
+// Core Agency Model with Subscription Fields
+model Agency {
+  id                    String               @id @default(uuid())
+  agencyName            String
+  licenseNumber         String               @unique
+
+  // Subscription & Billing
+  subscriptionPlan      PlanType             @default(FREE)
+  subscriptionStatus    SubscriptionStatus   @default(ACTIVE)
+  stripeCustomerId      String?              @unique
+  stripeSubscriptionId  String?              @unique
+
+  // Usage Tracking
+  queriesThisMonth      Int                  @default(0)
+  queriesAllTime        Int                  @default(0)
+  billingPeriodStart    DateTime             @default(now())
+  billingPeriodEnd      DateTime
+  lastQueryReset        DateTime?
+
+  // Profile Data
+  servicesOffered       String[]
+  serviceArea           String[]
+  agencySize            AgencySize
+
+  // Contact Info
+  primaryContactName    String
+  primaryContactRole    String
+  primaryContactEmail   String
+  primaryContactPhone   String?
+
+  // Operational Data
+  intakeMethod          IntakeMethod?
+  intakeMethods         String[]             @default([])  // Multi-select: phone, online, email, fax, in-person
+  intakeTrackingDescription String?          @db.Text      // How they track intake (custom dashboard description)
+  followUpFrequency     String?                            // How often they follow up: daily, weekly, bi-weekly, monthly, as-needed
+  followUpMethods       String[]             @default([])  // Methods: email, phone, text, in-person, automated
+  avgReferralsPerMonth  Int?
+  timeToProcessReferral Int?
+  staffHandlingIntake   Int?
+  painPoints            String[]             @default([])
+  preferredChannels     String[]             @default([])
+  specializations       String[]             @default([])
+
+  // Consent
+  consentToAnalytics    Boolean              @default(false)
+  consentToProcessRecs  Boolean              @default(false)
+
+  // Approval/Moderation
+  approvalStatus        ApprovalStatus       @default(PENDING)
+  approvalEmailSent     Boolean              @default(false)
+  approvedAt            DateTime?
+  approvedBy            String?              // Platform admin user ID
+  rejectionReason       String?              @db.Text
+
+  // Verification Info
+  taxId                 String?              // EIN/Tax ID
+  licenseDocument       String?              // URL to uploaded license
+  verificationNotes     String?              @db.Text
+
+  // Credential Compliance Settings
+  credentialWarningDays Int                       @default(30)  // Days before expiry to warn
+  autoReminderEnabled   Boolean                   @default(true)
+  reminderFrequency     AgencyReminderFrequency   @default(WEEKLY)
+
+  // Relations
+  users                 User[]
+  chatbotQueries        ChatbotQuery[]
+  creditTransactions    CreditTransaction[]
+  referralTracking      ReferralTracking[]
+  favorites             FavoriteReferral[]
+  eventLogs             EventLog[]
+  adminActions          AdminAction[]        @relation("AdminActionsOnAgency")
+  employees             Employee[]
+  documentTypes         DocumentType[]
+  credentialReminders   CredentialReminder[]
+  complianceSnapshots   ComplianceSnapshot[]
+  parsingJobs           CredentialParsingJob[]
+
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([subscriptionPlan])
+  @@index([approvalStatus])
+}
+
+// NextAuth.js User Model
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String?
+  password          String?
+  role              UserRole  @default(AGENCY_USER)
+  emailVerified     DateTime?
+  image             String?
+  isPrimaryContact  Boolean   @default(false)
+
+  agency                Agency?                @relation(fields: [agencyId], references: [id])
+  agencyId              String?
+  accounts              Account[]
+  sessions              Session[]
+  adminActions          AdminAction[]          @relation("AdminActions")
+  passwordSetupTokens   PasswordSetupToken[]
+  passwordResetTokens   PasswordResetToken[]
+  employee              Employee?              // Optional: if user is also an employee
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([agencyId])
+}
+
+// NextAuth.js Account Model (OAuth/Social Login)
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// NextAuth.js Session Model
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// NextAuth.js Verification Token Model
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Password Setup Token Model
+model PasswordSetupToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// Password Reset Token Model
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// AI Chatbot Query Tracking
+model ChatbotQuery {
+  id              String   @id @default(uuid())
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+
+  query           String   @db.Text
+  response        String   @db.Text
+  tokensUsed      Int
+  modelUsed       String
+  responseTime    Int
+  sourcesReturned Json
+  userRating      Int?
+
+  createdAt       DateTime @default(now())
+
+  @@index([agencyId])
+  @@index([createdAt])
+}
+
+// Optional: Local Vector Storage (alternative to Pinecone)
+model VectorEmbedding {
+  id              String   @id @default(uuid())
+  sourceType      String   // "kb_article", "agency_profile", etc.
+  sourceId        String
+  content         String   @db.Text
+  embedding       Decimal[] // Store as array of floats
+  metadata        Json?    // Flexible metadata storage
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sourceType, sourceId])
+}
+
+// Event Logging & Analytics
+model EventLog {
+  id              String   @id @default(uuid())
+  agencyId        String?
+  agency          Agency?  @relation(fields: [agencyId], references: [id])
+
+  eventType       String
+  eventData       Json
+  sessionId       String?
+  ipHash          String?
+  userAgent       String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([agencyId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// Referral Tracking
+model ReferralTracking {
+  id                  String          @id @default(uuid())
+  agencyId            String
+  agency              Agency          @relation(fields: [agencyId], references: [id])
+
+  referralSourceSlug  String
+  submissionDate      DateTime        @default(now())
+  submissionMethod    String?
+  patientType         String?
+
+  status              ReferralStatus  @default(SUBMITTED)
+  statusUpdatedAt     DateTime        @default(now())
+
+  responseTime        Int?
+  accepted            Boolean?
+  patientStarted      Boolean?
+
+  notes               String?         @db.Text
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([agencyId])
+  @@index([referralSourceSlug])
+}
+
+// User Favorites/Bookmarks
+model FavoriteReferral {
+  id          String   @id @default(uuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  articleSlug String
+  notes       String?  @db.Text
+
+  createdAt   DateTime @default(now())
+
+  @@unique([agencyId, articleSlug])
+}
+
+// Credit Transaction History
+model CreditTransaction {
+  id              String          @id @default(uuid())
+  agencyId        String
+  agency          Agency          @relation(fields: [agencyId], references: [id])
+
+  type            TransactionType
+  amount          Int
+  description     String
+  relatedEntityId String?
+
+  createdAt       DateTime        @default(now())
+
+  @@index([agencyId])
+}
+
+// Admin Action Log for Audit Trail
+model AdminAction {
+  id              String   @id @default(uuid())
+  adminId         String
+  admin           User     @relation("AdminActions", fields: [adminId], references: [id])
+
+  actionType      String   // "APPROVE_AGENCY", "REJECT_AGENCY", etc.
+  targetAgencyId  String?
+  targetAgency    Agency?  @relation("AdminActionsOnAgency", fields: [targetAgencyId], references: [id])
+
+  details         Json?
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetAgencyId])
+  @@index([actionType])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// DOCUMENT EXPIRATION TRACKER MODELS
+// ============================================================================
+
+// Enums for document tracking
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+  ON_LEAVE
+}
+
+enum DocumentStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  ARCHIVED
+  MISSING           // Required but not uploaded
+  PENDING_REVIEW    // Uploaded but not yet approved
+}
+
+enum ReviewStatus {
+  PENDING_UPLOAD     // Slot created, no document yet
+  PENDING_REVIEW     // Document uploaded, needs admin review
+  APPROVED           // Admin verified
+  REJECTED           // Document rejected (quality/authenticity issues)
+  NEEDS_CORRECTION   // Needs employee to re-upload
+}
+
+enum ReminderType {
+  EXPIRING_SOON    // Credential expiring soon
+  EXPIRED          // Credential expired
+  MISSING          // Required credential not uploaded
+  RENEWAL_DUE      // Time to renew
+  FOLLOW_UP        // Follow-up on previous reminder
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+  WEBHOOK
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AgencyReminderFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum ReminderFrequency {
+  MINIMAL   // Only critical (expired, rejected)
+  STANDARD  // Normal (30 days, 7 days, expired)
+  FREQUENT  // All reminders (30, 14, 7, 3, 1 day, expired)
+}
+
+// Employee model - separate from User for compliance tracking
+model Employee {
+  id              String          @id @default(uuid())
+  agencyId        String
+  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+
+  // Employment Details
+  employeeNumber  String?
+  hireDate        DateTime?
+  department      String?
+  position        String?
+  status          EmployeeStatus  @default(ACTIVE)
+
+  // Optional link to User account (if employee has login)
+  userId          String?         @unique
+  user            User?           @relation(fields: [userId], references: [id])
+
+  // Relations
+  documents       EmployeeDocument[]
+  notificationPreferences NotificationPreferences?
+  credentialReminders CredentialReminder[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([agencyId])
+  @@index([email])
+  @@index([status])
+  @@index([userId])
+}
+
+// Document Type Template
+model DocumentType {
+  id              String    @id @default(uuid())
+
+  // For agency-specific types
+  agencyId        String?
+  agency          Agency?   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Document Type Details
+  name            String
+  description     String?   @db.Text
+  expirationDays  Int?      // Days until expiration (null = no expiration)
+  reminderDays    Int[]     @default([30, 7]) // Days before expiration to send reminders
+  isRequired      Boolean   @default(false)
+  isGlobal        Boolean   @default(false) // True for system-wide templates
+  isActive        Boolean   @default(true)
+
+  // Relations
+  documents       EmployeeDocument[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([isGlobal])
+  @@index([isActive])
+}
+
+// Employee Document Instance
+model EmployeeDocument {
+  id              String        @id @default(uuid())
+
+  // Relations
+  employeeId      String
+  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  documentTypeId  String
+  documentType    DocumentType  @relation(fields: [documentTypeId], references: [id])
+
+  // File Storage (S3)
+  s3Key           String        // S3 file key
+  fileName        String        // Original filename
+  fileSize        Int           // Size in bytes
+  mimeType        String        // File MIME type
+
+  // Document Metadata
+  issueDate       DateTime?
+  expirationDate  DateTime?
+  status          DocumentStatus @default(ACTIVE)
+
+  // Credential-specific metadata
+  issuer            String?              // "American Red Cross", "MA Board of Nursing"
+  licenseNumber     String?              // "RN123456", "CPR-2024-001"
+  verificationUrl   String?              // URL to verify credential online
+
+  // AI parsing metadata
+  aiParsedData      Json?                // Raw LLM extraction output
+  aiConfidence      Float?               // 0.0-1.0 confidence score
+  aiParsedAt        DateTime?
+  aiParsedBy        String?              // Model name (e.g., "gpt-4-turbo")
+
+  // Review workflow
+  reviewStatus      ReviewStatus         @default(PENDING_UPLOAD)
+  reviewedBy        String?              // Admin user ID who reviewed
+  reviewedAt        DateTime?
+  reviewNotes       String?   @db.Text
+
+  // Compliance tracking
+  isCompliant       Boolean              @default(false)
+  complianceCheckedAt DateTime?
+
+  // Tracking
+  uploadedBy      String        // User ID who uploaded
+  notes           String?       @db.Text
+
+  // Reminder Tracking
+  lastReminderSent  DateTime?
+  remindersSent     Int          @default(0)
+
+  // Relations
+  reminders         CredentialReminder[]
+  parsingJob        CredentialParsingJob?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([employeeId])
+  @@index([documentTypeId])
+  @@index([expirationDate])
+  @@index([status])
+  @@index([uploadedBy])
+  @@index([employeeId, status])
+  @@index([status, expirationDate])
+  @@index([reviewStatus])
+  @@index([isCompliant])
+}
+
+// ============================================================================
+// CREDENTIAL TRACKING MODELS
+// ============================================================================
+
+// Credential Reminder History
+model CredentialReminder {
+  id                String   @id @default(uuid())
+
+  // Relations
+  documentId        String
+  document          EmployeeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  employeeId        String
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  agencyId          String
+  agency            Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Reminder details
+  reminderType      ReminderType     // EXPIRING_SOON, EXPIRED, MISSING
+  sentAt            DateTime         @default(now())
+  sentTo            String[]         // Email addresses that received the reminder
+  channel           NotificationChannel // EMAIL, SMS, IN_APP
+
+  // Context
+  daysBeforeExpiry  Int?             // How many days before expiration
+  templateUsed      String?          // Email template identifier
+  metadata          Json?            // Additional context
+
+  @@index([documentId, sentAt])
+  @@index([employeeId, sentAt])
+  @@index([agencyId, sentAt])
+  @@index([reminderType, sentAt])
+}
+
+// Notification Preferences - Employee notification settings
+model NotificationPreferences {
+  id                      String   @id @default(uuid())
+
+  // Relations
+  employeeId              String   @unique
+  employee                Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // Email Preferences
+  emailEnabled            Boolean  @default(true)
+  emailExpiringReminders  Boolean  @default(true)   // Receive expiring soon emails (30, 7 days)
+  emailExpiredReminders   Boolean  @default(true)   // Receive expired emails
+  emailApprovalNotifications Boolean @default(true) // Receive approval emails
+  emailRejectionNotifications Boolean @default(true) // Receive rejection emails
+
+  // Reminder Frequency
+  reminderFrequency       ReminderFrequency @default(STANDARD) // MINIMAL, STANDARD, FREQUENT
+
+  // Quiet Hours (optional)
+  quietHoursEnabled       Boolean  @default(false)
+  quietHoursStart         Int?     // Hour 0-23 (e.g., 22 = 10 PM)
+  quietHoursEnd           Int?     // Hour 0-23 (e.g., 8 = 8 AM)
+
+  // Digest Preferences
+  weeklyDigestEnabled     Boolean  @default(false)  // Weekly summary email
+  weeklyDigestDay         Int?     // Day of week (0 = Sunday, 6 = Saturday)
+
+  // Tracking
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+// Compliance Snapshot - Historical compliance tracking
+model ComplianceSnapshot {
+  id                String   @id @default(uuid())
+
+  // Relations
+  agencyId          String
+  agency            Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Snapshot metadata
+  snapshotDate      DateTime @default(now())
+  period            String?  // "2024-Q1", "2024-03", etc.
+
+  // Aggregated statistics
+  totalEmployees    Int
+  activeEmployees   Int
+
+  totalCredentials  Int
+  validCredentials  Int
+  expiringCredentials Int      // Within warning window
+  expiredCredentials Int
+  missingCredentials Int
+  pendingReviewCredentials Int
+
+  complianceRate    Float    // Percentage (0-100)
+
+  // Breakdowns (stored as JSON for flexibility)
+  byCredentialType  Json     // { "CPR": { valid: 10, expiring: 2, expired: 1 }, ... }
+  byDepartment      Json?    // { "Nursing": { complianceRate: 95.5, ... }, ... }
+  byEmployee        Json?    // Array of employee compliance records
+
+  // Metadata
+  createdBy         String?  // User who generated report
+  notes             String?  @db.Text
+
+  @@index([agencyId, snapshotDate])
+  @@index([snapshotDate])
+}
+
+// Credential Parsing Job Queue
+model CredentialParsingJob {
+  id            String   @id @default(uuid())
+
+  // Relations
+  documentId    String   @unique
+  document      EmployeeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Job details
+  status        JobStatus        @default(PENDING)
+  priority      Int              @default(0)  // Higher = more urgent
+
+  // Document context (for parsing)
+  s3Key         String                       // S3 key of the document to parse
+  fileName      String                       // Original filename
+  mimeType      String                       // MIME type (image/png, application/pdf, etc.)
+  documentTypeName String?                   // Hint for LLM (e.g., "CPR Certification")
+  metadata      Json?                        // Additional context for parsing
+  retryAt       DateTime?                    // Next scheduled retry timestamp
+
+  // Processing
+  attemptCount  Int              @default(0)
+  maxAttempts   Int              @default(3)
+  processingStartedAt DateTime?
+  processingCompletedAt DateTime?
+
+  // Error handling
+  error         String?  @db.Text
+  lastError     String?  @db.Text
+
+  // Result
+  result        Json?            // Parsed data
+
+  // Timing
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, priority])
+  @@index([agencyId, status])
+  @@index([createdAt])
+}

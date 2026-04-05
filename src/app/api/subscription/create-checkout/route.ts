@@ -1,0 +1,129 @@
+/**
+ * Create Subscription Checkout Session
+ *
+ * POST /api/subscription/create-checkout
+ *
+ * Creates a Stripe Checkout session for subscription purchase.
+ * Accepts a priceId and agencyId to create a checkout session.
+ */
+
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+import { getOrCreateStripeCustomer, getPlanAndSizeFromPriceId } from '@/lib/subscriptionHelpers';
+import { prisma } from '@/lib/db';
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2025-02-24.acacia',
+});
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { priceId, agencyId } = body;
+
+    // Validate required fields
+    if (!priceId) {
+      return NextResponse.json(
+        { error: 'Missing required field: priceId' },
+        { status: 400 }
+      );
+    }
+
+    if (!agencyId) {
+      return NextResponse.json(
+        { error: 'Missing required field: agencyId' },
+        { status: 400 }
+      );
+    }
+
+    // Validate price ID matches one of our subscription tiers
+    // Support both legacy (single price per plan) and new (size-based pricing)
+    const validPriceIds = [
+      // Legacy pricing (backwards compatibility)
+      process.env.STRIPE_PRICE_PRO,
+      process.env.STRIPE_PRICE_BUSINESS,
+      process.env.STRIPE_PRICE_ENTERPRISE,
+      // Size-based pricing
+      process.env.STRIPE_PRICE_PRO_SMALL,
+      process.env.STRIPE_PRICE_PRO_MEDIUM,
+      process.env.STRIPE_PRICE_PRO_LARGE,
+      process.env.STRIPE_PRICE_BUSINESS_SMALL,
+      process.env.STRIPE_PRICE_BUSINESS_MEDIUM,
+      process.env.STRIPE_PRICE_BUSINESS_LARGE,
+      process.env.STRIPE_PRICE_ENTERPRISE_SMALL,
+      process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM,
+      process.env.STRIPE_PRICE_ENTERPRISE_LARGE,
+    ].filter(Boolean); // Remove undefined values
+
+    if (!validPriceIds.includes(priceId)) {
+      return NextResponse.json(
+        { error: 'Invalid price ID' },
+        { status: 400 }
+      );
+    }
+
+    // Get plan and size from price ID (if using size-based pricing)
+    const planInfo = getPlanAndSizeFromPriceId(priceId);
+
+    // If using size-based pricing, update the agency size
+    if (planInfo) {
+      await prisma.agency.update({
+        where: { id: agencyId },
+        data: {
+          agencySize: planInfo.agencySize,
+        },
+      });
+    }
+
+    // Get or create Stripe customer for the agency
+    const customerId = await getOrCreateStripeCustomer(agencyId, stripe);
+
+    // Create the checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      subscription_data: {
+        metadata: {
+          agencyId,
+        },
+        trial_period_days: 14, // Optional: Add 14-day free trial
+      },
+      metadata: {
+        agencyId,
+      },
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/subscription?canceled=true`,
+      allow_promotion_codes: true,
+      billing_address_collection: 'required',
+    });
+
+    // Return the checkout session URL
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+    });
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+
+    // Handle specific error types
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to create checkout session' },
+      { status: 500 }
+    );
+  }
+}
