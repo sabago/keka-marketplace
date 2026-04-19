@@ -31,7 +31,9 @@ interface DashboardData {
     expired: number;
     active: number;
     needsActionCount: number;
+    flaggedCount: number;
   };
+  categoryBreakdown?: { category: "LICENSE" | "BACKGROUND_CHECK" | "TRAINING" | "HR" | "ID" | "INSURANCE" | "VACCINATION" | "COMPETENCY" | "OTHER"; compliant: number; total: number }[];
   credentials: any[];
   needsAction: any[];
 }
@@ -200,6 +202,31 @@ export default function CredentialsPage() {
         {/* Dashboard Content */}
         {!isLoading && !error && data && (
           <>
+            {/* Flagged credentials banner (rejected/needs correction) */}
+            {data.stats.flaggedCount > 0 && (
+              <div className="mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium text-red-900">
+                      {data.stats.flaggedCount}{' '}
+                      {data.stats.flaggedCount === 1 ? 'credential has' : 'credentials have'}{' '}
+                      been flagged by your admin
+                    </p>
+                    <p className="text-sm text-red-700 mt-1">
+                      Review the flagged credentials below and upload corrected versions as needed.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setFilter('needs-action')}
+                    className="text-sm text-red-700 font-medium hover:underline whitespace-nowrap"
+                  >
+                    View flagged
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Action Alert */}
             {data.stats.needsActionCount > 0 && (
               <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
@@ -444,7 +471,7 @@ export default function CredentialsPage() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Compliance Score Widget */}
-                <ComplianceScoreWidget stats={data.stats} />
+                <ComplianceScoreWidget stats={data.stats} categoryBreakdown={data.categoryBreakdown} />
 
                 {/* Help Card */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">

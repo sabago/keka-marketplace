@@ -18,19 +18,19 @@
  *   await processParsingQueue(batchSize);
  */
 
-import { parseCredentialDocument, type ParsedCredentialData } from './credentialParser';
+import { parseCredentialDocument, parseCredentialFiles, type ParsedCredentialData } from './credentialParser';
 import { prisma } from './db';
 
 // Configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [60, 300, 900]; // seconds: 1min, 5min, 15min
-const JOB_TIMEOUT_SECONDS = 120; // 2 minutes
+const JOB_TIMEOUT_SECONDS = 600; // 10 minutes (Tesseract cold start can take several minutes)
 const DEFAULT_BATCH_SIZE = 5; // Process 5 jobs per cron run
 
 /**
  * Job status enum (matches Prisma schema)
  */
-export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'ABANDONED';
+export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 /**
  * Enqueue a new parsing job
@@ -53,7 +53,7 @@ export async function enqueueParsingJob(
     // Check if job already exists for this credential
     const existingJob = await prisma.credentialParsingJob.findFirst({
       where: {
-        credentialId,
+        documentId: credentialId,
         status: { in: ['PENDING', 'PROCESSING'] },
       },
     });
@@ -67,7 +67,7 @@ export async function enqueueParsingJob(
     }
 
     // Get document type name for parsing hint
-    const credential = await prisma.employeeDocument.findUnique({
+    const credential = await prisma.staffCredential.findUnique({
       where: { id: credentialId },
       include: { documentType: true },
     });
@@ -81,14 +81,14 @@ export async function enqueueParsingJob(
     // Create new job
     const job = await prisma.credentialParsingJob.create({
       data: {
-        credentialId,
+        documentId: credentialId,
         agencyId,
         s3Key,
         fileName,
         mimeType,
         documentTypeName,
         status: 'PENDING',
-        attempts: 0,
+        attemptCount: 0,
         metadata: {
           enqueuedAt: new Date().toISOString(),
           documentTypeId: credential.documentTypeId,
@@ -148,40 +148,100 @@ async function processJob(jobId: string): Promise<boolean> {
       },
       data: {
         status: 'PROCESSING',
-        startedAt: new Date(),
-        attempts: { increment: 1 },
+        processingStartedAt: new Date(),
+        attemptCount: { increment: 1 },
       },
     });
 
-    console.log(`Processing job ${jobId} (attempt ${job.attempts}/${MAX_RETRIES})`);
+    console.log(`Processing job ${jobId} (attempt ${job.attemptCount}/${MAX_RETRIES})`);
 
-    // Parse credential
-    const result = await parseCredentialDocument(
-      job.s3Key,
-      job.fileName,
-      job.mimeType,
-      job.documentTypeName
-    );
+    // Parse credential — prefer CredentialFile rows (multi-file support);
+    // fall back to job-level s3Key for legacy jobs that pre-date the migration.
+    const credentialFiles = await prisma.credentialFile.findMany({
+      where: { credentialId: job.documentId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    const result = credentialFiles.length > 0
+      ? await parseCredentialFiles(
+          credentialFiles.map((f) => ({
+            s3Key: f.s3Key,
+            pageRole: f.pageRole,
+            pageNumber: f.pageNumber ?? undefined,
+            fileName: f.fileName,
+            mimeType: f.mimeType,
+          })),
+          job.documentTypeName ?? 'Unknown'
+        )
+      : await parseCredentialDocument(
+          job.s3Key,
+          job.fileName,
+          job.mimeType,
+          job.documentTypeName ?? 'Unknown'
+        );
 
     if (!result.success || !result.data) {
       // Parsing failed - determine if should retry
-      await handleJobFailure(jobId, result.error || 'Unknown parsing error', job.attempts);
+      await handleJobFailure(jobId, result.error || 'Unknown parsing error', job.attemptCount);
       return false;
     }
 
     // Parsing succeeded - update credential and complete job
     const parsedData = result.data;
 
+    // Fetch existing user-provided dates before overwriting anything.
+    // Strategy: user-provided values win; OCR fills gaps only.
+    // If both exist and disagree by >1 day, flag for admin review.
+    const existing = await prisma.staffCredential.findUnique({
+      where: { id: job.documentId },
+      select: { issueDate: true, expirationDate: true },
+    });
+
+    const ocrIssueDate = parsedData.issuedAt ? new Date(parsedData.issuedAt) : null;
+    const ocrExpirationDate = parsedData.expiresAt ? new Date(parsedData.expiresAt) : null;
+
+    // Use user-provided if present; fall back to OCR
+    const finalIssueDate = existing?.issueDate ?? ocrIssueDate;
+    const finalExpirationDate = existing?.expirationDate ?? ocrExpirationDate;
+
+    // Detect discrepancies (>1 day difference) for admin visibility
+    const dateMismatchNotes: string[] = [];
+    const ONE_DAY_MS = 86_400_000;
+
+    if (existing?.issueDate && ocrIssueDate) {
+      const diffMs = Math.abs(existing.issueDate.getTime() - ocrIssueDate.getTime());
+      if (diffMs > ONE_DAY_MS) {
+        dateMismatchNotes.push(
+          `Issue date mismatch: user entered ${existing.issueDate.toISOString().slice(0, 10)}, OCR read ${parsedData.issuedAt}`
+        );
+      }
+    }
+    if (existing?.expirationDate && ocrExpirationDate) {
+      const diffMs = Math.abs(existing.expirationDate.getTime() - ocrExpirationDate.getTime());
+      if (diffMs > ONE_DAY_MS) {
+        dateMismatchNotes.push(
+          `Expiration date mismatch: user entered ${existing.expirationDate.toISOString().slice(0, 10)}, OCR read ${parsedData.expiresAt}`
+        );
+      }
+    }
+
+    const hasMismatch = dateMismatchNotes.length > 0;
+    const mismatchNote = dateMismatchNotes.join(' | ');
+
+    // Require review if AI flagged it OR if there's a date discrepancy
+    const requiresReview = parsedData.requiresReview || hasMismatch;
+    const reviewReason = [parsedData.reviewReason, mismatchNote].filter(Boolean).join(' | ') || null;
+
     // Update credential with parsed data
-    await prisma.employeeDocument.update({
-      where: { id: job.credentialId },
+    await prisma.staffCredential.update({
+      where: { id: job.documentId },
       data: {
-        // Parsed metadata
+        // Parsed metadata — user-provided dates win; OCR fills gaps
         issuer: parsedData.issuer,
         licenseNumber: parsedData.licenseNumber,
         verificationUrl: parsedData.verificationUrl,
-        issueDate: parsedData.issuedAt ? new Date(parsedData.issuedAt) : null,
-        expirationDate: parsedData.expiresAt ? new Date(parsedData.expiresAt) : null,
+        issueDate: finalIssueDate,
+        expirationDate: finalExpirationDate,
 
         // AI metadata
         aiParsedData: {
@@ -189,14 +249,17 @@ async function processJob(jobId: string): Promise<boolean> {
           parsedAt: new Date().toISOString(),
           ocrProvider: result.ocrProvider,
           tokensUsed: result.tokensUsed,
+          ocrIssuedAt: parsedData.issuedAt,
+          ocrExpiresAt: parsedData.expiresAt,
+          dateMismatch: hasMismatch ? dateMismatchNotes : undefined,
         } as any,
         aiConfidence: parsedData.confidence,
         aiParsedAt: new Date(),
         aiParsedBy: 'gpt-4-turbo',
 
-        // Review status
-        reviewStatus: parsedData.requiresReview ? 'PENDING_REVIEW' : 'APPROVED',
-        reviewNotes: parsedData.reviewReason || null,
+        // Review status — escalate if date discrepancy found
+        reviewStatus: requiresReview ? 'PENDING_REVIEW' : 'APPROVED',
+        reviewNotes: reviewReason,
 
         // Compliance will be checked later by compliance checker
         complianceCheckedAt: new Date(),
@@ -208,12 +271,13 @@ async function processJob(jobId: string): Promise<boolean> {
       where: { id: jobId },
       data: {
         status: 'COMPLETED',
-        completedAt: new Date(),
+        processingCompletedAt: new Date(),
         result: {
           success: true,
           confidence: parsedData.confidence,
-          requiresReview: parsedData.requiresReview,
-          reviewReason: parsedData.reviewReason,
+          requiresReview,
+          reviewReason,
+          dateMismatch: hasMismatch,
           tokensUsed: result.tokensUsed,
           ocrProvider: result.ocrProvider,
           processingTimeMs: Date.now() - startTime,
@@ -230,13 +294,13 @@ async function processJob(jobId: string): Promise<boolean> {
     // Get current attempt count
     const job = await prisma.credentialParsingJob.findUnique({
       where: { id: jobId },
-      select: { attempts: true },
+      select: { attemptCount: true },
     });
 
     await handleJobFailure(
       jobId,
       error instanceof Error ? error.message : String(error),
-      job?.attempts || 1
+      job?.attemptCount || 1
     );
 
     return false;
@@ -284,7 +348,7 @@ async function handleJobFailure(
       data: {
         status: 'FAILED',
         error: errorMessage,
-        completedAt: new Date(),
+        processingCompletedAt: new Date(),
         result: {
           success: false,
           error: errorMessage,
@@ -296,12 +360,12 @@ async function handleJobFailure(
     // Mark credential for manual review
     const job = await prisma.credentialParsingJob.findUnique({
       where: { id: jobId },
-      select: { credentialId: true },
+      select: { documentId: true },
     });
 
     if (job) {
-      await prisma.employeeDocument.update({
-        where: { id: job.credentialId },
+      await prisma.staffCredential.update({
+        where: { id: job.documentId },
         data: {
           reviewStatus: 'PENDING_REVIEW',
           reviewNotes: `Automatic parsing failed after ${currentAttempts} attempts: ${errorMessage}`,
@@ -324,9 +388,9 @@ async function cleanupStaleJobs(): Promise<number> {
   const staleJobs = await prisma.credentialParsingJob.findMany({
     where: {
       status: 'PROCESSING',
-      startedAt: { lt: staleThreshold },
+      processingStartedAt: { lt: staleThreshold },
     },
-    select: { id: true, attempts: true },
+    select: { id: true, attemptCount: true },
   });
 
   let resetCount = 0;
@@ -335,7 +399,7 @@ async function cleanupStaleJobs(): Promise<number> {
     await handleJobFailure(
       job.id,
       'Job timed out (exceeded processing time limit)',
-      job.attempts
+      job.attemptCount
     );
     resetCount++;
   }
@@ -458,7 +522,7 @@ export async function getJobStatus(jobId: string): Promise<{
 
   const response: any = {
     status: job.status,
-    attempts: job.attempts,
+    attempts: job.attemptCount,
     error: job.error,
     result: job.result,
   };
@@ -538,7 +602,7 @@ export async function retryFailedJob(jobId: string): Promise<boolean> {
       where: { id: jobId },
       data: {
         status: 'PENDING',
-        attempts: 0,
+        attemptCount: 0,
         error: null,
         retryAt: null,
         metadata: {
@@ -579,9 +643,9 @@ export async function cancelJob(jobId: string): Promise<boolean> {
     await prisma.credentialParsingJob.update({
       where: { id: jobId },
       data: {
-        status: 'ABANDONED',
+        status: 'CANCELLED',
         error: 'Cancelled by user',
-        completedAt: new Date(),
+        processingCompletedAt: new Date(),
       },
     });
 

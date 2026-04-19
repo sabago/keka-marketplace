@@ -9,14 +9,15 @@ import { requireSuperadmin } from '@/lib/authHelpers';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require platform admin authentication
     await requireSuperadmin();
+    const { id } = await params;
 
     const agency = await prisma.agency.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         users: {
           select: {

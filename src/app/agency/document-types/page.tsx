@@ -20,9 +20,17 @@ interface DocumentType {
 	id: string;
 	name: string;
 	description: string | null;
+	category: "LICENSE" | "BACKGROUND_CHECK" | "TRAINING" | "HR" | "ID" | "INSURANCE" | "VACCINATION" | "COMPETENCY" | "OTHER";
 	expirationDays: number | null;
 	reminderDays: number[];
 	isRequired: boolean;
+	requiresFrontBack: boolean;
+	allowsMultiPage: boolean;
+	minFiles: number;
+	maxFiles: number;
+	recheckCadenceDays: number | null;
+	aiParsingEnabled: boolean;
+	customFields: Record<string, string> | null;
 	isGlobal: boolean;
 	isActive: boolean;
 	_count?: {
@@ -71,8 +79,8 @@ export default function DocumentTypesPage() {
 
 			const data = await response.json();
 			setDocumentTypes(data.documentTypes);
-		} catch (err: any) {
-			setError(err.message || "Failed to load document types");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to load document types");
 		} finally {
 			setLoading(false);
 		}
@@ -80,7 +88,7 @@ export default function DocumentTypesPage() {
 
 	const handleDelete = async (documentTypeId: string) => {
 		const confirmed = confirm(
-			"Are you sure you want to delete this document type? This will not delete existing documents, but you won't be able to create new documents of this type."
+			"Disable this document type? Existing credentials that use it will be unaffected, but staff will no longer be able to upload new credentials of this type."
 		);
 
 		if (!confirmed) return;
@@ -95,13 +103,13 @@ export default function DocumentTypesPage() {
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.error || "Failed to delete document type");
+				throw new Error(data.error || "Failed to disable document type");
 			}
 
 			// Refresh list
 			fetchDocumentTypes();
-		} catch (err: any) {
-			alert(err.message || "Failed to delete document type");
+		} catch (err) {
+			alert(err instanceof Error ? err.message : "Failed to disable document type");
 		}
 	};
 
@@ -138,7 +146,7 @@ export default function DocumentTypesPage() {
 					<div>
 						<h1 className="text-3xl font-bold text-gray-900">Document Types</h1>
 						<p className="text-gray-600 mt-1">
-							Manage document types for your agency's compliance tracking
+							Manage document types for your agency&apos;s compliance tracking
 						</p>
 					</div>
 					<button

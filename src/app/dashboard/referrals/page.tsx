@@ -11,9 +11,18 @@ import {
   XCircle,
   Edit,
   ExternalLink,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import LogReferralModal from "@/components/LogReferralModal";
 import Link from "next/link";
+
+interface StatusHistoryEntry {
+  id: string;
+  status: string;
+  changedAt: string;
+  notes?: string | null;
+}
 
 interface Referral {
   id: string;
@@ -28,15 +37,23 @@ interface Referral {
   patientStarted?: boolean;
   notes?: string;
   createdAt: string;
+  statusHistory?: StatusHistoryEntry[];
 }
 
 export default function ReferralsPage() {
-  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [myReferrals, setMyReferrals] = useState<Referral[]>([]);
+  const [agencyReferrals, setAgencyReferrals] = useState<Referral[]>([]);
+  const [view, setView] = useState<"mine" | "agency">("agency");
+  const referrals = view === "mine" ? myReferrals : agencyReferrals;
   const [filteredReferrals, setFilteredReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [sortBy, setSortBy] = useState("date-desc");
+  const [editingReferral, setEditingReferral] = useState<Referral | null>(null);
+  const [editForm, setEditForm] = useState({ status: "", notes: "", responseTime: "", accepted: false, patientStarted: false });
+  const [editSaving, setEditSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReferrals();
@@ -51,7 +68,8 @@ export default function ReferralsPage() {
       const response = await fetch("/api/referrals");
       if (response.ok) {
         const data = await response.json();
-        setReferrals(data.referrals || []);
+        setMyReferrals(data.myReferrals || []);
+        setAgencyReferrals(data.agencyReferrals || data.referrals || []);
       }
     } catch (error) {
       console.error("Error fetching referrals:", error);
@@ -133,6 +151,46 @@ export default function ReferralsPage() {
     );
   };
 
+  const openEdit = (referral: Referral) => {
+    setEditingReferral(referral);
+    setEditForm({
+      status: referral.status,
+      notes: referral.notes || "",
+      responseTime: referral.responseTime != null ? String(referral.responseTime) : "",
+      accepted: referral.accepted ?? false,
+      patientStarted: referral.patientStarted ?? false,
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editingReferral) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/referrals/${editingReferral.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: editForm.status,
+          notes: editForm.notes,
+          responseTime: editForm.responseTime,
+          accepted: editForm.status === "ACCEPTED" || editForm.status === "PATIENT_STARTED",
+          patientStarted: editForm.status === "PATIENT_STARTED",
+        }),
+      });
+      if (res.ok) {
+        setEditingReferral(null);
+        fetchReferrals();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to save changes");
+      }
+    } catch {
+      alert("An error occurred while saving");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleExportCSV = () => {
     const headers = [
       "Date",
@@ -179,6 +237,22 @@ export default function ReferralsPage() {
           >
             <Plus className="h-5 w-5 mr-2" />
             Log New Referral
+          </button>
+        </div>
+
+        {/* View Toggle */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setView("agency")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+          >
+            All Agency ({agencyReferrals.length})
+          </button>
+          <button
+            onClick={() => setView("mine")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "mine" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+          >
+            Logged by Me ({myReferrals.length})
           </button>
         </div>
 
@@ -279,42 +353,108 @@ export default function ReferralsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredReferrals.map((referral) => (
-                    <tr key={referral.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        {new Date(referral.submissionDate).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <Link
-                          href={`/knowledge-base/${referral.referralSourceSlug}`}
-                          className="text-[#0B4F96] hover:text-[#48ccbc] font-medium flex items-center"
+                  {filteredReferrals.map((referral) => {
+                    const isExpanded = expandedId === referral.id;
+                    const history = referral.statusHistory || [];
+                    return (
+                      <>
+                        <tr
+                          key={referral.id}
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => setExpandedId(isExpanded ? null : referral.id)}
                         >
-                          {referral.referralSourceTitle || referral.referralSourceSlug}
-                          <ExternalLink className="h-3 w-3 ml-1" />
-                        </Link>
-                        {referral.patientType && (
-                          <span className="text-xs text-gray-500 block mt-1">
-                            {referral.patientType}
-                          </span>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                            <div className="flex items-center gap-2">
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                : <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />}
+                              {referral.submissionDate.slice(0, 10).replace(/-/g, '/').replace(/^(\d{4})\/(\d{2})\/(\d{2})$/, '$2/$3/$1')}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <Link
+                              href={`/knowledge-base/${referral.referralSourceSlug}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[#0B4F96] hover:text-[#48ccbc] font-medium flex items-center"
+                            >
+                              {referral.referralSourceTitle || referral.referralSourceSlug}
+                              <ExternalLink className="h-3 w-3 ml-1" />
+                            </Link>
+                            {referral.patientType && (
+                              <span className="text-xs text-gray-500 block mt-1">{referral.patientType}</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {referral.submissionMethod}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(referral.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {referral.responseTime != null && referral.responseTime > 0
+                              ? referral.responseTime < 60
+                                ? `${referral.responseTime}m`
+                                : `${Math.floor(referral.responseTime / 60)}h${referral.responseTime % 60 > 0 ? ` ${referral.responseTime % 60}m` : ""}`
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openEdit(referral); }}
+                              className="text-[#0B4F96] hover:text-[#48ccbc] flex items-center"
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${referral.id}-history`} className="bg-gray-50">
+                            <td colSpan={6} className="px-10 py-4">
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Timeline</p>
+                              {history.length === 0 ? (
+                                <p className="text-sm text-gray-400">No status history recorded.</p>
+                              ) : (
+                                <div className="flex flex-col gap-2">
+                                  {history.map((entry, i) => {
+                                    const prev = history[i - 1];
+                                    const minsElapsed = prev
+                                      ? Math.round((new Date(entry.changedAt).getTime() - new Date(prev.changedAt).getTime()) / 60_000)
+                                      : null;
+                                    const elapsedLabel = minsElapsed === null ? null
+                                      : minsElapsed < 60 ? `${minsElapsed}m`
+                                      : `${Math.floor(minsElapsed / 60)}h${minsElapsed % 60 > 0 ? ` ${minsElapsed % 60}m` : ""}`;
+                                    return (
+                                      <div key={entry.id} className="flex items-start gap-3">
+                                        <div className="flex flex-col items-center">
+                                          <div className="w-2.5 h-2.5 rounded-full bg-[#0B4F96] mt-1 flex-shrink-0" />
+                                          {i < history.length - 1 && <div className="w-px flex-1 bg-gray-300 mt-1" style={{ minHeight: 16 }} />}
+                                        </div>
+                                        <div className="pb-2">
+                                          <span className="text-sm font-semibold text-gray-800 capitalize">{entry.status.replace("_", " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                          <span className="text-xs text-gray-400 ml-2">
+                                            {new Date(entry.changedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{" "}
+                                            {new Date(entry.changedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                          </span>
+                                          {elapsedLabel !== null && (
+                                            <span className="text-xs text-gray-400 ml-2">({elapsedLabel} after previous)</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {referral.notes && (
+                                <p className="text-sm text-gray-500 mt-3 pt-3 border-t border-gray-200">
+                                  <span className="font-medium text-gray-700">Notes:</span> {referral.notes}
+                                </p>
+                              )}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {referral.submissionMethod}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(referral.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {referral.responseTime ? `${referral.responseTime}h` : "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button className="text-[#0B4F96] hover:text-[#48ccbc] flex items-center">
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -350,12 +490,85 @@ export default function ReferralsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Log Modal */}
       <LogReferralModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchReferrals}
       />
+
+      {/* Edit Modal */}
+      {editingReferral && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-800">Edit Referral</h2>
+              <button onClick={() => setEditingReferral(null)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Source</p>
+                <p className="font-medium text-gray-800">
+                  {editingReferral.referralSourceTitle || editingReferral.referralSourceSlug}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+                    const updates: Partial<typeof editForm> = { status: newStatus };
+                    // Auto-calculate response time (in minutes) when moving past SUBMITTED
+                    // Use createdAt (exact creation time) not submissionDate (date-only, midnight)
+                    if (newStatus !== "SUBMITTED" && editingReferral) {
+                      const submittedMs = new Date(editingReferral.createdAt).getTime();
+                      const minutesElapsed = Math.round((Date.now() - submittedMs) / 60_000);
+                      updates.responseTime = String(minutesElapsed);
+                    }
+                    if (newStatus === "SUBMITTED") updates.responseTime = "";
+                    setEditForm({ ...editForm, ...updates });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4F96] focus:border-transparent"
+                >
+                  <option value="SUBMITTED">Submitted</option>
+                  <option value="RESPONDED">Responded</option>
+                  <option value="ACCEPTED">Accepted</option>
+                  <option value="DECLINED">Declined</option>
+                  <option value="PATIENT_STARTED">Patient Started</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                  placeholder="Add notes about this referral..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4F96] focus:border-transparent resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              <button
+                onClick={() => setEditingReferral(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#0a4280] disabled:opacity-50"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -28,23 +28,23 @@ export async function GET(req: NextRequest) {
     // Agency admins only see their agency's credentials
     // Platform admins can see all or filter by agency
     if (user.role === 'AGENCY_ADMIN') {
-      where.employee = {
+      where.staffMember = {
         agencyId: agency.id,
       };
     } else if (agencyId) {
-      where.employee = {
+      where.staffMember = {
         agencyId,
       };
     }
 
     // Get total count
-    const total = await prisma.employeeDocument.count({ where });
+    const total = await prisma.staffCredential.count({ where });
 
     // Get credentials with employee and document type info
-    const credentials = await prisma.employeeDocument.findMany({
+    const credentials = await prisma.staffCredential.findMany({
       where,
       include: {
-        employee: {
+        staffMember: {
           select: {
             id: true,
             firstName: true,

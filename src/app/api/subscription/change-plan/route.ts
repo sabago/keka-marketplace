@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { prisma } from '@/lib/db';
-import { getPlanTypeFromPriceId } from '@/lib/subscriptionHelpers';
+import { getPlanTypeFromPriceId, getPlanAndSizeFromPriceId, resetQueryCount } from '@/lib/subscriptionHelpers';
 
 // Lazy initialize Stripe to avoid build-time errors
 let stripeInstance: Stripe | null = null;
@@ -49,14 +49,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate price ID
-    const validPriceIds = [
-      process.env.STRIPE_PRICE_PRO,
-      process.env.STRIPE_PRICE_BUSINESS,
-      process.env.STRIPE_PRICE_ENTERPRISE,
-    ];
-
-    if (!validPriceIds.includes(newPriceId)) {
+    // Validate price ID — must resolve to a known plan/size combination
+    const priceMatch = getPlanAndSizeFromPriceId(newPriceId);
+    if (!priceMatch) {
       return NextResponse.json(
         { error: 'Invalid price ID' },
         { status: 400 }
@@ -101,16 +96,9 @@ export async function POST(request: Request) {
     }
 
     // Determine if this is an upgrade or downgrade
-    const newPlanType = getPlanTypeFromPriceId(newPriceId);
-    if (!newPlanType) {
-      return NextResponse.json(
-        { error: 'Invalid plan type' },
-        { status: 400 }
-      );
-    }
-
-    const planOrder = { FREE: 0, PRO: 1, BUSINESS: 2, ENTERPRISE: 3 };
-    const isUpgrade = planOrder[newPlanType] > planOrder[agency.subscriptionPlan];
+    const newPlanType = priceMatch.planType;
+    const PLAN_RANK = { FREE: 0, PRO: 1, BUSINESS: 2, ENTERPRISE: 3 };
+    const isUpgrade = PLAN_RANK[newPlanType] > PLAN_RANK[agency.subscriptionPlan];
 
     // Update the subscription in Stripe
     const updatedSubscription = await stripe.subscriptions.update(
@@ -127,7 +115,13 @@ export async function POST(request: Request) {
       }
     );
 
-    // Note: The webhook will handle updating the database with the new plan
+    // On mid-cycle upgrades, reset query count immediately so the agency
+    // can use their new plan right away without waiting for the next webhook
+    if (isUpgrade) {
+      await resetQueryCount(agencyId);
+    }
+
+    // Note: The webhook will handle updating the database with the new plan details
     // This ensures consistency between Stripe and our database
 
     return NextResponse.json({

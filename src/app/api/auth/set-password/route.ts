@@ -67,8 +67,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user's agency is approved
-    if (tokenRecord.user.agency?.approvalStatus !== 'APPROVED') {
+    // Check if user's agency is approved (skip for platform/superadmins who may have no agency)
+    const isAdminRole = tokenRecord.user.role === 'PLATFORM_ADMIN' || tokenRecord.user.role === 'SUPERADMIN';
+    if (!isAdminRole && tokenRecord.user.agency?.approvalStatus !== 'APPROVED') {
       return NextResponse.json(
         { error: 'Your agency must be approved before you can set a password' },
         { status: 403 }
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = tokenRecord.user;
 
     // Update user password and mark token as used in a transaction
     await prisma.$transaction(async (tx) => {
@@ -94,6 +97,27 @@ export async function POST(request: NextRequest) {
         where: { id: tokenRecord.id },
         data: { used: true },
       });
+
+      // Auto-create staff credential record for AGENCY_USER members only.
+      // Admin roles (AGENCY_ADMIN, PLATFORM_ADMIN, SUPERADMIN) manage staff — they are not staff.
+      if (user.agencyId && user.role === 'AGENCY_USER') {
+        const existingRecord = await tx.staffMember.findFirst({
+          where: { userId: tokenRecord.userId },
+        });
+        if (!existingRecord) {
+          const nameParts = (user.name || '').trim().split(/\s+/);
+          await tx.staffMember.create({
+            data: {
+              agencyId: user.agencyId,
+              userId: tokenRecord.userId,
+              firstName: nameParts[0] || user.name || 'Staff',
+              lastName: nameParts.slice(1).join(' ') || 'Member',
+              email: user.email,
+              status: 'ACTIVE',
+            },
+          });
+        }
+      }
     });
 
     return NextResponse.json({
@@ -140,6 +164,7 @@ export async function GET(request: NextRequest) {
           select: {
             email: true,
             name: true,
+            role: true,
             agency: {
               select: {
                 agencyName: true,
@@ -174,8 +199,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if user's agency is approved
-    if (tokenRecord.user.agency?.approvalStatus !== 'APPROVED') {
+    // Check if user's agency is approved (skip for platform/superadmins who may have no agency)
+    const isAdminRole = tokenRecord.user.role === 'PLATFORM_ADMIN' || tokenRecord.user.role === 'SUPERADMIN';
+    if (!isAdminRole && tokenRecord.user.agency?.approvalStatus !== 'APPROVED') {
       return NextResponse.json(
         { error: 'Agency not approved', valid: false },
         { status: 403 }

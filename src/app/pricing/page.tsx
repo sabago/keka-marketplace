@@ -16,11 +16,19 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+// Annual prices = 10× monthly (2 months free, ~17% discount)
+const ANNUAL_PRICING: Record<PlanType, Record<AgencySize, number>> = {
+	FREE: { SMALL: 0, MEDIUM: 0, LARGE: 0 },
+	PRO: { SMALL: 490, MEDIUM: 990, LARGE: 1490 },
+	BUSINESS: { SMALL: 1990, MEDIUM: 2990, LARGE: 4490 },
+	ENTERPRISE: { SMALL: 4990, MEDIUM: 7990, LARGE: 11990 },
+};
+
 export default function PricingPage() {
 	const router = useRouter();
 	const [selectedSize, setSelectedSize] = useState<AgencySize>(AgencySize.MEDIUM);
+	const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
 
-	// Agency size options with descriptions
 	const agencySizes = [
 		{
 			size: AgencySize.SMALL,
@@ -45,37 +53,41 @@ export default function PricingPage() {
 		},
 	];
 
-	// Plan configurations
 	const plans = [
 		{
 			type: PlanType.FREE,
-			name: "Free",
-			description: "Perfect for trying out the platform",
+			name: "Free Trial",
+			description: "Try the platform — no credit card required",
 			features: [
-				"20 AI queries per month",
+				"20 AI queries (lifetime trial)",
+				"10 credential document uploads (lifetime)",
+				"Up to 10 staff seats",
 				"Basic referral directory access",
 				"State-specific guides",
-				"Community access",
 				"Email support",
 			],
-			limitations: ["Limited query capacity", "No advanced analytics"],
-			cta: "Get Started Free",
+			limitations: [
+				"Lifetime query and document limits — not monthly",
+				"No advanced analytics",
+			],
+			cta: "Request Access",
 		},
 		{
 			type: PlanType.PRO,
 			name: "Pro",
 			description: "For growing agencies",
 			features: [
-				"200 AI queries per month",
+				"200 AI queries/month",
+				"Unlimited credential document uploads",
+				"Up to 10 staff seats (Small) / 50 (Medium) / Unlimited (Large)",
 				"Advanced analytics dashboard",
 				"Referral tracking",
 				"Priority email support",
 				"Export reports (CSV, PDF)",
-				"API access (basic)",
 				"Saved searches and alerts",
 			],
 			popular: true,
-			cta: "Start 14-Day Free Trial",
+			cta: "Get Started",
 		},
 		{
 			type: PlanType.BUSINESS,
@@ -83,15 +95,16 @@ export default function PricingPage() {
 			description: "For established agencies",
 			features: [
 				"Unlimited AI queries",
+				"Unlimited credential document uploads",
+				"Up to 10 staff seats (Small) / 50 (Medium) / Unlimited (Large)",
 				"Advanced analytics & forecasting",
 				"Priority phone & email support",
 				"White-label reports",
 				"Multi-location management",
 				"Full API access",
 				"Custom integrations",
-				"Early access to new features",
 			],
-			cta: "Start 14-Day Free Trial",
+			cta: "Get Started",
 		},
 		{
 			type: PlanType.ENTERPRISE,
@@ -113,52 +126,50 @@ export default function PricingPage() {
 
 	const handleSelectPlan = (planType: PlanType) => {
 		if (planType === PlanType.FREE) {
-			router.push("/auth/signin");
+			router.push("/request-access");
 		} else if (planType === PlanType.ENTERPRISE) {
-			// For enterprise, contact sales
-			window.location.href = "mailto:sales@example.com?subject=Enterprise Plan Inquiry";
+			window.location.href =
+				"mailto:info@masteringhomecare.com?subject=Enterprise Plan Inquiry";
 		} else {
-			// For paid plans, redirect to signup with plan and size
 			router.push(
-				`/auth/signin?plan=${planType.toLowerCase()}&size=${selectedSize.toLowerCase()}`
+				`/request-access?plan=${planType.toLowerCase()}&size=${selectedSize.toLowerCase()}&billing=${billingCycle}`
 			);
 		}
 	};
 
-	const getPrice = (planType: PlanType) => {
-		return PLAN_PRICING[planType][selectedSize];
-	};
+	const getMonthlyPrice = (planType: PlanType) => PLAN_PRICING[planType][selectedSize];
+	const getAnnualPrice = (planType: PlanType) => ANNUAL_PRICING[planType][selectedSize];
 
 	const faqs = [
 		{
 			question: "How does agency size affect pricing?",
 			answer:
-				"Pricing is based on your agency size to ensure you only pay for what you need. Larger agencies get more staff seats and higher usage limits. You can upgrade your size tier as your agency grows.",
+				"Pricing is based on your agency size to ensure you only pay for what you need. Larger agencies get more staff seats. You can upgrade your size tier as your agency grows.",
 		},
 		{
-			question: "Can I change my agency size later?",
+			question: "What is the difference between the free trial and a paid plan?",
 			answer:
-				"Yes! You can upgrade your agency size at any time. The change takes effect immediately, and we'll prorate the difference in your next billing cycle.",
+				"The free trial gives you 20 AI queries and 10 credential document uploads — these are lifetime limits, not monthly. Once you use them, you'll need to upgrade to continue using AI-powered features. Paid plans give you monthly query resets and unlimited credential uploads.",
 		},
 		{
 			question: "What are staff seats?",
 			answer:
-				"Staff seats allow you to invite team members to your agency account. Small agencies get up to 5 seats, Medium get up to 15 seats, and Large agencies get unlimited seats.",
+				"Staff seats allow you to invite team members to your agency account. Small agencies get up to 10 seats, Medium get up to 50 seats, and Large agencies get unlimited seats.",
 		},
 		{
-			question: "What happens when I exceed my query limit?",
+			question: "What happens when I exceed my monthly query limit on a paid plan?",
 			answer:
-				"For Free and Pro tiers, queries will be paused until the next billing cycle. You'll receive notifications before hitting your limit. Business and Enterprise plans have unlimited queries.",
+				"On Pro plans, AI queries are paused until your next billing date. Business and Enterprise plans have unlimited queries. You'll receive notifications before hitting your limit.",
 		},
 		{
-			question: "Do you offer refunds?",
+			question: "How does annual billing work?",
 			answer:
-				"We offer a 14-day free trial for all paid plans. If you're not satisfied within the first 30 days of paid service, we'll provide a full refund.",
+				"Annual billing is billed once per year at 10× the monthly price — equivalent to 12 months for the price of 10 (2 months free, ~17% savings). You can cancel before renewal for a prorated refund.",
 		},
 		{
 			question: "Can I switch between plans?",
 			answer:
-				"Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and we'll prorate any differences in your billing.",
+				"Yes. Upgrades take effect immediately — if you hit your query limit mid-month and upgrade, your count resets right away. Downgrades take effect at the next billing date.",
 		},
 	];
 
@@ -185,7 +196,7 @@ export default function PricingPage() {
 			location: "Miami, FL",
 			agencySize: "Medium",
 			quote:
-				"Started with the free plan, upgraded to Pro within a month. The ROI is undeniable for our medium-sized agency.",
+				"Started with the free trial, upgraded to Pro within a month. The ROI is undeniable for our medium-sized agency.",
 		},
 	];
 
@@ -201,6 +212,41 @@ export default function PricingPage() {
 					Choose the plan that fits your agency size. All plans include our core
 					features with flexible pricing based on your team size.
 				</p>
+
+				{/* Billing Toggle */}
+				<div className="flex items-center justify-center gap-4 mb-12">
+					<span
+						className={`text-sm font-medium ${
+							billingCycle === "monthly" ? "text-gray-900" : "text-gray-500"
+						}`}
+					>
+						Monthly
+					</span>
+					<button
+						onClick={() =>
+							setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")
+						}
+						className={`relative w-14 h-7 rounded-full transition-colors ${
+							billingCycle === "annual" ? "bg-[#0B4F96]" : "bg-gray-300"
+						}`}
+					>
+						<span
+							className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${
+								billingCycle === "annual" ? "translate-x-7" : "translate-x-0"
+							}`}
+						/>
+					</button>
+					<span
+						className={`text-sm font-medium ${
+							billingCycle === "annual" ? "text-gray-900" : "text-gray-500"
+						}`}
+					>
+						Annual
+						<span className="ml-2 inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+							2 months free
+						</span>
+					</span>
+				</div>
 
 				{/* Agency Size Selector */}
 				<div className="mb-12">
@@ -255,7 +301,9 @@ export default function PricingPage() {
 				{/* Pricing Cards */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
 					{plans.map((plan) => {
-						const price = getPrice(plan.type);
+						const monthlyPrice = getMonthlyPrice(plan.type);
+						const annualPrice = getAnnualPrice(plan.type);
+						const isFree = monthlyPrice === 0;
 						return (
 							<div
 								key={plan.type}
@@ -265,7 +313,6 @@ export default function PricingPage() {
 										: "border border-gray-200"
 								}`}
 							>
-								{/* Popular Badge */}
 								{plan.popular && (
 									<div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
 										<div className="bg-[#48ccbc] text-white px-4 py-1 rounded-full text-sm font-bold">
@@ -284,19 +331,31 @@ export default function PricingPage() {
 
 								{/* Price */}
 								<div className="text-center mb-6">
-									{price === 0 ? (
+									{isFree ? (
 										<div className="text-4xl font-bold text-[#0B4F96]">Free</div>
+									) : billingCycle === "monthly" ? (
+										<>
+											<div className="flex items-baseline justify-center gap-1">
+												<span className="text-4xl font-bold text-[#0B4F96]">
+													${monthlyPrice}
+												</span>
+												<span className="text-gray-600">/mo</span>
+											</div>
+										</>
 									) : (
 										<>
 											<div className="flex items-baseline justify-center gap-1">
 												<span className="text-4xl font-bold text-[#0B4F96]">
-													${price}
+													${annualPrice}
 												</span>
-												<span className="text-gray-600">/month</span>
+												<span className="text-gray-600">/yr</span>
 											</div>
-											{plan.type === PlanType.ENTERPRISE && (
-												<div className="mt-2 text-sm text-gray-600">Custom pricing</div>
-											)}
+											<div className="text-sm text-gray-500 mt-1">
+												${Math.round(annualPrice / 12)}/mo
+											</div>
+											<div className="text-xs text-green-600 font-medium mt-0.5">
+												Save ${monthlyPrice * 2} — 2 months free
+											</div>
 										</>
 									)}
 								</div>
@@ -376,7 +435,7 @@ export default function PricingPage() {
 							</div>
 							<h3 className="text-xl font-bold text-gray-900 mb-2">AI-Powered Tools</h3>
 							<p className="text-gray-600">
-								Get intelligent recommendations and insights
+								Get intelligent recommendations and insights for your agency
 							</p>
 						</div>
 					</div>
@@ -451,14 +510,13 @@ export default function PricingPage() {
 						Ready to Transform Your Agency?
 					</h2>
 					<p className="text-xl text-white opacity-90 mb-8">
-						Join hundreds of agencies already using our platform. Start with a free
-						trial today.
+						Request access to get started. Our team will reach out to onboard you.
 					</p>
 					<button
-						onClick={() => router.push("/auth/signin")}
+						onClick={() => router.push("/request-access")}
 						className="bg-white text-[#0B4F96] px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors shadow-lg"
 					>
-						Get Started Now
+						Request Access
 					</button>
 				</div>
 			</div>

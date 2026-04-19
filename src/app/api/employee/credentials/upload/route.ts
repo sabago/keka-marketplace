@@ -11,8 +11,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
+import { getOrCreateStaffRecord } from '@/lib/credentialHelpers';
 import { uploadToS3 } from '@/lib/s3';
 import { enqueueParsingJob } from '@/lib/jobQueue';
+import { canUploadCredential, incrementCredentialUploadCount } from '@/lib/subscriptionHelpers';
 import { z } from 'zod';
 
 // File validation
@@ -34,15 +36,10 @@ export async function POST(req: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: { id: true, agencyId: true, firstName: true, lastName: true },
-    });
-
+    const employee = await getOrCreateStaffRecord(user.id);
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee profile not found' },
+        { error: 'No agency association found. Please contact your administrator.' },
         { status: 404 }
       );
     }
@@ -69,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Invalid form data', details: validationResult.error.errors },
+        { error: 'Invalid form data', details: validationResult.error.issues },
         { status: 400 }
       );
     }
@@ -121,6 +118,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check credential upload limit (FREE plan: 10 lifetime uploads)
+    const credCheck = await canUploadCredential(employee.agencyId);
+    if (!credCheck.canUpload) {
+      return NextResponse.json(
+        {
+          error: 'CREDENTIAL_LIMIT_REACHED',
+          message: `Your free trial includes ${credCheck.limit} credential document uploads. You've used all ${credCheck.currentCount}. Upgrade to Pro for unlimited credential tracking.`,
+          currentCount: credCheck.currentCount,
+          limit: credCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
     // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -145,10 +156,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create EmployeeDocument record
-    const credential = await prisma.employeeDocument.create({
+    // Archive any previous credentials of the same type for this staff member.
+    await prisma.staffCredential.updateMany({
+      where: {
+        staffMemberId: employee.id,
+        documentTypeId,
+        status: { in: ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED'] },
+      },
+      data: { status: 'ARCHIVED' },
+    });
+
+    // Create StaffCredential record
+    const credential = await prisma.staffCredential.create({
       data: {
-        employeeId: employee.id,
+        staffMemberId: employee.id,
         documentTypeId,
         s3Key,
         fileName: file.name,
@@ -175,10 +196,13 @@ export async function POST(req: NextRequest) {
     );
 
     // Update credential with parsing job status
-    await prisma.employeeDocument.update({
+    await prisma.staffCredential.update({
       where: { id: credential.id },
       data: { reviewStatus: 'PENDING_REVIEW' },
     });
+
+    // Increment lifetime credential upload counter
+    await incrementCredentialUploadCount(employee.agencyId);
 
     return NextResponse.json({
       success: true,

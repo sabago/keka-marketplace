@@ -4,10 +4,10 @@ import { prisma } from "@/lib/db";
 // PATCH /api/admin/reviews/[id] - Approve a review
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const body = await request.json();
     
     // Update the review
@@ -31,10 +31,10 @@ export async function PATCH(
 // DELETE /api/admin/reviews/[id] - Delete a review
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     
     // Delete the review
     await prisma.review.delete({

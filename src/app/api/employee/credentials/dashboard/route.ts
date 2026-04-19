@@ -5,36 +5,29 @@
  * Includes: credentials list, compliance stats, upcoming expirations
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { getUpcomingExpirations } from '@/lib/credentialReminders';
+import { getOrCreateStaffRecord } from '@/lib/credentialHelpers';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: {
-        id: true,
-        agencyId: true,
-        firstName: true,
-        lastName: true,
-      },
-    });
+    // Find or auto-create staff record
+    const employee = await getOrCreateStaffRecord(user.id);
 
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee profile not found' },
+        { error: 'No agency association found for this account. Please contact your administrator.' },
         { status: 404 }
       );
     }
 
     // Get all credentials with document type info
-    const credentials = await prisma.employeeDocument.findMany({
-      where: { employeeId: employee.id },
+    const credentials = await prisma.staffCredential.findMany({
+      where: { staffMemberId: employee.id },
       include: {
         documentType: true,
         reminders: {
@@ -64,20 +57,38 @@ export async function GET(req: NextRequest) {
       ? Math.round((compliant / totalCredentials) * 100)
       : 0;
 
+    // Compute per-category breakdown for weighted compliance score in the widget
+    const categoryMap: Record<string, { compliant: number; total: number }> = {};
+    for (const c of credentials) {
+      const cat = (c.documentType?.category as string) ?? 'OTHER';
+      categoryMap[cat] ??= { compliant: 0, total: 0 };
+      categoryMap[cat].total++;
+      if (c.isCompliant) categoryMap[cat].compliant++;
+    }
+    const categoryBreakdown = Object.entries(categoryMap).map(([category, counts]) => ({
+      category,
+      ...counts,
+    }));
+
     // Get credentials needing action
     const needsAction = credentials.filter(
       (c) =>
         c.status === 'EXPIRED' ||
         c.status === 'EXPIRING_SOON' ||
         c.reviewStatus === 'PENDING_REVIEW' ||
-        c.reviewStatus === 'REJECTED'
+        c.reviewStatus === 'REJECTED' ||
+        c.reviewStatus === 'NEEDS_CORRECTION'
     );
+
+    const flaggedCount = credentials.filter(
+      (c) => c.reviewStatus === 'REJECTED' || c.reviewStatus === 'NEEDS_CORRECTION'
+    ).length;
 
     // Get recent reminders
     const recentReminders = await prisma.credentialReminder.findMany({
-      where: { employeeId: employee.id },
+      where: { staffMemberId: employee.id },
       include: {
-        credential: {
+        document: {
           include: {
             documentType: true,
           },
@@ -102,8 +113,10 @@ export async function GET(req: NextRequest) {
         expired,
         active,
         needsActionCount: needsAction.length,
+        flaggedCount,
       },
       credentials,
+      categoryBreakdown,
       needsAction,
       recentReminders,
       upcomingExpirations,

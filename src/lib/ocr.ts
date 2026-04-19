@@ -115,11 +115,23 @@ export class TesseractProvider implements OCRProvider {
     try {
       // Dynamically import tesseract to avoid build-time loading
       const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('eng');
 
+      // Next.js RSC bundler rewrites __dirname and require.resolve paths by
+      // prepending "(rsc)/" which makes the resolved path invalid at runtime.
+      // Use process.cwd() (the project root, always correct) to build the path.
+      const workerPath = require('path').join(
+        process.cwd(),
+        'node_modules',
+        'tesseract.js',
+        'src',
+        'worker-script',
+        'node',
+        'index.js'
+      );
+
+      const worker = await createWorker('eng', 1, { workerPath, logger: () => {} });
       const result = await worker.recognize(buffer);
       const text = result.data.text;
-
       await worker.terminate();
 
       return text;

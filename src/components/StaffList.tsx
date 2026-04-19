@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Mail,
@@ -11,6 +12,7 @@ import {
   Clock,
   XCircle,
   Shield,
+  FileText,
 } from "lucide-react";
 import { UserRole } from "@prisma/client";
 
@@ -37,6 +39,7 @@ export default function StaffList({
   onRemove,
   onResendInvitation,
 }: StaffListProps) {
+  const router = useRouter();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const getRoleBadge = (role: UserRole) => {
@@ -127,6 +130,9 @@ export default function StaffList({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Joined
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Credentials
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -161,6 +167,15 @@ export default function StaffList({
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                   {new Date(staff.createdAt).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <button
+                    onClick={() => router.push(`/agency/staff/${staff.id}`)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-[#0B4F96] border border-[#0B4F96] rounded hover:bg-[#0B4F96] hover:text-white transition-colors"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Credentials
+                  </button>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="relative inline-block">
@@ -247,36 +262,45 @@ export default function StaffList({
                 {staff.isPrimaryContact && (
                   <div className="text-xs text-gray-500 mb-2">Primary Contact</div>
                 )}
-                {!staff.isPrimaryContact && (
-                  <div className="flex gap-2">
-                    {staff.invitationStatus !== "active" && (
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => router.push(`/agency/staff/${staff.id}`)}
+                    className="flex items-center gap-1 px-3 py-1 text-xs text-[#0B4F96] border border-[#0B4F96] rounded hover:bg-[#0B4F96] hover:text-white transition-colors"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Credentials
+                  </button>
+                  {!staff.isPrimaryContact && (
+                    <>
+                      {staff.invitationStatus !== "active" && (
+                        <button
+                          onClick={() => onResendInvitation(staff.id)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-100 transition-colors"
+                        >
+                          <Send className="h-3 w-3" />
+                          Resend
+                        </button>
+                      )}
                       <button
-                        onClick={() => onResendInvitation(staff.id)}
-                        className="flex items-center gap-1 px-3 py-1 text-xs text-[#0B4F96] border border-[#0B4F96] rounded hover:bg-[#0B4F96] hover:text-white transition-colors"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Are you sure you want to remove ${
+                                staff.name || staff.email
+                              } from your agency?`
+                            )
+                          ) {
+                            onRemove(staff.id);
+                          }
+                        }}
+                        className="flex items-center gap-1 px-3 py-1 text-xs text-red-600 border border-red-600 rounded hover:bg-red-600 hover:text-white transition-colors"
                       >
-                        <Send className="h-3 w-3" />
-                        Resend
+                        <Trash2 className="h-3 w-3" />
+                        Remove
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Are you sure you want to remove ${
-                              staff.name || staff.email
-                            } from your agency?`
-                          )
-                        ) {
-                          onRemove(staff.id);
-                        }
-                      }}
-                      className="flex items-center gap-1 px-3 py-1 text-xs text-red-600 border border-red-600 rounded hover:bg-red-600 hover:text-white transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      Remove
-                    </button>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

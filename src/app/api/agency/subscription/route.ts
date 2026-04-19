@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAgency } from '@/lib/authHelpers';
-import { getSubscriptionStatus, getStaffLimit, hasUnlimitedStaff } from '@/lib/subscriptionHelpers';
+import { getSubscriptionStatus, getStaffLimit, hasUnlimitedStaff, getCredentialLimit, hasUnlimitedCredentials } from '@/lib/subscriptionHelpers';
 import { prisma } from '@/lib/db';
 
 /**
@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
     const staffLimit = getStaffLimit(agency.agencySize);
     const isUnlimitedStaff = hasUnlimitedStaff(agency.agencySize);
 
+    const credentialLimit = getCredentialLimit(agency.subscriptionPlan);
+    const isUnlimitedCredentials = hasUnlimitedCredentials(agency.subscriptionPlan);
+
     return NextResponse.json(
       {
         agency: {
@@ -33,6 +36,7 @@ export async function GET(req: NextRequest) {
           subscriptionStatus: agency.subscriptionStatus,
           queriesThisMonth: agency.queriesThisMonth,
           queriesAllTime: agency.queriesAllTime,
+          credentialUploadsTotal: agency.credentialUploadsTotal,
           billingPeriodStart: agency.billingPeriodStart,
           billingPeriodEnd: agency.billingPeriodEnd,
           stripeCustomerId: agency.stripeCustomerId,
@@ -41,6 +45,8 @@ export async function GET(req: NextRequest) {
         queryLimit: subscriptionStatus.queryLimit,
         queriesRemaining: subscriptionStatus.queriesRemaining,
         hasUnlimitedQueries: subscriptionStatus.hasUnlimitedQueries,
+        credentialLimit,
+        isUnlimitedCredentials,
         staffCount,
         staffLimit,
         isUnlimitedStaff,

@@ -15,11 +15,11 @@ import { requireAuth, requirePlatformAdmin } from '@/lib/authHelpers';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
     const { user } = await requireAuth();
-    const jobId = params.jobId;
+    const { jobId } = await params;
 
     // Get job status
     const status = await getJobStatus(jobId);
@@ -66,11 +66,11 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
     await requirePlatformAdmin();
-    const jobId = params.jobId;
+    const { jobId } = await params;
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
@@ -119,11 +119,11 @@ export async function POST(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
     await requirePlatformAdmin();
-    const jobId = params.jobId;
+    const { jobId } = await params;
 
     const success = await cancelJob(jobId);
 

@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
+import { getOrCreateStaffRecord } from '@/lib/credentialHelpers';
 import { z } from 'zod';
 
 const preferencesSchema = z.object({
@@ -28,27 +29,24 @@ export async function GET(req: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: {
-        id: true,
-        notificationPreferences: true,
-      },
-    });
-
-    if (!employee) {
+    const staffRecord = await getOrCreateStaffRecord(user.id);
+    if (!staffRecord) {
       return NextResponse.json(
-        { error: 'Employee profile not found' },
+        { error: 'No agency association found. Please contact your administrator.' },
         { status: 404 }
       );
     }
+
+    const employee = (await prisma.staffMember.findUnique({
+      where: { id: staffRecord.id },
+      select: { id: true, notificationPreferences: true },
+    }))!;
 
     // If preferences don't exist, create defaults
     if (!employee.notificationPreferences) {
       const defaultPreferences = await prisma.notificationPreferences.create({
         data: {
-          employeeId: employee.id,
+          staffMemberId: employee.id,
           emailEnabled: true,
           emailExpiringReminders: true,
           emailExpiredReminders: true,
@@ -99,7 +97,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(
         {
           error: 'Invalid preferences data',
-          details: validationResult.error.errors,
+          details: validationResult.error.issues,
         },
         { status: 400 }
       );
@@ -133,24 +131,19 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Find employee record
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
-    });
-
+    const employee = await getOrCreateStaffRecord(user.id);
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee profile not found' },
+        { error: 'No agency association found. Please contact your administrator.' },
         { status: 404 }
       );
     }
 
     // Update or create preferences
     const updatedPreferences = await prisma.notificationPreferences.upsert({
-      where: { employeeId: employee.id },
+      where: { staffMemberId: employee.id },
       create: {
-        employeeId: employee.id,
+        staffMemberId: employee.id,
         ...preferences,
       },
       update: preferences,

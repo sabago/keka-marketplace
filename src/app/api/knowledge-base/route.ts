@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+import { prisma } from '@/lib/db';
 
 // Recursively find all markdown files in a directory
 function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {

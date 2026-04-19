@@ -4,11 +4,10 @@ import { prisma } from '@/lib/db';
 // GET /api/admin/orders/[id] - Get a specific order by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fix the "params should be awaited" error
-    const { id } = await Promise.resolve(params);
+    const { id } = await params;
 
     // Get order with related data
     const order = await prisma.order.findUnique({
@@ -44,11 +43,10 @@ export async function GET(
 // POST /api/admin/orders/[id]/send-email - Resend download links email
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fix the "params should be awaited" error
-    const { id } = await Promise.resolve(params);
+    const { id } = await params;
 
     // Get order with related data
     const order = await prisma.order.findUnique({

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Lock, Mail, User, AlertCircle, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
@@ -9,6 +10,7 @@ function SetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
+  const { data: session } = useSession();
 
   const [validating, setValidating] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
@@ -28,7 +30,7 @@ function SetPasswordContent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Validate token on mount
+  // Sign out any active session, then validate token
   useEffect(() => {
     if (!token) {
       setTokenError('No token provided. Please check your email for the correct link.');
@@ -36,8 +38,12 @@ function SetPasswordContent() {
       return;
     }
 
-    validateToken();
-  }, [token]);
+    if (session) {
+      signOut({ redirect: false }).then(() => validateToken());
+    } else {
+      validateToken();
+    }
+  }, [token, session]);
 
   const validateToken = async () => {
     try {
@@ -173,10 +179,9 @@ function SetPasswordContent() {
                 <strong>What's next?</strong>
               </p>
               <ul className="mt-2 text-sm text-gray-600 space-y-1 list-disc list-inside">
-                <li>Redirecting you to sign in...</li>
-                <li>Use your email and new password to log in</li>
-                <li>Complete your agency profile</li>
-                <li>Start managing referrals and accessing resources</li>
+                <li>Use your email and new password to sign in</li>
+                <li>Your agency admin will guide you on next steps</li>
+                <li>Explore your dashboard and available tools</li>
               </ul>
             </div>
             <div className="flex items-center justify-center gap-2 text-gray-600">

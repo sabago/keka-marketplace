@@ -13,6 +13,38 @@ const sesClient = new SESClient({
 // Get the site URL from environment
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
+const isDev = process.env.NODE_ENV === 'development';
+
+async function sendEmail(to: string, subject: string, html: string, text: string): Promise<boolean> {
+  if (isDev) {
+    console.log('\n========== EMAIL (dev) ==========');
+    console.log(`TO:      ${to}`);
+    console.log(`SUBJECT: ${subject}`);
+    console.log(`BODY:\n${text}`);
+    console.log('=================================\n');
+    return true;
+  }
+
+  try {
+    const command = new SendEmailCommand({
+      Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Subject: { Data: subject, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: html, Charset: 'UTF-8' },
+          Text: { Data: text, Charset: 'UTF-8' },
+        },
+      },
+    });
+    await sesClient.send(command);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return false;
+  }
+}
+
 /**
  * Send an order confirmation email with download links
  * @param order Order details
@@ -142,37 +174,7 @@ export async function sendOrderConfirmationEmail(
   // Create text version of the email
   const textContent = `Thank you for your purchase! Order ID: ${order.id.substring(0, 8)}. Total: ${formattedTotal}. Your downloads are available at: ${downloads.map(d => `https://keka-marketplace-production.up.railway.app/api/download/${d.downloadToken}`).join(', ')}. Download links will expire in 30 days.`;
 
-  // Send the email using AWS SES directly
-  try {
-    const command = new SendEmailCommand({
-      Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
-      Destination: {
-        ToAddresses: [order.customerEmail],
-      },
-      Message: {
-        Subject: {
-          Data: `Your Purchase Receipt - Order #${order.id.substring(0, 8)}`,
-          Charset: 'UTF-8',
-        },
-        Body: {
-          Html: {
-            Data: htmlContent,
-            Charset: 'UTF-8',
-          },
-          Text: {
-            Data: textContent,
-            Charset: 'UTF-8',
-          },
-        },
-      },
-    });
-
-    await sesClient.send(command);
-    return true;
-  } catch (error) {
-    console.error('Error sending order confirmation email:', error);
-    return false;
-  }
+  return sendEmail(order.customerEmail, `Your Purchase Receipt - Order #${order.id.substring(0, 8)}`, htmlContent, textContent);
 }
 
 /**
@@ -323,36 +325,7 @@ This link will expire in 24 hours.
 Welcome aboard!
 The Platform Team`;
 
-  try {
-    const command = new SendEmailCommand({
-      Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
-      Destination: {
-        ToAddresses: [user.email],
-      },
-      Message: {
-        Subject: {
-          Data: `🎉 ${agencyName} - Agency Approved! Set Up Your Password`,
-          Charset: 'UTF-8',
-        },
-        Body: {
-          Html: {
-            Data: htmlContent,
-            Charset: 'UTF-8',
-          },
-          Text: {
-            Data: textContent,
-            Charset: 'UTF-8',
-          },
-        },
-      },
-    });
-
-    await sesClient.send(command);
-    return true;
-  } catch (error) {
-    console.error('Error sending agency approval email:', error);
-    return false;
-  }
+  return sendEmail(user.email, `🎉 ${agencyName} - Agency Approved! Set Up Your Password`, htmlContent, textContent);
 }
 
 /**
@@ -464,36 +437,7 @@ If you have questions or want to reapply, please contact our support team.
 Best regards,
 The Platform Team`;
 
-  try {
-    const command = new SendEmailCommand({
-      Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
-      Destination: {
-        ToAddresses: [user.email],
-      },
-      Message: {
-        Subject: {
-          Data: `${agencyName} - Application Update`,
-          Charset: 'UTF-8',
-        },
-        Body: {
-          Html: {
-            Data: htmlContent,
-            Charset: 'UTF-8',
-          },
-          Text: {
-            Data: textContent,
-            Charset: 'UTF-8',
-          },
-        },
-      },
-    });
-
-    await sesClient.send(command);
-    return true;
-  } catch (error) {
-    console.error('Error sending agency rejection email:', error);
-    return false;
-  }
+  return sendEmail(user.email, `${agencyName} - Application Update`, htmlContent, textContent);
 }
 
 /**
@@ -647,30 +591,21 @@ Contact Email: ${user.email}
 
 Review the application here: ${reviewUrl}`;
 
+  if (isDev) {
+    return sendEmail(adminEmails.join(', '), `📋 New Agency Application: ${agency.name}`, htmlContent, textContent);
+  }
   try {
     const command = new SendEmailCommand({
       Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
-      Destination: {
-        ToAddresses: adminEmails,
-      },
+      Destination: { ToAddresses: adminEmails },
       Message: {
-        Subject: {
-          Data: `📋 New Agency Application: ${agency.name}`,
-          Charset: 'UTF-8',
-        },
+        Subject: { Data: `📋 New Agency Application: ${agency.name}`, Charset: 'UTF-8' },
         Body: {
-          Html: {
-            Data: htmlContent,
-            Charset: 'UTF-8',
-          },
-          Text: {
-            Data: textContent,
-            Charset: 'UTF-8',
-          },
+          Html: { Data: htmlContent, Charset: 'UTF-8' },
+          Text: { Data: textContent, Charset: 'UTF-8' },
         },
       },
     });
-
     await sesClient.send(command);
     return true;
   } catch (error) {
@@ -817,34 +752,166 @@ This link will expire in 24 hours.
 Welcome to the team!
 The Platform Team`;
 
+  return sendEmail(staff.email, `🎉 You're invited to join ${agencyName}!`, htmlContent, textContent);
+}
+
+/**
+ * Send password reset email with reset link
+ */
+export async function sendPasswordResetEmail(
+  user: { email: string; name: string | null },
+  token: string
+): Promise<boolean> {
+  const resetUrl = `${SITE_URL}/auth/reset-password?token=${token}`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Reset Your Password</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #0B4F96 0%, #48ccbc 100%); padding: 30px 20px; text-align: center; color: white; }
+        .content { padding: 30px 20px; }
+        .cta-button { display: inline-block; background-color: #48ccbc; color: white !important; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+        .info-box { background-color: #f0f7ff; border-left: 4px solid #0B4F96; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { font-size: 12px; color: #6c757d; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>Reset Your Password</h1>
+      </div>
+      <div class="content">
+        <p>Hi ${user.name || 'there'},</p>
+        <p>We received a request to reset the password for your account.</p>
+        <div style="text-align: center;">
+          <a href="${resetUrl}" class="cta-button">Reset Password</a>
+        </div>
+        <div class="info-box">
+          <p><strong>Didn't request this?</strong></p>
+          <p>If you didn't request a password reset, you can safely ignore this email. Your password will not change.</p>
+        </div>
+        <p><strong>Note:</strong> This link will expire in 1 hour for security reasons.</p>
+        <p>
+          Best regards,<br>
+          The Platform Team
+        </p>
+      </div>
+      <div class="footer">
+        <p>&copy; ${new Date().getFullYear()} Healthcare Agency Platform. All rights reserved.</p>
+        <p>This email was sent to ${user.email}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `Reset Your Password
+
+Hi ${user.name || 'there'},
+
+We received a request to reset the password for your account.
+
+Reset your password here: ${resetUrl}
+
+This link will expire in 1 hour.
+
+If you didn't request this, ignore this email — your password won't change.
+
+Best regards,
+The Platform Team`;
+
+  return sendEmail(user.email, 'Reset your password', htmlContent, textContent);
+}
+
+/**
+ * Send access request notification to all platform admins
+ */
+export async function sendAccessRequestNotification(data: {
+  agencyName: string;
+  licenseNumber: string;
+  taxId: string;
+  state: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  hearAboutUs: string;
+}): Promise<boolean> {
+  const platformAdmins = await prisma.user.findMany({
+    where: { role: 'PLATFORM_ADMIN' },
+    select: { email: true },
+  });
+
+  const toAddresses = platformAdmins.length > 0
+    ? platformAdmins.map(a => a.email)
+    : [process.env.SES_SENDER_EMAIL || 'info@masteringhomecare.com'];
+
+  const adminPanelUrl = `${SITE_URL}/admin/agencies/new`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>New Agency Access Request</title></head>
+    <body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;">
+      <div style="background:linear-gradient(135deg,#0B4F96 0%,#48ccbc 100%);padding:30px 20px;text-align:center;color:white;">
+        <h1 style="margin:0;font-size:24px;">New Agency Access Request</h1>
+        <p style="margin:8px 0 0;opacity:0.9;">Someone wants to join the platform</p>
+      </div>
+      <div style="padding:30px 20px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;width:40%;">Agency Name</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.agencyName}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">License Number</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.licenseNumber}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">Tax ID / EIN</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.taxId}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">State</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.state}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">Contact Name</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.contactName}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">Contact Email</td><td style="padding:8px 0;border-bottom:1px solid #eee;"><a href="mailto:${data.contactEmail}">${data.contactEmail}</a></td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">Contact Phone</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.contactPhone}</td></tr>
+          ${data.hearAboutUs ? `<tr><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold;">How they heard</td><td style="padding:8px 0;border-bottom:1px solid #eee;">${data.hearAboutUs}</td></tr>` : ''}
+        </table>
+        <div style="margin-top:30px;text-align:center;">
+          <a href="${adminPanelUrl}" style="background:#0B4F96;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">
+            Add This Agency in Admin Panel
+          </a>
+        </div>
+        <p style="margin-top:24px;font-size:13px;color:#666;">Reply directly to <a href="mailto:${data.contactEmail}">${data.contactEmail}</a> to follow up with the agency.</p>
+      </div>
+    </body>
+    </html>`;
+
+  const textContent = `New Agency Access Request
+
+Agency Name:    ${data.agencyName}
+License Number: ${data.licenseNumber}
+Tax ID / EIN:   ${data.taxId}
+State:          ${data.state}
+Contact Name:   ${data.contactName}
+Contact Email:  ${data.contactEmail}
+Contact Phone:  ${data.contactPhone}
+${data.hearAboutUs ? `How they heard: ${data.hearAboutUs}` : ''}
+
+Add this agency in the admin panel: ${adminPanelUrl}`;
+
+  if (isDev) {
+    return sendEmail(toAddresses.join(', '), `New Agency Access Request: ${data.agencyName}`, htmlContent, textContent);
+  }
+
   try {
     const command = new SendEmailCommand({
       Source: process.env.SES_SENDER_EMAIL || 'noreply@yourdomain.com',
-      Destination: {
-        ToAddresses: [staff.email],
-      },
+      Destination: { ToAddresses: toAddresses },
       Message: {
-        Subject: {
-          Data: `🎉 You're invited to join ${agencyName}!`,
-          Charset: 'UTF-8',
-        },
+        Subject: { Data: `New Agency Access Request: ${data.agencyName}`, Charset: 'UTF-8' },
         Body: {
-          Html: {
-            Data: htmlContent,
-            Charset: 'UTF-8',
-          },
-          Text: {
-            Data: textContent,
-            Charset: 'UTF-8',
-          },
+          Html: { Data: htmlContent, Charset: 'UTF-8' },
+          Text: { Data: textContent, Charset: 'UTF-8' },
         },
       },
     });
-
     await sesClient.send(command);
     return true;
   } catch (error) {
-    console.error('Error sending staff invitation email:', error);
+    console.error('Error sending access request notification:', error);
     return false;
   }
 }

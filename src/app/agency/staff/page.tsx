@@ -36,7 +36,7 @@ export default function AgencyStaffPage() {
     } else if (
       session?.user &&
       session.user.role !== UserRole.AGENCY_ADMIN &&
-      session.user.role !== UserRole.PLATFORM_ADMIN
+      session.user.role !== UserRole.PLATFORM_ADMIN && session.user.role !== UserRole.SUPERADMIN
     ) {
       router.push("/dashboard");
     }
@@ -74,7 +74,7 @@ export default function AgencyStaffPage() {
     if (
       status === "authenticated" &&
       (session?.user.role === UserRole.AGENCY_ADMIN ||
-        session?.user.role === UserRole.PLATFORM_ADMIN)
+        session?.user.role === UserRole.PLATFORM_ADMIN || session?.user.role === UserRole.SUPERADMIN)
     ) {
       fetchStaffMembers();
     }
@@ -158,7 +158,7 @@ export default function AgencyStaffPage() {
   if (
     session?.user &&
     session.user.role !== UserRole.AGENCY_ADMIN &&
-    session.user.role !== UserRole.PLATFORM_ADMIN
+    session.user.role !== UserRole.PLATFORM_ADMIN && session.user.role !== UserRole.SUPERADMIN
   ) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

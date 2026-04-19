@@ -229,7 +229,7 @@ export async function POST(request: Request) {
           }
 
           // Determine subscription status
-          let status = SubscriptionStatus.ACTIVE;
+          let status: SubscriptionStatus = SubscriptionStatus.ACTIVE;
           if (subscription.status === 'trialing') {
             status = SubscriptionStatus.TRIAL;
           } else if (subscription.status === 'incomplete') {
@@ -288,7 +288,7 @@ export async function POST(request: Request) {
           }
 
           // Map Stripe status to our status
-          let status = SubscriptionStatus.ACTIVE;
+          let status: SubscriptionStatus = SubscriptionStatus.ACTIVE;
           if (subscription.status === 'trialing') {
             status = SubscriptionStatus.TRIAL;
           } else if (subscription.status === 'past_due') {

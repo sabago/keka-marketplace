@@ -18,6 +18,13 @@ import {
 import { UserRole, PlanType, AgencySize } from "@prisma/client";
 import { PLAN_PRICING, STAFF_LIMITS, getPriceIdForPlan } from "@/lib/subscriptionHelpers";
 
+const ANNUAL_PRICING: Record<PlanType, Record<AgencySize, number>> = {
+  FREE: { SMALL: 0, MEDIUM: 0, LARGE: 0 },
+  PRO: { SMALL: 490, MEDIUM: 990, LARGE: 1490 },
+  BUSINESS: { SMALL: 1990, MEDIUM: 2990, LARGE: 4490 },
+  ENTERPRISE: { SMALL: 4990, MEDIUM: 7990, LARGE: 11990 },
+};
+
 interface SubscriptionData {
   agency: {
     id: string;
@@ -27,6 +34,7 @@ interface SubscriptionData {
     subscriptionStatus: string;
     queriesThisMonth: number;
     queriesAllTime: number;
+    credentialUploadsTotal: number;
     billingPeriodStart: string;
     billingPeriodEnd: string;
     stripeCustomerId: string | null;
@@ -35,6 +43,8 @@ interface SubscriptionData {
   queryLimit: number;
   queriesRemaining: number;
   hasUnlimitedQueries: boolean;
+  credentialLimit: number;
+  isUnlimitedCredentials: boolean;
   staffCount: number;
   staffLimit: number;
   isUnlimitedStaff: boolean;
@@ -48,6 +58,7 @@ export default function SubscriptionManagementPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -55,7 +66,7 @@ export default function SubscriptionManagementPage() {
     } else if (
       session?.user &&
       session.user.role !== UserRole.AGENCY_ADMIN &&
-      session.user.role !== UserRole.PLATFORM_ADMIN
+      session.user.role !== UserRole.PLATFORM_ADMIN && session.user.role !== UserRole.SUPERADMIN
     ) {
       router.push("/dashboard");
     }
@@ -65,7 +76,7 @@ export default function SubscriptionManagementPage() {
     if (
       status === "authenticated" &&
       (session?.user.role === UserRole.AGENCY_ADMIN ||
-        session?.user.role === UserRole.PLATFORM_ADMIN)
+        session?.user.role === UserRole.PLATFORM_ADMIN || session?.user.role === UserRole.SUPERADMIN)
     ) {
       fetchSubscriptionData();
     }
@@ -94,7 +105,7 @@ export default function SubscriptionManagementPage() {
 
     try {
       setUpgrading(true);
-      const priceId = getPriceIdForPlan(planType, data.agency.agencySize);
+      const priceId = getPriceIdForPlan(planType, data.agency.agencySize, billingCycle);
 
       if (!priceId) {
         throw new Error("Price ID not found for this plan and agency size");
@@ -106,6 +117,7 @@ export default function SubscriptionManagementPage() {
         body: JSON.stringify({
           priceId,
           agencyId: data.agency.id,
+          billingCycle,
         }),
       });
 
@@ -142,9 +154,17 @@ export default function SubscriptionManagementPage() {
     }
   };
 
+  const isFreeplan = data?.agency.subscriptionPlan === PlanType.FREE;
+
   const getQueryUsagePercentage = () => {
     if (!data || data.hasUnlimitedQueries) return 0;
-    return Math.min(100, Math.round((data.agency.queriesThisMonth / data.queryLimit) * 100));
+    const used = isFreeplan ? data.agency.queriesAllTime : data.agency.queriesThisMonth;
+    return Math.min(100, Math.round((used / data.queryLimit) * 100));
+  };
+
+  const getCredentialUsagePercentage = () => {
+    if (!data || data.isUnlimitedCredentials) return 0;
+    return Math.min(100, Math.round((data.agency.credentialUploadsTotal / data.credentialLimit) * 100));
   };
 
   const getStaffUsagePercentage = () => {
@@ -181,6 +201,8 @@ export default function SubscriptionManagementPage() {
   const currentPrice = PLAN_PRICING[data.agency.subscriptionPlan][data.agency.agencySize];
   const queryUsagePercentage = getQueryUsagePercentage();
   const staffUsagePercentage = getStaffUsagePercentage();
+  const credentialUsagePercentage = getCredentialUsagePercentage();
+  const queriesUsedDisplay = isFreeplan ? data.agency.queriesAllTime : data.agency.queriesThisMonth;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -205,11 +227,13 @@ export default function SubscriptionManagementPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <p className="text-blue-100 mb-2">Current Plan</p>
-              <h2 className="text-3xl font-bold">{data.agency.subscriptionPlan}</h2>
+              <h2 className="text-3xl font-bold">
+                {data.agency.subscriptionPlan === "FREE" ? "Starter" : data.agency.subscriptionPlan}
+              </h2>
               <p className="text-blue-100 mt-1">
-                {data.agency.agencySize.charAt(0) +
-                  data.agency.agencySize.slice(1).toLowerCase()}{" "}
-                Agency
+                {data.agency.subscriptionPlan === "FREE"
+                  ? "20 free queries included"
+                  : `${data.agency.agencySize.charAt(0) + data.agency.agencySize.slice(1).toLowerCase()} Agency`}
               </p>
             </div>
             <div>
@@ -218,7 +242,7 @@ export default function SubscriptionManagementPage() {
                 {currentPrice === 0 ? "Free" : `$${currentPrice}`}
               </h2>
               <p className="text-blue-100 mt-1">
-                {currentPrice === 0 ? "Forever" : "per month"}
+                {currentPrice === 0 ? "Upgrade when queries run out" : "per month"}
               </p>
             </div>
             <div>
@@ -250,19 +274,21 @@ export default function SubscriptionManagementPage() {
         </div>
 
         {/* Usage Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className={`grid grid-cols-1 ${isFreeplan ? "md:grid-cols-3" : "md:grid-cols-2"} gap-6 mb-8`}>
           {/* Query Usage */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Query Usage</h3>
+              <h3 className="text-lg font-semibold text-gray-900">AI Query Usage</h3>
               <TrendingUp className="h-5 w-5 text-[#0B4F96]" />
             </div>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">This Month</span>
+                  <span className="text-gray-600">
+                    {isFreeplan ? "Lifetime Used" : "This Month"}
+                  </span>
                   <span className="font-semibold text-gray-900">
-                    {data.agency.queriesThisMonth} /{" "}
+                    {queriesUsedDisplay} /{" "}
                     {data.hasUnlimitedQueries ? "Unlimited" : data.queryLimit}
                   </span>
                 </div>
@@ -281,15 +307,17 @@ export default function SubscriptionManagementPage() {
                   </div>
                 )}
               </div>
-              <div className="pt-4 border-t border-gray-200">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">All Time</span>
-                  <span className="font-semibold text-gray-900">
-                    {data.agency.queriesAllTime} queries
-                  </span>
+              {!isFreeplan && (
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">All Time</span>
+                    <span className="font-semibold text-gray-900">
+                      {data.agency.queriesAllTime} queries
+                    </span>
+                  </div>
                 </div>
-              </div>
-              {data.agency.billingPeriodEnd && (
+              )}
+              {!isFreeplan && data.agency.billingPeriodEnd && (
                 <div className="pt-4 border-t border-gray-200">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />
@@ -298,8 +326,52 @@ export default function SubscriptionManagementPage() {
                   </div>
                 </div>
               )}
+              {isFreeplan && (
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">
+                    Free trial limit — does not reset. Upgrade for monthly query allowances.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Credential Document Usage — FREE plan only */}
+          {isFreeplan && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Credential Documents</h3>
+                <TrendingUp className="h-5 w-5 text-[#0B4F96]" />
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-600">Lifetime Uploads</span>
+                    <span className="font-semibold text-gray-900">
+                      {data.agency.credentialUploadsTotal} / {data.credentialLimit}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all ${
+                        credentialUsagePercentage >= 90
+                          ? "bg-red-500"
+                          : credentialUsagePercentage >= 70
+                          ? "bg-yellow-500"
+                          : "bg-[#48ccbc]"
+                      }`}
+                      style={{ width: `${credentialUsagePercentage}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded p-2">
+                    Free trial limit — does not reset. Upgrade to Pro for unlimited credential tracking.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Staff Usage */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -354,7 +426,36 @@ export default function SubscriptionManagementPage() {
         {/* Upgrade Options */}
         {data.agency.subscriptionPlan !== PlanType.ENTERPRISE && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Upgrade Your Plan</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Upgrade Your Plan</h2>
+
+              {/* Billing cycle toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 self-start sm:self-auto">
+                <button
+                  onClick={() => setBillingCycle("monthly")}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    billingCycle === "monthly"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setBillingCycle("annual")}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    billingCycle === "annual"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Annual
+                  <span className="text-[10px] font-bold bg-[#48ccbc] text-white px-1.5 py-0.5 rounded">
+                    2 months free
+                  </span>
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* PRO */}
@@ -364,17 +465,28 @@ export default function SubscriptionManagementPage() {
                     <Crown className="h-6 w-6 text-[#48ccbc]" />
                     <h3 className="text-xl font-bold text-gray-900">Pro</h3>
                   </div>
-                  <p className="text-3xl font-bold text-[#0B4F96] mb-4">
-                    ${PLAN_PRICING.PRO[data.agency.agencySize]}/mo
-                  </p>
-                  <ul className="space-y-2 mb-6">
+                  {billingCycle === "monthly" ? (
+                    <p className="text-3xl font-bold text-[#0B4F96] mb-1">
+                      ${PLAN_PRICING.PRO[data.agency.agencySize]}<span className="text-lg font-normal">/mo</span>
+                    </p>
+                  ) : (
+                    <div className="mb-1">
+                      <p className="text-3xl font-bold text-[#0B4F96]">
+                        ${ANNUAL_PRICING.PRO[data.agency.agencySize]}<span className="text-lg font-normal">/yr</span>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        ${Math.round(ANNUAL_PRICING.PRO[data.agency.agencySize] / 12)}/mo · Save ${PLAN_PRICING.PRO[data.agency.agencySize] * 2}
+                      </p>
+                    </div>
+                  )}
+                  <ul className="space-y-2 mb-6 mt-4">
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
                       200 queries per month
                     </li>
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
-                      Advanced analytics
+                      Unlimited credential tracking
                     </li>
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
@@ -399,17 +511,28 @@ export default function SubscriptionManagementPage() {
                     <Crown className="h-6 w-6 text-[#0B4F96]" />
                     <h3 className="text-xl font-bold text-gray-900">Business</h3>
                   </div>
-                  <p className="text-3xl font-bold text-[#0B4F96] mb-4">
-                    ${PLAN_PRICING.BUSINESS[data.agency.agencySize]}/mo
-                  </p>
-                  <ul className="space-y-2 mb-6">
+                  {billingCycle === "monthly" ? (
+                    <p className="text-3xl font-bold text-[#0B4F96] mb-1">
+                      ${PLAN_PRICING.BUSINESS[data.agency.agencySize]}<span className="text-lg font-normal">/mo</span>
+                    </p>
+                  ) : (
+                    <div className="mb-1">
+                      <p className="text-3xl font-bold text-[#0B4F96]">
+                        ${ANNUAL_PRICING.BUSINESS[data.agency.agencySize]}<span className="text-lg font-normal">/yr</span>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        ${Math.round(ANNUAL_PRICING.BUSINESS[data.agency.agencySize] / 12)}/mo · Save ${PLAN_PRICING.BUSINESS[data.agency.agencySize] * 2}
+                      </p>
+                    </div>
+                  )}
+                  <ul className="space-y-2 mb-6 mt-4">
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
                       Unlimited queries
                     </li>
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
-                      Advanced forecasting
+                      Advanced analytics & forecasting
                     </li>
                     <li className="flex items-start gap-2 text-sm text-gray-700">
                       <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
@@ -432,10 +555,21 @@ export default function SubscriptionManagementPage() {
                   <Crown className="h-6 w-6 text-gray-600" />
                   <h3 className="text-xl font-bold text-gray-900">Enterprise</h3>
                 </div>
-                <p className="text-3xl font-bold text-[#0B4F96] mb-4">
-                  ${PLAN_PRICING.ENTERPRISE[data.agency.agencySize]}/mo
-                </p>
-                <ul className="space-y-2 mb-6">
+                {billingCycle === "monthly" ? (
+                  <p className="text-3xl font-bold text-[#0B4F96] mb-1">
+                    ${PLAN_PRICING.ENTERPRISE[data.agency.agencySize]}<span className="text-lg font-normal">/mo</span>
+                  </p>
+                ) : (
+                  <div className="mb-1">
+                    <p className="text-3xl font-bold text-[#0B4F96]">
+                      ${ANNUAL_PRICING.ENTERPRISE[data.agency.agencySize]}<span className="text-lg font-normal">/yr</span>
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      ${Math.round(ANNUAL_PRICING.ENTERPRISE[data.agency.agencySize] / 12)}/mo · Save ${PLAN_PRICING.ENTERPRISE[data.agency.agencySize] * 2}
+                    </p>
+                  </div>
+                )}
+                <ul className="space-y-2 mb-6 mt-4">
                   <li className="flex items-start gap-2 text-sm text-gray-700">
                     <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
                     Everything in Business
@@ -460,6 +594,12 @@ export default function SubscriptionManagementPage() {
                 </button>
               </div>
             </div>
+
+            {billingCycle === "annual" && (
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                Annual plans are billed upfront for 12 months. You save the equivalent of 2 months compared to monthly billing.
+              </p>
+            )}
           </div>
         )}
       </div>

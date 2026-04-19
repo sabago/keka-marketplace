@@ -47,16 +47,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Check query limit
-    const limitCheck = await checkQueryLimit(user.agencyId);
+    const limitCheck = await checkQueryLimit(user.agencyId, user.role);
 
     if (!limitCheck.allowed) {
       return NextResponse.json(
         {
           error: 'Query limit exceeded',
-          message: `You have reached your monthly query limit of ${limitCheck.limit} queries.`,
+          message: limitCheck.message,
           remaining: 0,
           limit: limitCheck.limit,
           plan: limitCheck.plan,
+          isLifetime: limitCheck.isLifetime,
           upgradeRequired: limitCheck.upgradeRequired,
         },
         { status: 429 }

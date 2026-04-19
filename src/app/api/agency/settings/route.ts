@@ -58,7 +58,6 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
 
     const {
-      agencyName,
       agencySize,
       servicesOffered,
       serviceArea,
@@ -104,7 +103,6 @@ export async function PUT(req: NextRequest) {
     // Build update object with only provided fields
     const updateData: any = {};
 
-    if (agencyName !== undefined) updateData.agencyName = agencyName;
     if (agencySize !== undefined) updateData.agencySize = agencySize;
     if (servicesOffered !== undefined) updateData.servicesOffered = servicesOffered;
     if (serviceArea !== undefined) updateData.serviceArea = serviceArea;
@@ -134,10 +132,9 @@ export async function PUT(req: NextRequest) {
     // Log the admin action
     await prisma.adminAction.create({
       data: {
-        userId: user.id,
-        action: 'AGENCY_SETTINGS_UPDATED',
-        entityType: 'Agency',
-        entityId: agency.id,
+        adminId: user.id,
+        actionType: 'AGENCY_SETTINGS_UPDATED',
+        targetAgencyId: agency.id,
         details: {
           updatedFields: Object.keys(updateData),
           agencyName: updatedAgency.agencyName,

@@ -21,17 +21,17 @@ import { z } from 'zod';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgencyAdmin();
-    const credentialId = params.id;
+    const { id: credentialId } = await params;
 
     // Get credential with all related data
-    const credential = await prisma.employeeDocument.findUnique({
+    const credential = await prisma.staffCredential.findUnique({
       where: { id: credentialId },
       include: {
-        employee: {
+        staffMember: {
           select: {
             id: true,
             firstName: true,
@@ -58,8 +58,9 @@ export async function GET(
       );
     }
 
-    // Verify admin has access to this credential
-    if (user.role === 'AGENCY_ADMIN' && credential.employee.agencyId !== agency.id) {
+    // Verify admin has access to this credential (platform/super admins have full access)
+    const isAgencyScopedAdmin = user.role === 'AGENCY_ADMIN' || user.role === 'SUPERADMIN';
+    if (isAgencyScopedAdmin && credential.staffMember.agencyId !== agency.id) {
       return NextResponse.json(
         { error: 'You do not have permission to review this credential' },
         { status: 403 }
@@ -75,7 +76,7 @@ export async function GET(
 
     // Get parsing job info if exists
     const parsingJob = await prisma.credentialParsingJob.findFirst({
-      where: { credentialId },
+      where: { documentId: credentialId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -122,11 +123,11 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgencyAdmin();
-    const credentialId = params.id;
+    const { id: credentialId } = await params;
 
     // Parse and validate request body
     const ReviewSchema = z.object({
@@ -148,7 +149,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: 'Invalid request body',
-          details: validation.error.errors,
+          details: validation.error.issues,
         },
         { status: 400 }
       );
@@ -157,10 +158,10 @@ export async function POST(
     const { action, notes, corrections } = validation.data;
 
     // Get credential and verify access
-    const credential = await prisma.employeeDocument.findUnique({
+    const credential = await prisma.staffCredential.findUnique({
       where: { id: credentialId },
       include: {
-        employee: {
+        staffMember: {
           select: {
             agencyId: true,
             agency: {
@@ -170,6 +171,7 @@ export async function POST(
             },
           },
         },
+        documentType: true,
       },
     });
 
@@ -180,8 +182,9 @@ export async function POST(
       );
     }
 
-    // Verify admin has access
-    if (user.role === 'AGENCY_ADMIN' && credential.employee.agencyId !== agency.id) {
+    // Verify admin has access (platform/super admins have full access)
+    const isAgencyScopedAdmin = user.role === 'AGENCY_ADMIN' || user.role === 'SUPERADMIN';
+    if (isAgencyScopedAdmin && credential.staffMember.agencyId !== agency.id) {
       return NextResponse.json(
         { error: 'You do not have permission to review this credential' },
         { status: 403 }
@@ -194,7 +197,7 @@ export async function POST(
     if (action === 'approve') {
       // Approve credential
       await prisma.$transaction(async (tx) => {
-        updatedCredential = await tx.employeeDocument.update({
+        updatedCredential = await tx.staffCredential.update({
           where: { id: credentialId },
           data: {
             reviewStatus: 'APPROVED',
@@ -212,21 +215,21 @@ export async function POST(
           data: {
             adminId: user.id,
             actionType: 'APPROVE_CREDENTIAL',
-            targetAgencyId: credential.employee.agencyId,
+            targetAgencyId: credential.staffMember.agencyId,
             notes: `Approved credential: ${credential.fileName}${notes ? ` - ${notes}` : ''}`,
           },
         });
       });
 
       // Send approval notification email (async, don't block response)
-      const employeeWithDetails = await prisma.employee.findUnique({
-        where: { id: credential.employeeId },
+      const employeeWithDetails = await prisma.staffMember.findUnique({
+        where: { id: credential.staffMemberId },
         select: { firstName: true, lastName: true, email: true },
       });
 
-      if (employeeWithDetails) {
+      if (employeeWithDetails?.email) {
         sendCredentialApprovedNotification(
-          employeeWithDetails,
+          { ...employeeWithDetails, email: employeeWithDetails.email },
           {
             id: credentialId,
             documentTypeName: credential.documentType?.name || 'Credential',
@@ -246,7 +249,7 @@ export async function POST(
     } else if (action === 'reject') {
       // Reject credential
       await prisma.$transaction(async (tx) => {
-        updatedCredential = await tx.employeeDocument.update({
+        updatedCredential = await tx.staffCredential.update({
           where: { id: credentialId },
           data: {
             reviewStatus: 'REJECTED',
@@ -262,21 +265,21 @@ export async function POST(
           data: {
             adminId: user.id,
             actionType: 'REJECT_CREDENTIAL',
-            targetEmployeeId: credential.employeeId,
+            targetAgencyId: credential.staffMember.agencyId,
             notes: `Rejected credential: ${credential.fileName}${notes ? ` - ${notes}` : ''}`,
           },
         });
       });
 
       // Send rejection notification email (async, don't block response)
-      const employeeWithDetails = await prisma.employee.findUnique({
-        where: { id: credential.employeeId },
+      const employeeWithDetails = await prisma.staffMember.findUnique({
+        where: { id: credential.staffMemberId },
         select: { firstName: true, lastName: true, email: true },
       });
 
-      if (employeeWithDetails) {
+      if (employeeWithDetails?.email) {
         sendCredentialRejectedNotification(
-          employeeWithDetails,
+          { ...employeeWithDetails, email: employeeWithDetails.email },
           {
             id: credentialId,
             documentTypeName: credential.documentType?.name || 'Credential',
@@ -305,11 +308,11 @@ export async function POST(
       const newExpirationDate = corrections.expirationDate || credential.expirationDate;
       const newStatus = calculateCredentialStatus(
         newExpirationDate,
-        credential.employee.agency.credentialWarningDays
+        credential.staffMember.agency.credentialWarningDays
       );
 
       await prisma.$transaction(async (tx) => {
-        updatedCredential = await tx.employeeDocument.update({
+        updatedCredential = await tx.staffCredential.update({
           where: { id: credentialId },
           data: {
             // Apply corrections
@@ -342,21 +345,21 @@ export async function POST(
           data: {
             adminId: user.id,
             actionType: 'EDIT_CREDENTIAL',
-            targetAgencyId: credential.employee.agencyId,
+            targetAgencyId: credential.staffMember.agencyId,
             notes: `Edited and approved credential: ${credential.fileName}. Corrections: ${correctionsList}${notes ? `. Notes: ${notes}` : ''}`,
           },
         });
       });
 
       // Send approval notification email (async, don't block response)
-      const employeeWithDetails = await prisma.employee.findUnique({
-        where: { id: credential.employeeId },
+      const employeeWithDetails = await prisma.staffMember.findUnique({
+        where: { id: credential.staffMemberId },
         select: { firstName: true, lastName: true, email: true },
       });
 
-      if (employeeWithDetails) {
+      if (employeeWithDetails?.email) {
         sendCredentialApprovedNotification(
-          employeeWithDetails,
+          { ...employeeWithDetails, email: employeeWithDetails.email },
           {
             id: credentialId,
             documentTypeName: credential.documentType?.name || 'Credential',
@@ -383,7 +386,7 @@ export async function POST(
       }
 
       await prisma.$transaction(async (tx) => {
-        updatedCredential = await tx.employeeDocument.update({
+        updatedCredential = await tx.staffCredential.update({
           where: { id: credentialId },
           data: {
             reviewStatus: 'NEEDS_CORRECTION',
@@ -398,21 +401,21 @@ export async function POST(
           data: {
             adminId: user.id,
             actionType: 'REQUEST_CORRECTION',
-            targetAgencyId: credential.employee.agencyId,
+            targetAgencyId: credential.staffMember.agencyId,
             notes: `Requested correction for credential: ${credential.fileName}. Reason: ${notes}`,
           },
         });
       });
 
       // Send correction email to employee (async, don't block response)
-      const employeeWithDetails = await prisma.employee.findUnique({
-        where: { id: credential.employeeId },
+      const employeeWithDetails = await prisma.staffMember.findUnique({
+        where: { id: credential.staffMemberId },
         select: { firstName: true, lastName: true, email: true },
       });
 
-      if (employeeWithDetails) {
+      if (employeeWithDetails?.email) {
         sendCredentialRejectedNotification(
-          employeeWithDetails,
+          { ...employeeWithDetails, email: employeeWithDetails.email },
           {
             id: credentialId,
             documentTypeName: credential.documentType?.name || 'Credential',

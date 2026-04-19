@@ -803,3 +803,126 @@ Your Agency HR Team`;
     return false;
   }
 }
+
+/**
+ * Send weekly compliance digest email to an agency admin
+ */
+export async function sendWeeklyComplianceDigest(
+  admin: { email: string; firstName: string; lastName: string },
+  agencyName: string,
+  summary: {
+    total: number;
+    valid: number;
+    expiringSoon: number;
+    expired: number;
+    missing: number;
+    pendingReview: number;
+    complianceRate: number;
+  },
+  urgentCredentials: Array<{
+    employeeName: string;
+    documentTypeName: string;
+    expirationDate: Date | null;
+    status: string;
+  }>
+): Promise<boolean> {
+  const urgentRows = urgentCredentials
+    .map(
+      (c) =>
+        `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee">${c.employeeName}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee">${c.documentTypeName}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee">${c.expirationDate ? new Date(c.expirationDate).toLocaleDateString('en-US') : 'N/A'}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee">${c.status}</td>
+        </tr>`
+    )
+    .join('');
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>Weekly Compliance Digest</title></head>
+    <body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto">
+      <div style="background:#0B4F96;padding:24px 20px;text-align:center;color:#fff">
+        <h1 style="margin:0;font-size:22px">Weekly Compliance Digest</h1>
+        <p style="margin:4px 0 0;opacity:.9">${agencyName}</p>
+      </div>
+      <div style="padding:24px 20px">
+        <p>Hi ${admin.firstName},</p>
+        <p>Here is your weekly credential compliance summary for <strong>${agencyName}</strong>.</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+          <tr style="background:#f5f7fa">
+            <td style="padding:8px 12px;font-weight:bold">Compliance Rate</td>
+            <td style="padding:8px 12px">${summary.complianceRate.toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px">Total Credentials</td>
+            <td style="padding:8px 12px">${summary.total}</td>
+          </tr>
+          <tr style="background:#f5f7fa">
+            <td style="padding:8px 12px">Valid</td>
+            <td style="padding:8px 12px;color:#16a34a">${summary.valid}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px">Expiring Soon</td>
+            <td style="padding:8px 12px;color:#d97706">${summary.expiringSoon}</td>
+          </tr>
+          <tr style="background:#f5f7fa">
+            <td style="padding:8px 12px">Expired</td>
+            <td style="padding:8px 12px;color:#dc2626">${summary.expired}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px">Missing</td>
+            <td style="padding:8px 12px;color:#dc2626">${summary.missing}</td>
+          </tr>
+          <tr style="background:#f5f7fa">
+            <td style="padding:8px 12px">Pending Review</td>
+            <td style="padding:8px 12px">${summary.pendingReview}</td>
+          </tr>
+        </table>
+        ${
+          urgentCredentials.length > 0
+            ? `<h3 style="color:#dc2626;margin-top:0">Urgent Credentials</h3>
+              <table style="width:100%;border-collapse:collapse;font-size:14px">
+                <thead>
+                  <tr style="background:#fee2e2;color:#7f1d1d">
+                    <th style="padding:8px;text-align:left">Employee</th>
+                    <th style="padding:8px;text-align:left">Credential</th>
+                    <th style="padding:8px;text-align:left">Expires</th>
+                    <th style="padding:8px;text-align:left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>${urgentRows}</tbody>
+              </table>`
+            : '<p style="color:#16a34a">No urgent credentials this week.</p>'
+        }
+        <p style="margin-top:24px">
+          <a href="${SITE_URL}/agency/credentials" style="background:#0B4F96;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">View All Credentials</a>
+        </p>
+      </div>
+    </body>
+    </html>`;
+
+  try {
+    const command = new SendEmailCommand({
+      Source: process.env.FROM_EMAIL || 'noreply@example.com',
+      Destination: { ToAddresses: [admin.email] },
+      Message: {
+        Subject: { Data: `Weekly Compliance Digest — ${agencyName}`, Charset: 'UTF-8' },
+        Body: {
+          Html: { Data: htmlContent, Charset: 'UTF-8' },
+          Text: {
+            Data: `Weekly Compliance Digest for ${agencyName}\n\nCompliance Rate: ${summary.complianceRate.toFixed(1)}%\nTotal: ${summary.total} | Valid: ${summary.valid} | Expiring: ${summary.expiringSoon} | Expired: ${summary.expired}`,
+            Charset: 'UTF-8',
+          },
+        },
+      },
+    });
+
+    await sesClient.send(command);
+    return true;
+  } catch (error) {
+    console.error('Error sending weekly compliance digest:', error);
+    return false;
+  }
+}

@@ -5,10 +5,9 @@ import { getFileFromS3 } from '@/lib/s3';
 // GET /api/download/[token] - Download a file using a token
 export async function GET(
   request: Request,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
-  // Use await to fix the "params should be awaited" error
-  const { token } = await Promise.resolve(params);
+  const { token } = await params;
   
   try {
     // Find download record by token

@@ -18,7 +18,8 @@ interface Article {
 
 export default function AdminKnowledgeBasePage() {
   const router = useRouter();
-  const { isAdmin, loading: adminLoading } = useAdminAccess();
+  const { hasAdminAccess: isAdmin } = useAdminAccess();
+  const adminLoading = false;
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);

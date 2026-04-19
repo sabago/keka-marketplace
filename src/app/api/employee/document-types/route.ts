@@ -8,20 +8,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
+import { getOrCreateStaffRecord } from '@/lib/credentialHelpers';
 
 export async function GET(req: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: { id: true, agencyId: true },
-    });
-
+    const employee = await getOrCreateStaffRecord(user.id);
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee profile not found' },
+        { error: 'No agency association found. Please contact your administrator.' },
         { status: 404 }
       );
     }

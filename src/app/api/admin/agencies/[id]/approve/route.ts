@@ -12,18 +12,19 @@ import { ApprovalStatus } from '@prisma/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require platform admin authentication
     const admin = await requireSuperadmin();
+    const { id } = await params;
 
     const body = await request.json().catch(() => ({}));
     const { notes } = body;
 
     // Get the agency with primary contact
     const agency = await prisma.agency.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         users: {
           where: { isPrimaryContact: true },
@@ -53,52 +54,54 @@ export async function POST(
       );
     }
 
-    // Generate password setup token
-    const token = await generatePasswordSetupToken(primaryContact.id);
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Failed to generate password setup token' },
-        { status: 500 }
-      );
-    }
+    // Platform/super admins already have accounts — skip password setup email
+    const alreadyHasAccount = primaryContact.role === 'PLATFORM_ADMIN' || primaryContact.role === 'SUPERADMIN';
 
     // Update agency and log action in transaction
     await prisma.$transaction(async (tx) => {
-      // Update agency approval status
       await tx.agency.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           approvalStatus: ApprovalStatus.APPROVED,
           approvedAt: new Date(),
           approvedBy: admin.id,
-          approvalEmailSent: true,
+          approvalEmailSent: !alreadyHasAccount,
         },
       });
 
-      // Log admin action
       await tx.adminAction.create({
         data: {
           adminId: admin.id,
           actionType: 'APPROVE_AGENCY',
-          targetAgencyId: params.id,
+          targetAgencyId: id,
           notes: notes || null,
         },
       });
     });
 
-    // Send approval email with password setup link
-    const emailSent = await sendAgencyApprovalEmail(
-      {
-        email: primaryContact.email,
-        name: primaryContact.name || 'User',
-      },
-      token,
-      agency.agencyName
-    );
+    let emailSent = false;
+    if (!alreadyHasAccount) {
+      // Generate password setup token and send approval email
+      const token = await generatePasswordSetupToken(primaryContact.id);
+      if (!token) {
+        return NextResponse.json(
+          { error: 'Failed to generate password setup token' },
+          { status: 500 }
+        );
+      }
 
-    if (!emailSent) {
-      console.error('Failed to send approval email to:', primaryContact.email);
-      // Don't fail the request - approval is already saved
+      emailSent = await sendAgencyApprovalEmail(
+        {
+          email: primaryContact.email,
+          name: primaryContact.name || 'User',
+        },
+        token,
+        agency.agencyName
+      );
+
+      if (!emailSent) {
+        console.error('Failed to send approval email to:', primaryContact.email);
+      }
     }
 
     return NextResponse.json({

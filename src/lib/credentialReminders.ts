@@ -99,14 +99,14 @@ export async function processCredentialReminders(): Promise<{
     console.log('[REMINDERS] Starting credential reminder processing...');
 
     // Get all active, approved credentials with expiration dates
-    const credentials = await prisma.employeeDocument.findMany({
+    const credentials = await prisma.staffCredential.findMany({
       where: {
         expirationDate: { not: null },
         reviewStatus: 'APPROVED',
         status: { in: ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED'] },
       },
       include: {
-        employee: {
+        staffMember: {
           select: {
             id: true,
             firstName: true,
@@ -156,16 +156,16 @@ export async function processCredentialReminders(): Promise<{
 
           // Check notification preferences
           const prefsAllow = shouldSendBasedOnPreferences(
-            credential.employee.notificationPreferences,
+            credential.staffMember.notificationPreferences,
             'expired'
           );
 
           if (shouldSendExpired && prefsAllow) {
             const sent = await sendCredentialExpiredNotification(
               {
-                firstName: credential.employee.firstName,
-                lastName: credential.employee.lastName,
-                email: credential.employee.email,
+                firstName: credential.staffMember.firstName,
+                lastName: credential.staffMember.lastName,
+                email: credential.staffMember.email ?? '',
               },
               {
                 id: credential.id,
@@ -180,11 +180,11 @@ export async function processCredentialReminders(): Promise<{
               await prisma.credentialReminder.create({
                 data: {
                   documentId: credential.id,
-                  employeeId: credential.employee.id,
-                  agencyId: credential.employee.agencyId,
+                  staffMemberId: credential.staffMember.id,
+                  agencyId: credential.staffMember.agencyId,
                   reminderType: 'EXPIRED',
                   channel: 'EMAIL',
-                  sentTo: [credential.employee.email || ''],
+                  sentTo: [credential.staffMember.email || ''],
                   daysBeforeExpiry: daysUntilExpiration,
                   sentAt: new Date(),
                 },
@@ -192,19 +192,19 @@ export async function processCredentialReminders(): Promise<{
 
               expiredNotificationsSent++;
               details.push(
-                `Sent EXPIRED notification for ${credential.documentType.name} to ${credential.employee.email}`
+                `Sent EXPIRED notification for ${credential.documentType.name} to ${credential.staffMember.email}`
               );
             } else {
               errors++;
               details.push(
-                `Failed to send EXPIRED notification for ${credential.documentType.name} to ${credential.employee.email}`
+                `Failed to send EXPIRED notification for ${credential.documentType.name} to ${credential.staffMember.email}`
               );
             }
           }
         } else {
           // Check if this is a reminder day based on employee preferences
           const employeeReminderDays = getReminderDays(
-            credential.employee.notificationPreferences
+            credential.staffMember.notificationPreferences
           );
 
           if (employeeReminderDays.includes(daysUntilExpiration)) {
@@ -217,16 +217,16 @@ export async function processCredentialReminders(): Promise<{
 
             // Check notification preferences
             const prefsAllow = shouldSendBasedOnPreferences(
-              credential.employee.notificationPreferences,
+              credential.staffMember.notificationPreferences,
               'expiring'
             );
 
             if (shouldSend && prefsAllow) {
               const sent = await sendCredentialExpiringReminder(
               {
-                firstName: credential.employee.firstName,
-                lastName: credential.employee.lastName,
-                email: credential.employee.email,
+                firstName: credential.staffMember.firstName,
+                lastName: credential.staffMember.lastName,
+                email: credential.staffMember.email ?? '',
               },
               {
                 id: credential.id,
@@ -242,11 +242,11 @@ export async function processCredentialReminders(): Promise<{
               await prisma.credentialReminder.create({
                 data: {
                   documentId: credential.id,
-                  employeeId: credential.employee.id,
-                  agencyId: credential.employee.agencyId,
+                  staffMemberId: credential.staffMember.id,
+                  agencyId: credential.staffMember.agencyId,
                   reminderType: 'EXPIRING_SOON',
                   channel: 'EMAIL',
-                  sentTo: [credential.employee.email || ''],
+                  sentTo: [credential.staffMember.email || ''],
                   daysBeforeExpiry: daysUntilExpiration,
                   sentAt: new Date(),
                 },
@@ -254,12 +254,12 @@ export async function processCredentialReminders(): Promise<{
 
               remindersSent++;
               details.push(
-                `Sent EXPIRING reminder (${daysUntilExpiration} days) for ${credential.documentType.name} to ${credential.employee.email}`
+                `Sent EXPIRING reminder (${daysUntilExpiration} days) for ${credential.documentType.name} to ${credential.staffMember.email}`
               );
             } else {
               errors++;
               details.push(
-                `Failed to send reminder for ${credential.documentType.name} to ${credential.employee.email}`
+                `Failed to send reminder for ${credential.documentType.name} to ${credential.staffMember.email}`
               );
             }
           }
@@ -474,9 +474,9 @@ export async function getUpcomingExpirations(agencyId: string): Promise<{
   sevenDaysOut.setDate(today.getDate() + 7);
 
   const [expiringSoon, expiringThisWeek, expired] = await Promise.all([
-    prisma.employeeDocument.count({
+    prisma.staffCredential.count({
       where: {
-        employee: { agencyId },
+        staffMember: { agencyId },
         expirationDate: {
           gte: today,
           lte: thirtyDaysOut,
@@ -485,9 +485,9 @@ export async function getUpcomingExpirations(agencyId: string): Promise<{
         status: { in: ['ACTIVE', 'EXPIRING_SOON'] },
       },
     }),
-    prisma.employeeDocument.count({
+    prisma.staffCredential.count({
       where: {
-        employee: { agencyId },
+        staffMember: { agencyId },
         expirationDate: {
           gte: today,
           lte: sevenDaysOut,
@@ -496,9 +496,9 @@ export async function getUpcomingExpirations(agencyId: string): Promise<{
         status: { in: ['ACTIVE', 'EXPIRING_SOON'] },
       },
     }),
-    prisma.employeeDocument.count({
+    prisma.staffCredential.count({
       where: {
-        employee: { agencyId },
+        staffMember: { agencyId },
         expirationDate: { lt: today },
         reviewStatus: 'APPROVED',
         status: 'EXPIRED',

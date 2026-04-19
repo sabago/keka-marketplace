@@ -3,13 +3,13 @@
  * Helper functions for credential status calculation, compliance checking, and management
  */
 
-import { DocumentStatus, ReviewStatus, EmployeeStatus, Prisma } from '@prisma/client';
+import { DocumentStatus, ReviewStatus, StaffStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
 // Type for credential with related data
-export type CredentialWithRelations = Prisma.EmployeeDocumentGetPayload<{
+export type CredentialWithRelations = Prisma.StaffCredentialGetPayload<{
   include: {
-    employee: true;
+    staffMember: true;
     documentType: true;
   };
 }>;
@@ -18,9 +18,7 @@ export type CredentialWithRelations = Prisma.EmployeeDocumentGetPayload<{
 export interface ComplianceSummary {
   total: number;
   valid: number;
-  expiringS
-
-oon: number;
+  expiringSoon: number;
   expired: number;
   missing: number;
   pendingReview: number;
@@ -169,16 +167,16 @@ export async function getCredentialsByStatus(
 ): Promise<CredentialWithRelations[]> {
   const statusFilter = Array.isArray(status) ? { in: status } : status;
 
-  const credentials = await prisma.employeeDocument.findMany({
+  const credentials = await prisma.staffCredential.findMany({
     where: {
-      employee: {
+      staffMember: {
         agencyId,
         ...(includeInactiveEmployees ? {} : { status: 'ACTIVE' }),
       },
       status: statusFilter,
     },
     include: {
-      employee: true,
+      staffMember: true,
       documentType: true,
     },
     orderBy: [
@@ -197,9 +195,10 @@ export async function getAgencyComplianceSummary(
   agencyId: string,
   includeInactiveEmployees: boolean = false
 ): Promise<ComplianceSummary> {
-  const credentials = await prisma.employeeDocument.findMany({
+  const credentials = await prisma.staffCredential.findMany({
     where: {
-      employee: {
+      status: { not: 'ARCHIVED' },
+      staffMember: {
         agencyId,
         ...(includeInactiveEmployees ? {} : { status: 'ACTIVE' }),
       },
@@ -236,10 +235,11 @@ export async function getAgencyComplianceSummary(
 export async function getEmployeeComplianceStatus(
   employeeId: string
 ): Promise<EmployeeComplianceStatus | null> {
-  const employee = await prisma.employee.findUnique({
+  const staffMember = await prisma.staffMember.findUnique({
     where: { id: employeeId },
     include: {
-      documents: {
+      credentials: {
+        where: { status: { not: 'ARCHIVED' } },
         select: {
           status: true,
           isCompliant: true,
@@ -248,26 +248,26 @@ export async function getEmployeeComplianceStatus(
     },
   });
 
-  if (!employee) {
+  if (!staffMember) {
     return null;
   }
 
-  const total = employee.documents.length;
-  const valid = employee.documents.filter(
+  const total = staffMember.credentials.length;
+  const valid = staffMember.credentials.filter(
     (d) => d.status === 'ACTIVE' && d.isCompliant
   ).length;
-  const expiring = employee.documents.filter((d) => d.status === 'EXPIRING_SOON').length;
-  const expired = employee.documents.filter((d) => d.status === 'EXPIRED').length;
-  const missing = employee.documents.filter((d) => d.status === 'MISSING').length;
+  const expiring = staffMember.credentials.filter((d) => d.status === 'EXPIRING_SOON').length;
+  const expired = staffMember.credentials.filter((d) => d.status === 'EXPIRED').length;
+  const missing = staffMember.credentials.filter((d) => d.status === 'MISSING').length;
 
   const complianceRate = total > 0 ? (valid / total) * 100 : 0;
   const isCompliant = expired === 0 && missing === 0;
 
   return {
-    employeeId: employee.id,
-    employeeName: `${employee.firstName} ${employee.lastName}`,
-    department: employee.department,
-    position: employee.position,
+    employeeId: staffMember.id,
+    employeeName: `${staffMember.firstName} ${staffMember.lastName}`,
+    department: staffMember.department,
+    position: staffMember.position,
     totalCredentials: total,
     validCredentials: valid,
     expiringCredentials: expiring,
@@ -284,36 +284,36 @@ export async function getEmployeeComplianceStatus(
 export async function getNonCompliantEmployees(
   agencyId: string
 ): Promise<EmployeeComplianceStatus[]> {
-  const employees = await prisma.employee.findMany({
+  const staffMembers = await prisma.staffMember.findMany({
     where: {
       agencyId,
       status: 'ACTIVE',
     },
     include: {
-      documents: true,
+      credentials: true,
     },
   });
 
   const complianceStatuses: EmployeeComplianceStatus[] = [];
 
-  for (const employee of employees) {
-    const total = employee.documents.length;
-    const valid = employee.documents.filter(
+  for (const staffMember of staffMembers) {
+    const total = staffMember.credentials.length;
+    const valid = staffMember.credentials.filter(
       (d) => d.status === 'ACTIVE' && d.isCompliant
     ).length;
-    const expiring = employee.documents.filter((d) => d.status === 'EXPIRING_SOON').length;
-    const expired = employee.documents.filter((d) => d.status === 'EXPIRED').length;
-    const missing = employee.documents.filter((d) => d.status === 'MISSING').length;
+    const expiring = staffMember.credentials.filter((d) => d.status === 'EXPIRING_SOON').length;
+    const expired = staffMember.credentials.filter((d) => d.status === 'EXPIRED').length;
+    const missing = staffMember.credentials.filter((d) => d.status === 'MISSING').length;
 
     // Only include if they have compliance issues
     if (expired > 0 || missing > 0) {
       const complianceRate = total > 0 ? (valid / total) * 100 : 0;
 
       complianceStatuses.push({
-        employeeId: employee.id,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        department: employee.department,
-        position: employee.position,
+        employeeId: staffMember.id,
+        employeeName: `${staffMember.firstName} ${staffMember.lastName}`,
+        department: staffMember.department,
+        position: staffMember.position,
         totalCredentials: total,
         validCredentials: valid,
         expiringCredentials: expiring,
@@ -335,10 +335,10 @@ export async function getNonCompliantEmployees(
 export async function updateCredentialCompliance(
   credentialId: string
 ): Promise<void> {
-  const credential = await prisma.employeeDocument.findUnique({
+  const credential = await prisma.staffCredential.findUnique({
     where: { id: credentialId },
     include: {
-      employee: {
+      staffMember: {
         include: {
           agency: true,
         },
@@ -351,7 +351,7 @@ export async function updateCredentialCompliance(
   }
 
   // Calculate current status
-  const warningDays = credential.employee.agency.credentialWarningDays;
+  const warningDays = credential.staffMember.agency.credentialWarningDays;
   const newStatus = calculateCredentialStatus(credential.expirationDate, warningDays);
 
   // Determine if compliant
@@ -362,7 +362,7 @@ export async function updateCredentialCompliance(
   );
 
   // Update the credential
-  await prisma.employeeDocument.update({
+  await prisma.staffCredential.update({
     where: { id: credentialId },
     data: {
       status: newStatus,
@@ -376,14 +376,14 @@ export async function updateCredentialCompliance(
  * Batch update compliance status for all credentials in an agency
  */
 export async function batchUpdateAgencyCompliance(agencyId: string): Promise<number> {
-  const credentials = await prisma.employeeDocument.findMany({
+  const credentials = await prisma.staffCredential.findMany({
     where: {
-      employee: {
+      staffMember: {
         agencyId,
       },
     },
     include: {
-      employee: {
+      staffMember: {
         include: {
           agency: true,
         },
@@ -394,7 +394,7 @@ export async function batchUpdateAgencyCompliance(agencyId: string): Promise<num
   let updatedCount = 0;
 
   for (const credential of credentials) {
-    const warningDays = credential.employee.agency.credentialWarningDays;
+    const warningDays = credential.staffMember.agency.credentialWarningDays;
     const newStatus = calculateCredentialStatus(credential.expirationDate, warningDays);
     const isCompliant = isCredentialCompliant(
       newStatus,
@@ -404,7 +404,7 @@ export async function batchUpdateAgencyCompliance(agencyId: string): Promise<num
 
     // Only update if status or compliance changed
     if (credential.status !== newStatus || credential.isCompliant !== isCompliant) {
-      await prisma.employeeDocument.update({
+      await prisma.staffCredential.update({
         where: { id: credential.id },
         data: {
           status: newStatus,
@@ -438,9 +438,9 @@ export async function findCredentialsNeedingReminders(
     return [];
   }
 
-  const credentials = await prisma.employeeDocument.findMany({
+  const credentials = await prisma.staffCredential.findMany({
     where: {
-      employee: {
+      staffMember: {
         agencyId,
         status: 'ACTIVE',
       },
@@ -452,7 +452,7 @@ export async function findCredentialsNeedingReminders(
       },
     },
     include: {
-      employee: true,
+      staffMember: true,
       documentType: true,
     },
   });
@@ -485,9 +485,9 @@ export async function getCredentialStatsByType(agencyId: string): Promise<
     complianceRate: number;
   }>
 > {
-  const credentials = await prisma.employeeDocument.findMany({
+  const credentials = await prisma.staffCredential.findMany({
     where: {
-      employee: {
+      staffMember: {
         agencyId,
         status: 'ACTIVE',
       },
@@ -562,9 +562,9 @@ export async function hasAllRequiredCredentials(
   });
 
   // Get employee's credentials
-  const employeeCredentials = await prisma.employeeDocument.findMany({
+  const employeeCredentials = await prisma.staffCredential.findMany({
     where: {
-      employeeId,
+      staffMemberId: employeeId,
       status: {
         not: 'ARCHIVED',
       },
@@ -587,4 +587,86 @@ export async function hasAllRequiredCredentials(
     hasAll: missing.length === 0,
     missing,
   };
+}
+
+/**
+ * Find or auto-create a StaffMember credential record for an AGENCY_USER.
+ * Admin roles (AGENCY_ADMIN, PLATFORM_ADMIN, SUPERADMIN) are never tracked as staff
+ * and will always receive null — they manage staff, they are not staff.
+ * Returns null if the user has no agency association or is an admin role.
+ */
+export async function getOrCreateStaffRecord(userId: string) {
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true, agencyId: true, role: true },
+  });
+
+  // Only AGENCY_USER staff members have credential tracking records
+  if (!dbUser?.agencyId || dbUser.role !== 'AGENCY_USER') return null;
+
+  let record = await prisma.staffMember.findUnique({
+    where: { userId },
+    select: { id: true, agencyId: true, firstName: true, lastName: true },
+  });
+
+  if (!record) {
+    const nameParts = (dbUser.name || '').trim().split(/\s+/);
+    record = await prisma.staffMember.create({
+      data: {
+        agencyId: dbUser.agencyId,
+        userId,
+        firstName: nameParts[0] || dbUser.name || 'Staff',
+        lastName: nameParts.slice(1).join(' ') || 'Member',
+        email: dbUser.email || '',
+        status: 'ACTIVE',
+      },
+      select: { id: true, agencyId: true, firstName: true, lastName: true },
+    });
+  }
+
+  return record;
+}
+
+/**
+ * Detect credential gaps for a staff member.
+ * A gap exists for a document type when recheckCadenceDays is set (meaning
+ * the type requires continuous coverage) AND no approved ACTIVE or EXPIRING_SOON
+ * credential currently exists for that type.
+ */
+export async function detectCredentialGaps(
+  staffMemberId: string,
+  agencyId: string
+): Promise<Array<{ documentTypeId: string; documentTypeName: string; recheckCadenceDays: number }>> {
+  // Fetch all document types for this agency that require periodic renewal
+  const requiredTypes = await prisma.documentType.findMany({
+    where: {
+      OR: [{ isGlobal: true }, { agencyId }],
+      isActive: true,
+      recheckCadenceDays: { not: null },
+    },
+    select: { id: true, name: true, recheckCadenceDays: true },
+  });
+
+  if (requiredTypes.length === 0) return [];
+
+  // Find which of those types the staff member currently has covered
+  const activeCredentials = await prisma.staffCredential.findMany({
+    where: {
+      staffMemberId,
+      documentTypeId: { in: requiredTypes.map((t) => t.id) },
+      reviewStatus: 'APPROVED',
+      status: { in: ['ACTIVE', 'EXPIRING_SOON'] },
+    },
+    select: { documentTypeId: true },
+  });
+
+  const coveredTypeIds = new Set(activeCredentials.map((c) => c.documentTypeId));
+
+  return requiredTypes
+    .filter((t) => !coveredTypeIds.has(t.id))
+    .map((t) => ({
+      documentTypeId: t.id,
+      documentTypeName: t.name,
+      recheckCadenceDays: t.recheckCadenceDays!,
+    }));
 }

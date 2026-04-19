@@ -70,46 +70,74 @@ export async function requireChatbotAuth(
 
 /**
  * Check if agency has exceeded query limit
+ *
+ * FREE plan: uses queriesAllTime as a lifetime counter (never resets)
+ * Paid plans: use queriesThisMonth, resets each billing period
  */
-export async function checkQueryLimit(agencyId: string): Promise<{
+export async function checkQueryLimit(agencyId: string, userRole?: string): Promise<{
   allowed: boolean;
   remaining: number;
   limit: number;
   plan: string;
+  isLifetime: boolean;
   upgradeRequired: boolean;
+  message?: string;
 }> {
   const agency = await prisma.agency.findUnique({
     where: { id: agencyId },
+    select: {
+      subscriptionPlan: true,
+      queriesThisMonth: true,
+      queriesAllTime: true,
+      billingPeriodEnd: true,
+    },
   });
 
   if (!agency) {
     throw new Error('Agency not found');
   }
 
-  // Get query limit from centralized subscription helpers
   const limit = getQueryLimit(agency.subscriptionPlan as any);
+  const isLifetime = agency.subscriptionPlan === 'FREE';
 
-  // For unlimited plans (limit = -1), always allow
+  // Unlimited plans: always allow
   if (limit === -1) {
     return {
       allowed: true,
-      remaining: -1, // Unlimited
+      remaining: -1,
       limit: -1,
       plan: agency.subscriptionPlan,
+      isLifetime: false,
       upgradeRequired: false,
     };
   }
 
-  const remaining = Math.max(0, limit - agency.queriesThisMonth);
+  // FREE plan uses lifetime count; paid plans use monthly count
+  const used = isLifetime ? agency.queriesAllTime : agency.queriesThisMonth;
+  const remaining = Math.max(0, limit - used);
   const allowed = remaining > 0;
   const upgradeRequired = !allowed && agency.subscriptionPlan !== 'ENTERPRISE' && agency.subscriptionPlan !== 'BUSINESS';
+
+  let message: string | undefined;
+  if (!allowed) {
+    if (userRole === 'AGENCY_ADMIN') {
+      const resetInfo = isLifetime
+        ? 'This is a lifetime limit on the free trial plan.'
+        : `Resets on ${new Date(agency.billingPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`;
+      message = `You've used all ${limit} ${isLifetime ? 'lifetime' : 'monthly'} AI queries. ${resetInfo} Upgrade to Pro for 200 queries/month.`;
+    } else {
+      message = `Your agency has reached its ${isLifetime ? 'lifetime trial' : 'monthly'} query limit. Please contact your agency admin to upgrade the plan.`;
+    }
+  }
 
   return {
     allowed,
     remaining,
     limit,
     plan: agency.subscriptionPlan,
+    isLifetime,
     upgradeRequired,
+    message,
   };
 }
 

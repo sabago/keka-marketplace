@@ -30,22 +30,22 @@ function calculateDocumentStatus(expirationDate: Date | null): DocumentStatus {
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgency();
-    const documentId = params.id;
+    const { id: documentId } = await params;
 
-    const document = await prisma.employeeDocument.findFirst({
+    const document = await prisma.staffCredential.findFirst({
       where: {
         id: documentId,
-        employee: {
+        staffMember: {
           agencyId: agency.id,
         },
       },
       include: {
         documentType: true,
-        employee: {
+        staffMember: {
           select: {
             id: true,
             firstName: true,
@@ -65,7 +65,7 @@ export async function GET(
 
     // Check permissions for staff users
     const isAdmin = user.role === 'AGENCY_ADMIN' || user.role === 'PLATFORM_ADMIN';
-    if (!isAdmin && document.employee.userId !== user.id) {
+    if (!isAdmin && document.staffMember.userId !== user.id) {
       return NextResponse.json(
         { error: 'You do not have permission to view this document' },
         { status: 403 }
@@ -93,18 +93,18 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgencyAdmin();
-    const documentId = params.id;
+    const { id: documentId } = await params;
     const body = await req.json();
 
     // Verify document exists and belongs to agency
-    const existing = await prisma.employeeDocument.findFirst({
+    const existing = await prisma.staffCredential.findFirst({
       where: {
         id: documentId,
-        employee: {
+        staffMember: {
           agencyId: agency.id,
         },
       },
@@ -143,12 +143,12 @@ export async function PUT(
     }
 
     // Update document
-    const document = await prisma.employeeDocument.update({
+    const document = await prisma.staffCredential.update({
       where: { id: documentId },
       data: updateData,
       include: {
         documentType: true,
-        employee: {
+        staffMember: {
           select: {
             firstName: true,
             lastName: true,
@@ -184,17 +184,17 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgencyAdmin();
-    const documentId = params.id;
+    const { id: documentId } = await params;
 
     // Verify document exists and belongs to agency
-    const existing = await prisma.employeeDocument.findFirst({
+    const existing = await prisma.staffCredential.findFirst({
       where: {
         id: documentId,
-        employee: {
+        staffMember: {
           agencyId: agency.id,
         },
       },
@@ -231,7 +231,7 @@ export async function DELETE(
     }
 
     // Delete from database
-    await prisma.employeeDocument.delete({
+    await prisma.staffCredential.delete({
       where: { id: documentId },
     });
 

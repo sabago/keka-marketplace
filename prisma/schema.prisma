@@ -10,8 +10,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Product {
@@ -223,6 +224,7 @@ model Agency {
   // Usage Tracking
   queriesThisMonth      Int                  @default(0)
   queriesAllTime        Int                  @default(0)
+  credentialUploadsTotal Int                 @default(0)
   billingPeriodStart    DateTime             @default(now())
   billingPeriodEnd      DateTime
   lastQueryReset        DateTime?
@@ -280,7 +282,7 @@ model Agency {
   favorites             FavoriteReferral[]
   eventLogs             EventLog[]
   adminActions          AdminAction[]        @relation("AdminActionsOnAgency")
-  employees             Employee[]
+  staffMembers          StaffMember[]
   documentTypes         DocumentType[]
   credentialReminders   CredentialReminder[]
   complianceSnapshots   ComplianceSnapshot[]
@@ -312,7 +314,9 @@ model User {
   adminActions          AdminAction[]          @relation("AdminActions")
   passwordSetupTokens   PasswordSetupToken[]
   passwordResetTokens   PasswordResetToken[]
-  employee              Employee?              // Optional: if user is also an employee
+  staffMember           StaffMember?           // Optional: if user has a staff credential record
+  referralsLogged       ReferralTracking[]     @relation("ReferralLoggedBy")
+  favoritesCreated      FavoriteReferral[]     @relation("FavoriteCreatedBy")
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -450,6 +454,9 @@ model ReferralTracking {
   agencyId            String
   agency              Agency          @relation(fields: [agencyId], references: [id])
 
+  loggedByUserId      String?
+  loggedBy            User?           @relation("ReferralLoggedBy", fields: [loggedByUserId], references: [id])
+
   referralSourceSlug  String
   submissionDate      DateTime        @default(now())
   submissionMethod    String?
@@ -464,11 +471,26 @@ model ReferralTracking {
 
   notes               String?         @db.Text
 
+  statusHistory       ReferralStatusHistory[]
+
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
   @@index([agencyId])
+  @@index([loggedByUserId])
   @@index([referralSourceSlug])
+}
+
+model ReferralStatusHistory {
+  id          String         @id @default(uuid())
+  referralId  String
+  referral    ReferralTracking @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  status      ReferralStatus
+  changedAt   DateTime       @default(now())
+  notes       String?
+
+  @@index([referralId])
 }
 
 // User Favorites/Bookmarks
@@ -476,12 +498,17 @@ model FavoriteReferral {
   id          String   @id @default(uuid())
   agencyId    String
   agency      Agency   @relation(fields: [agencyId], references: [id])
+
+  savedByUserId String?
+  savedBy       User?   @relation("FavoriteCreatedBy", fields: [savedByUserId], references: [id])
+
   articleSlug String
   notes       String?  @db.Text
 
   createdAt   DateTime @default(now())
 
   @@unique([agencyId, articleSlug])
+  @@index([savedByUserId])
 }
 
 // Credit Transaction History
@@ -526,11 +553,13 @@ model AdminAction {
 // ============================================================================
 
 // Enums for document tracking
-enum EmployeeStatus {
+enum StaffStatus {
   ACTIVE
   INACTIVE
   TERMINATED
   ON_LEAVE
+
+  @@map("EmployeeStatus")
 }
 
 enum DocumentStatus {
@@ -547,7 +576,7 @@ enum ReviewStatus {
   PENDING_REVIEW     // Document uploaded, needs admin review
   APPROVED           // Admin verified
   REJECTED           // Document rejected (quality/authenticity issues)
-  NEEDS_CORRECTION   // Needs employee to re-upload
+  NEEDS_CORRECTION   // Needs staff member to re-upload
 }
 
 enum ReminderType {
@@ -587,11 +616,30 @@ enum ReminderFrequency {
   FREQUENT  // All reminders (30, 14, 7, 3, 1 day, expired)
 }
 
-// Employee model - separate from User for compliance tracking
-model Employee {
-  id              String          @id @default(uuid())
+enum DocumentCategory {
+  LICENSE
+  BACKGROUND_CHECK
+  TRAINING
+  HR
+  ID
+  INSURANCE
+  VACCINATION
+  COMPETENCY
+  OTHER
+}
+
+enum CredentialPageRole {
+  FRONT
+  BACK
+  SINGLE
+  PAGE
+}
+
+// Staff member credential tracking record
+model StaffMember {
+  id              String      @id @default(uuid())
   agencyId        String
-  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agency          Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   // Basic Info
   firstName       String
@@ -599,25 +647,26 @@ model Employee {
   email           String?
   phone           String?
 
-  // Employment Details
-  employeeNumber  String?
+  // Staff Details
+  staffNumber     String?   @map("employeeNumber")
   hireDate        DateTime?
   department      String?
   position        String?
-  status          EmployeeStatus  @default(ACTIVE)
+  status          StaffStatus @default(ACTIVE)
 
-  // Optional link to User account (if employee has login)
-  userId          String?         @unique
-  user            User?           @relation(fields: [userId], references: [id])
+  // Optional link to User account (if staff member has login)
+  userId          String?     @unique
+  user            User?       @relation(fields: [userId], references: [id])
 
   // Relations
-  documents       EmployeeDocument[]
+  credentials     StaffCredential[]
   notificationPreferences NotificationPreferences?
   credentialReminders CredentialReminder[]
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
+  @@map("Employee")
   @@index([agencyId])
   @@index([email])
   @@index([status])
@@ -641,8 +690,18 @@ model DocumentType {
   isGlobal        Boolean   @default(false) // True for system-wide templates
   isActive        Boolean   @default(true)
 
+  // Multi-file and upload configuration
+  category            DocumentCategory  @default(OTHER)
+  requiresFrontBack   Boolean           @default(false)
+  allowsMultiPage     Boolean           @default(true)
+  minFiles            Int               @default(1)
+  maxFiles            Int               @default(10)
+  recheckCadenceDays  Int?              // null = no recurring recheck; e.g. OIG=30, CORI=365
+  aiParsingEnabled    Boolean           @default(true)
+  customFields        Json?             // e.g. { "competencyName": "string", "ceHours": "number" }
+
   // Relations
-  documents       EmployeeDocument[]
+  credentials     StaffCredential[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -650,15 +709,16 @@ model DocumentType {
   @@index([agencyId])
   @@index([isGlobal])
   @@index([isActive])
+  @@index([category])
 }
 
-// Employee Document Instance
-model EmployeeDocument {
+// Staff Credential Instance
+model StaffCredential {
   id              String        @id @default(uuid())
 
   // Relations
-  employeeId      String
-  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  staffMemberId   String        @map("employeeId")
+  staffMember     StaffMember   @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
 
   documentTypeId  String
   documentType    DocumentType  @relation(fields: [documentTypeId], references: [id])
@@ -706,19 +766,44 @@ model EmployeeDocument {
   // Relations
   reminders         CredentialReminder[]
   parsingJob        CredentialParsingJob?
+  files             CredentialFile[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  @@index([employeeId])
+  @@map("EmployeeDocument")
+  @@index([staffMemberId])
   @@index([documentTypeId])
   @@index([expirationDate])
   @@index([status])
   @@index([uploadedBy])
-  @@index([employeeId, status])
+  @@index([staffMemberId, status])
   @@index([status, expirationDate])
   @@index([reviewStatus])
   @@index([isCompliant])
+}
+
+// ============================================================================
+// CREDENTIAL FILE STORAGE (multi-file credentials)
+// ============================================================================
+
+// Individual file for a credential (supports front/back, multi-page)
+// StaffCredential.s3Key is preserved for backward compat; this is the
+// authoritative file list going forward.
+model CredentialFile {
+  id           String             @id @default(uuid())
+  credentialId String
+  credential   StaffCredential    @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  s3Key        String
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  pageRole     CredentialPageRole @default(SINGLE)
+  pageNumber   Int?               // For PAGE role, 1-indexed
+  sortOrder    Int                @default(0)
+  uploadedAt   DateTime           @default(now())
+
+  @@index([credentialId])
 }
 
 // ============================================================================
@@ -731,10 +816,10 @@ model CredentialReminder {
 
   // Relations
   documentId        String
-  document          EmployeeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document          StaffCredential @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  employeeId        String
-  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  staffMemberId     String          @map("employeeId")
+  staffMember       StaffMember     @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
 
   agencyId          String
   agency            Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -751,18 +836,18 @@ model CredentialReminder {
   metadata          Json?            // Additional context
 
   @@index([documentId, sentAt])
-  @@index([employeeId, sentAt])
+  @@index([staffMemberId, sentAt])
   @@index([agencyId, sentAt])
   @@index([reminderType, sentAt])
 }
 
-// Notification Preferences - Employee notification settings
+// Notification Preferences - Staff notification settings
 model NotificationPreferences {
   id                      String   @id @default(uuid())
 
   // Relations
-  employeeId              String   @unique
-  employee                Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  staffMemberId           String       @unique @map("employeeId")
+  staffMember             StaffMember  @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
 
   // Email Preferences
   emailEnabled            Boolean  @default(true)
@@ -787,7 +872,7 @@ model NotificationPreferences {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  @@index([employeeId])
+  @@index([staffMemberId])
 }
 
 // Compliance Snapshot - Historical compliance tracking
@@ -803,8 +888,8 @@ model ComplianceSnapshot {
   period            String?  // "2024-Q1", "2024-03", etc.
 
   // Aggregated statistics
-  totalEmployees    Int
-  activeEmployees   Int
+  totalStaff        Int    @map("totalEmployees")
+  activeStaff       Int    @map("activeEmployees")
 
   totalCredentials  Int
   validCredentials  Int
@@ -818,7 +903,7 @@ model ComplianceSnapshot {
   // Breakdowns (stored as JSON for flexibility)
   byCredentialType  Json     // { "CPR": { valid: 10, expiring: 2, expired: 1 }, ... }
   byDepartment      Json?    // { "Nursing": { complianceRate: 95.5, ... }, ... }
-  byEmployee        Json?    // Array of employee compliance records
+  byStaffMember     Json?    @map("byEmployee") // Array of staff compliance records
 
   // Metadata
   createdBy         String?  // User who generated report
@@ -834,7 +919,7 @@ model CredentialParsingJob {
 
   // Relations
   documentId    String   @unique
-  document      EmployeeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document      StaffCredential @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   agencyId      String
   agency        Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)

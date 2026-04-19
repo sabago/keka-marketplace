@@ -17,11 +17,12 @@ const suspendSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require platform admin authentication
     const admin = await requireSuperadmin();
+    const { id } = await params;
 
     const body = await request.json();
     const validation = suspendSchema.safeParse(body);
@@ -37,7 +38,7 @@ export async function POST(
 
     // Get the agency
     const agency = await prisma.agency.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!agency) {
@@ -58,7 +59,7 @@ export async function POST(
     await prisma.$transaction(async (tx) => {
       // Update agency to suspended
       await tx.agency.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           approvalStatus: ApprovalStatus.SUSPENDED,
           rejectionReason: reason,
@@ -70,7 +71,7 @@ export async function POST(
         data: {
           adminId: admin.id,
           actionType: 'SUSPEND_AGENCY',
-          targetAgencyId: params.id,
+          targetAgencyId: id,
           notes: notes || reason,
         },
       });

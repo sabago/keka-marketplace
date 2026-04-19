@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Shield, Mail, User, Plus, Loader2, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Shield, Mail, User, Plus, Loader2, AlertCircle, CheckCircle, X, RefreshCw } from 'lucide-react';
 
 interface Superadmin {
   id: string;
@@ -26,6 +26,8 @@ export default function SuperadminsPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -88,6 +90,26 @@ export default function SuperadminsPage() {
       setInviteError(err instanceof Error ? err.message : 'Failed to send invitation');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const handleResend = async (userId: string) => {
+    setResendingId(userId);
+    setResendSuccess(null);
+    try {
+      const response = await fetch('/api/admin/invite-superadmin', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to resend');
+      setResendSuccess(userId);
+      setTimeout(() => setResendSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resend invitation');
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -270,9 +292,30 @@ export default function SuperadminsPage() {
                         Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">
-                        Pending Setup
-                      </span>
+                      <>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">
+                          Pending Setup
+                        </span>
+                        {resendSuccess === superadmin.id ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Sent!
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleResend(superadmin.id)}
+                            disabled={resendingId === superadmin.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full hover:bg-blue-100 transition-colors disabled:opacity-50"
+                          >
+                            {resendingId === superadmin.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                            Resend
+                          </button>
+                        )}
+                      </>
                     )}
                     <span className="text-xs text-gray-500">
                       Invited {new Date(superadmin.createdAt).toLocaleDateString()}

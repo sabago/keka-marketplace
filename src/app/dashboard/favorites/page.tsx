@@ -14,7 +14,10 @@ interface Favorite {
 }
 
 export default function FavoritesPage() {
-  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [myFavorites, setMyFavorites] = useState<Favorite[]>([]);
+  const [agencyFavorites, setAgencyFavorites] = useState<Favorite[]>([]);
+  const [view, setView] = useState<"mine" | "agency">("agency");
+  const favorites = view === "mine" ? myFavorites : agencyFavorites;
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
@@ -28,7 +31,8 @@ export default function FavoritesPage() {
       const response = await fetch("/api/favorites");
       if (response.ok) {
         const data = await response.json();
-        setFavorites(data.favorites || []);
+        setMyFavorites(data.myFavorites || []);
+        setAgencyFavorites(data.agencyFavorites || data.favorites || []);
       }
     } catch (error) {
       console.error("Error fetching favorites:", error);
@@ -48,7 +52,8 @@ export default function FavoritesPage() {
       });
 
       if (response.ok) {
-        setFavorites(favorites.filter((fav) => fav.id !== id));
+        const updater = (list: Favorite[]) => list.filter((fav) => fav.id !== id);
+        view === "mine" ? setMyFavorites(updater) : setAgencyFavorites(updater);
       }
     } catch (error) {
       console.error("Error removing favorite:", error);
@@ -77,11 +82,9 @@ export default function FavoritesPage() {
       });
 
       if (response.ok) {
-        setFavorites(
-          favorites.map((fav) =>
-            fav.id === id ? { ...fav, notes: editNotes } : fav
-          )
-        );
+        const updater = (list: Favorite[]) =>
+          list.map((fav) => (fav.id === id ? { ...fav, notes: editNotes } : fav));
+        view === "mine" ? setMyFavorites(updater) : setAgencyFavorites(updater);
         setEditingId(null);
         setEditNotes("");
       }
@@ -95,7 +98,7 @@ export default function FavoritesPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center">
             <Star className="h-8 w-8 text-yellow-500 mr-3 fill-yellow-500" />
             Favorite Referral Sources
@@ -103,6 +106,22 @@ export default function FavoritesPage() {
           <p className="text-gray-600">
             Quick access to your most-used referral sources with personal notes
           </p>
+        </div>
+
+        {/* View Toggle */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setView("agency")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+          >
+            All Agency ({agencyFavorites.length})
+          </button>
+          <button
+            onClick={() => setView("mine")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "mine" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+          >
+            Saved by Me ({myFavorites.length})
+          </button>
         </div>
 
         {/* Favorites Grid */}

@@ -360,7 +360,7 @@ export default function AgencyDetailCard({ agency }: AgencyDetailCardProps) {
                     </span>
                   )}
                   {user.emailVerified && (
-                    <CheckCircle className="ml-2 h-4 w-4 text-green-600" title="Verified" />
+                    <CheckCircle className="ml-2 h-4 w-4 text-green-600" />
                   )}
                 </div>
                 <p className="text-sm text-gray-600">{user.email}</p>

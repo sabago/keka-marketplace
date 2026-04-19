@@ -383,7 +383,7 @@ export function validateCredentialFormData(formData: FormData): {
     const result = UploadCredentialSchema.safeParse(metadata);
 
     if (!result.success) {
-      const validationErrors = result.error.errors.map(
+      const validationErrors = result.error.issues.map(
         (err) => `${err.path.join('.')}: ${err.message}`
       );
       errors.push(...validationErrors);

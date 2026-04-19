@@ -24,7 +24,7 @@ export async function requireAuth() {
     throw new Error('Authentication required. Please sign in to continue.');
   }
 
-  return user;
+  return { user };
 }
 
 /**
@@ -33,15 +33,25 @@ export async function requireAuth() {
  * @throws Error if user has no agency
  */
 export async function requireAgency() {
-  const user = await requireAuth();
+  const { user } = await requireAuth();
 
-  if (!user.agencyId) {
+  // agencyId may be missing from a stale JWT — re-fetch from DB if needed
+  let agencyId = user.agencyId;
+  if (!agencyId && user.id) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { agencyId: true },
+    });
+    agencyId = dbUser?.agencyId ?? null;
+  }
+
+  if (!agencyId) {
     throw new Error('Agency association required. Please contact support to link your account to an agency.');
   }
 
   // Verify agency exists and fetch full agency data
   const agency = await prisma.agency.findUnique({
-    where: { id: user.agencyId },
+    where: { id: agencyId },
   });
 
   if (!agency) {
@@ -49,7 +59,7 @@ export async function requireAgency() {
   }
 
   return {
-    user,
+    user: { ...user, agencyId },
     agency,
   };
 }
@@ -60,7 +70,7 @@ export async function requireAgency() {
  * @throws Error if user is not a platform admin
  */
 export async function requirePlatformAdmin() {
-  const user = await requireAuth();
+  const { user } = await requireAuth();
 
   if (user.role !== UserRole.PLATFORM_ADMIN) {
     throw new Error('Platform administrator access required. You do not have permission to access this resource.');
@@ -75,7 +85,7 @@ export async function requirePlatformAdmin() {
  * @throws Error if user is not a superadmin or platform admin
  */
 export async function requireSuperadmin() {
-  const user = await requireAuth();
+  const { user } = await requireAuth();
 
   if (user.role !== UserRole.SUPERADMIN && user.role !== UserRole.PLATFORM_ADMIN) {
     throw new Error('Superadmin access required. You do not have permission to access this resource.');
@@ -92,7 +102,7 @@ export async function requireSuperadmin() {
 export async function requireAgencyAdmin() {
   const { user, agency } = await requireAgency();
 
-  if (user.role !== UserRole.AGENCY_ADMIN && user.role !== UserRole.PLATFORM_ADMIN) {
+  if (user.role !== UserRole.AGENCY_ADMIN && user.role !== UserRole.PLATFORM_ADMIN && user.role !== UserRole.SUPERADMIN) {
     throw new Error('Agency administrator access required. You do not have permission to perform this action.');
   }
 

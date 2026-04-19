@@ -33,7 +33,10 @@ export type AuditEventType =
   | 'api_key_created'
   | 'api_key_revoked'
   | 'permission_changed'
-  | 'security_alert';
+  | 'security_alert'
+  | 'document_type_created'
+  | 'document_type_updated'
+  | 'document_type_disabled';
 
 export interface AuditEventData {
   userId?: string;

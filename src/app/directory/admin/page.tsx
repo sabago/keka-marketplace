@@ -26,8 +26,10 @@ interface Agency {
 	id: string;
 	agencyName: string;
 	licenseNumber: string;
-	city: string;
-	state: string;
+	agencySize: import("@prisma/client").AgencySize;
+	primaryContactName: string;
+	primaryContactEmail: string;
+	serviceArea: string[];
 	approvalStatus: ApprovalStatus;
 	createdAt: string;
 	users: User[];

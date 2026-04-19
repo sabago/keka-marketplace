@@ -9,13 +9,12 @@ import { UserRole } from '@prisma/client';
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require agency admin authentication
     const { user, agency } = await requireAgencyAdmin();
-
-    const staffId = params.id;
+    const { id: staffId } = await params;
 
     if (!staffId) {
       return NextResponse.json(
@@ -90,15 +89,14 @@ export async function DELETE(
     // Log the admin action
     await prisma.adminAction.create({
       data: {
-        userId: user.id,
-        action: 'STAFF_REMOVED',
-        entityType: 'User',
-        entityId: staffId,
+        adminId: user.id,
+        actionType: 'STAFF_REMOVED',
+        targetAgencyId: agency.id,
         details: {
+          staffId,
           staffEmail: staffMember.email,
           staffName: staffMember.name,
           staffRole: staffMember.role,
-          agencyId: agency.id,
           agencyName: agency.agencyName,
         },
       },
@@ -136,13 +134,12 @@ export async function DELETE(
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require agency admin authentication
     const { user, agency } = await requireAgencyAdmin();
-
-    const staffId = params.id;
+    const { id: staffId } = await params;
 
     if (!staffId) {
       return NextResponse.json(
@@ -232,16 +229,13 @@ export async function POST(
     // Log the admin action
     await prisma.adminAction.create({
       data: {
-        userId: user.id,
-        action: 'INVITATION_RESENT',
-        entityType: 'User',
-        entityId: staffId,
-        details: {
+        adminId: user.id,
+        actionType: 'INVITATION_RESENT',
+        targetAgencyId: agency.id,
+        notes: JSON.stringify({
           staffEmail: staffMember.email,
           staffName: staffMember.name,
-          agencyId: agency.id,
-          agencyName: agency.agencyName,
-        },
+        }),
       },
     });
 

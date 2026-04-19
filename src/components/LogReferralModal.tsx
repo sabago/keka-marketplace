@@ -7,6 +7,7 @@ interface LogReferralModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  prefillSlug?: string;
 }
 
 interface ReferralSource {
@@ -19,11 +20,12 @@ export default function LogReferralModal({
   isOpen,
   onClose,
   onSuccess,
+  prefillSlug,
 }: LogReferralModalProps) {
   const [sources, setSources] = useState<ReferralSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    referralSourceSlug: "",
+    referralSourceSlug: prefillSlug || "",
     submissionDate: new Date().toISOString().split("T")[0],
     submissionMethod: "PORTAL",
     patientType: "",
@@ -33,15 +35,26 @@ export default function LogReferralModal({
   useEffect(() => {
     if (isOpen) {
       fetchReferralSources();
+      // Pre-populate slug when modal opens (handles cases where prefillSlug arrives after mount)
+      if (prefillSlug) {
+        setFormData(prev => ({ ...prev, referralSourceSlug: prefillSlug }));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, prefillSlug]);
 
   const fetchReferralSources = async () => {
     try {
       const response = await fetch("/api/knowledge-base?published=true");
       if (response.ok) {
         const data = await response.json();
-        setSources(data.articles || []);
+        // Deduplicate by slug in case the same slug appears in multiple content dirs
+        const seen = new Set<string>();
+        const unique = (data.articles || []).filter((a: ReferralSource) => {
+          if (seen.has(a.slug)) return false;
+          seen.add(a.slug);
+          return true;
+        });
+        setSources(unique);
       }
     } catch (error) {
       console.error("Error fetching referral sources:", error);
@@ -66,7 +79,7 @@ export default function LogReferralModal({
         onClose();
         // Reset form
         setFormData({
-          referralSourceSlug: "",
+          referralSourceSlug: prefillSlug || "",
           submissionDate: new Date().toISOString().split("T")[0],
           submissionMethod: "PORTAL",
           patientType: "",

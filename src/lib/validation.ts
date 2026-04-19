@@ -105,7 +105,7 @@ export const AgencySignupSchema = z.object({
     .string()
     .min(2, 'City is required')
     .max(100, 'City name too long'),
-  state: z.enum(US_STATES, { errorMap: () => ({ message: 'Please select a valid US state' }) }),
+  state: z.enum(US_STATES, { error: () => ({ message: 'Please select a valid US state' }) }),
   zipCode: z
     .string()
     .regex(/^\d{5}(-\d{4})?$/, 'ZIP code must be in format 12345 or 12345-6789'),
@@ -129,7 +129,7 @@ export const AgencySignupSchema = z.object({
     .max(200, 'Name too long'),
   contactEmail: emailSchema,
   contactRole: z.enum(['AGENCY_ADMIN', 'AGENCY_USER'], {
-    errorMap: () => ({ message: 'Please select a role' }),
+    error: () => ({ message: 'Please select a role' }),
   }),
 
   // Optional Fields
@@ -216,7 +216,7 @@ export const ChatbotQuerySchema = z.object({
     .min(1, 'Query cannot be empty')
     .max(2000, 'Query too long (max 2000 characters)'),
   agencyId: uuidSchema,
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ============================================================================
@@ -342,7 +342,7 @@ export const PaginationSchema = z.object({
 
 export const SearchQuerySchema = z.object({
   query: z.string().min(1).max(500),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
   page: z.number().int().min(1).default(1),
   limit: z.number().int().min(1).max(100).default(20),
 });
@@ -365,7 +365,7 @@ export async function validateRequestBody<T>(
     if (result.success) {
       return { success: true, data: result.data };
     } else {
-      const errors = result.error.errors.map((err) => `${err.path.join('.')}: ${err.message}`);
+      const errors = result.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`);
       return { success: false, errors };
     }
   } catch (error) {
@@ -387,7 +387,7 @@ export function validateQueryParams<T>(
     if (result.success) {
       return { success: true, data: result.data };
     } else {
-      const errors = result.error.errors.map((err) => `${err.path.join('.')}: ${err.message}`);
+      const errors = result.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`);
       return { success: false, errors };
     }
   } catch (error) {

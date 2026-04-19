@@ -15,6 +15,7 @@ export interface Category {
   icon: typeof Hospital;
   color: CategoryColor;
   order: number;
+  howToUse?: string;
 }
 
 // Category color definitions - WCAG AA compliant

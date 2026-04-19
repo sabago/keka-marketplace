@@ -27,11 +27,11 @@ const agencySignupSchema = z.object({
   contactName: z.string().min(2, 'Contact name is required'),
   contactEmail: z.string().email('Invalid email address'),
   contactRole: z.enum(['AGENCY_ADMIN', 'AGENCY_USER'], {
-    errorMap: () => ({ message: 'Role must be either AGENCY_ADMIN or AGENCY_USER' }),
+    error: () => ({ message: 'Role must be either AGENCY_ADMIN or AGENCY_USER' }),
   }),
 
   // Optional
-  agencySize: z.enum(['SMALL', 'MEDIUM', 'LARGE', '']).optional(),
+  agencySize: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional(),
 
   // Intake Analytics
   intakeMethods: z.array(z.string()).min(1, 'At least one intake method is required'),
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
           // Profile data (using defaults for now, can be updated later)
           servicesOffered: [], // Can be filled in onboarding or profile update
           serviceArea: [data.state], // Use the state from address
-          agencySize: data.agencySize && data.agencySize !== ''
+          agencySize: data.agencySize
             ? (data.agencySize as AgencySize)
             : AgencySize.SMALL,
 

@@ -10,7 +10,7 @@ import { UserRole } from '@prisma/client';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Get authentication token
@@ -26,7 +26,7 @@ export async function GET(
       );
     }
 
-    const agencyId = params.id;
+    const { id: agencyId } = await params;
 
     // Verify that the user is accessing their own agency data or is a platform admin
     if (

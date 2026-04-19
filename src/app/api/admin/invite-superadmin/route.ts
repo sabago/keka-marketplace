@@ -117,6 +117,77 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * PUT /api/admin/invite-superadmin
+ * Resend invitation to a pending superadmin
+ * Body: { userId: string }
+ */
+export async function PUT(req: NextRequest) {
+  try {
+    const adminUser = await requirePlatformAdmin();
+
+    const body = await req.json();
+    const { userId } = body;
+
+    if (!userId) {
+      return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+    }
+
+    const superadmin = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, role: true, emailVerified: true, password: true },
+    });
+
+    if (!superadmin || superadmin.role !== UserRole.SUPERADMIN) {
+      return NextResponse.json({ error: 'Superadmin not found' }, { status: 404 });
+    }
+
+    if (superadmin.emailVerified || superadmin.password) {
+      return NextResponse.json(
+        { error: 'This user has already set up their account' },
+        { status: 409 }
+      );
+    }
+
+    const token = await generatePasswordSetupToken(superadmin.id);
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Failed to generate invitation link. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    const emailSent = await sendStaffInvitationEmail(
+      { email: superadmin.email, name: superadmin.name },
+      token,
+      'the Platform',
+      adminUser.name || adminUser.email
+    );
+
+    await prisma.adminAction.create({
+      data: {
+        adminId: adminUser.id,
+        actionType: 'SUPERADMIN_INVITED',
+        notes: JSON.stringify({ superadminEmail: superadmin.email, resend: true }),
+      },
+    });
+
+    return NextResponse.json({ success: true, emailSent });
+  } catch (error: any) {
+    console.error('Error resending superadmin invitation:', error);
+
+    if (error.message?.includes('Platform administrator')) {
+      return NextResponse.json({ error: 'Platform admin access required' }, { status: 403 });
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to resend invitation. Please try again.' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * GET /api/admin/invite-superadmin
  * List all superadmins
  */

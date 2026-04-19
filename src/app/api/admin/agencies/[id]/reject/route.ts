@@ -18,11 +18,12 @@ const rejectSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require platform admin authentication
     const admin = await requireSuperadmin();
+    const { id } = await params;
 
     const body = await request.json();
     const validation = rejectSchema.safeParse(body);
@@ -38,7 +39,7 @@ export async function POST(
 
     // Get the agency with primary contact
     const agency = await prisma.agency.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         users: {
           where: { isPrimaryContact: true },
@@ -72,7 +73,7 @@ export async function POST(
     await prisma.$transaction(async (tx) => {
       // Update agency approval status
       await tx.agency.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           approvalStatus: ApprovalStatus.REJECTED,
           rejectionReason: reason,
@@ -84,7 +85,7 @@ export async function POST(
         data: {
           adminId: admin.id,
           actionType: 'REJECT_AGENCY',
-          targetAgencyId: params.id,
+          targetAgencyId: id,
           notes: notes || reason,
         },
       });

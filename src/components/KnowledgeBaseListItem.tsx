@@ -31,7 +31,7 @@ export default function KnowledgeBaseListItem({
     day: 'numeric',
   });
 
-  const color = getCategoryColor(category);
+  const color = getCategoryColor(category ?? null);
 
   return (
     <Link href={`/knowledge-base/${slug}`}>

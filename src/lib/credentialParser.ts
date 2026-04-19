@@ -1,22 +1,27 @@
 /**
  * Credential Parser with AI Extraction
  *
- * Uses OCR + GPT-4 to intelligently extract credential metadata from documents
+ * Uses OCR + GPT-4 to intelligently extract credential metadata from documents.
+ * Supports multi-file credentials (front/back IDs, multi-page documents).
  *
  * Pipeline:
- * 1. OCR: Extract text from PDF/image using appropriate provider
- * 2. LLM: Parse structured data using GPT-4
- * 3. Validation: Score confidence and determine if manual review needed
+ * 1. OCR: Extract text from each file using the appropriate provider
+ * 2. Concatenate: Join OCR outputs with page-role separators
+ * 3. LLM: Run a single GPT-4 extraction on the combined text
+ * 4. Validation: Score confidence and determine if manual review needed
+ * 5. Merge: Overlay any user-provided fields onto the AI result
  *
- * Usage:
- *   const result = await parseCredentialDocument(s3Key, fileName, documentTypeName);
- *   if (result.requiresReview) {
- *     // Queue for manual admin review
- *   }
+ * Usage (multi-file):
+ *   const result = await parseCredentialFiles(files, documentTypeName, userProvided);
+ *
+ * Usage (single-file, legacy shim):
+ *   const result = await parseCredentialDocument(s3Key, fileName, mimeType, documentTypeName);
  */
 
 import OpenAI from 'openai';
+import { CredentialPageRole } from '@prisma/client';
 import { getOCRProvider, isOCRSupported } from './ocr';
+import { getFileFromS3 } from './s3';
 import { shouldRequireReview } from './credentialHelpers';
 
 // Lazy initialize OpenAI to avoid build-time errors
@@ -39,6 +44,17 @@ const CONFIDENCE_THRESHOLD = 0.7; // Below this = requires manual review
 const MAX_TEXT_LENGTH = 15000; // Limit OCR text sent to LLM (token management)
 
 /**
+ * Input descriptor for a single file within a multi-file credential.
+ */
+export interface CredentialFileInput {
+  s3Key: string;
+  pageRole: CredentialPageRole;
+  pageNumber?: number;
+  fileName: string;
+  mimeType: string;
+}
+
+/**
  * Parsed credential data returned by AI
  */
 export interface ParsedCredentialData {
@@ -58,6 +74,10 @@ export interface ParsedCredentialData {
   // Workflow
   requiresReview: boolean;
   reviewReason?: string;
+
+  // User-provided overrides (stored under __userProvided in aiParsedData)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  __userProvided?: Record<string, any>;
 }
 
 /**
@@ -98,6 +118,7 @@ IMPORTANT RULES:
 5. License numbers should be the exact alphanumeric code (no extra formatting)
 6. In parsingNotes, explain what you found and what you couldn't find
 7. If the document appears to be the wrong type or unreadable, score confidence very low
+8. When multiple pages are present (front, back, or numbered pages), synthesize across all pages
 
 Return ONLY valid JSON with this structure (no markdown, no explanation):
 {
@@ -134,7 +155,7 @@ Please analyze the above text and extract credential metadata as JSON.`;
 /**
  * Parse AI response and validate structure
  */
-function parseAIResponse(content: string): Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason'> {
+function parseAIResponse(content: string): Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'> {
   try {
     // Remove markdown code blocks if present
     let jsonText = content.trim();
@@ -185,7 +206,7 @@ async function extractMetadataWithLLM(
   ocrText: string,
   fileName: string,
   documentTypeName: string
-): Promise<{ data: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason'>; tokensUsed: number }> {
+): Promise<{ data: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'>; tokensUsed: number }> {
   try {
     const systemPrompt = buildSystemPrompt(documentTypeName);
     const userPrompt = buildUserPrompt(ocrText, fileName);
@@ -212,6 +233,67 @@ async function extractMetadataWithLLM(
     console.error('Error calling OpenAI for credential parsing:', error);
     throw error;
   }
+}
+
+/**
+ * Extract credential metadata directly from an image using GPT-4 Vision.
+ * Bypasses Tesseract OCR — GPT-4 Vision reads the image bytes natively.
+ * Used for JPEG/PNG files where Tesseract has server-side worker issues.
+ */
+async function extractMetadataWithVision(
+  imageBuffer: Buffer,
+  mimeType: string,
+  fileName: string,
+  documentTypeName: string
+): Promise<{ data: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'>; tokensUsed: number; extractedText: string }> {
+  const openai = getOpenAI();
+  const base64 = imageBuffer.toString('base64');
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+  const systemPrompt = buildSystemPrompt(documentTypeName);
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `File name: ${fileName}\n\nPlease analyze this credential document image and extract all metadata as JSON.`,
+          },
+          {
+            type: 'image_url',
+            image_url: { url: dataUrl, detail: 'high' },
+          },
+        ],
+      },
+    ],
+    temperature: 0.1,
+    max_tokens: 1000,
+    response_format: { type: 'json_object' },
+  });
+
+  const content = response.choices[0].message.content || '{}';
+  const tokensUsed = response.usage?.total_tokens || 0;
+  const data = parseAIResponse(content);
+  // extractedText for images is the AI's own description from parsingNotes
+  return { data, tokensUsed, extractedText: data.parsingNotes };
+}
+
+/**
+ * Download a file from S3 as a Buffer.
+ */
+async function downloadS3Buffer(s3Key: string): Promise<Buffer> {
+  const stream = await getFileFromS3(s3Key);
+  const chunks: Uint8Array[] = [];
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
 }
 
 /**
@@ -250,13 +332,179 @@ function evaluateReviewRequirement(
 }
 
 /**
- * Main function: Parse credential document
+ * Parse an ordered list of credential files using OCR + LLM.
  *
- * @param s3Key S3 key of uploaded document
- * @param fileName Original file name
- * @param mimeType MIME type of file
- * @param documentTypeName Type of credential (e.g., "Nursing License")
- * @returns Parsing result with extracted metadata
+ * Each file is OCR'd individually. The extracted texts are concatenated
+ * with clear page-role separators, then passed to a single LLM call.
+ * User-provided fields (e.g. competencyName, ceHours) are merged into the
+ * result under the __userProvided key so the AI parser can defer to them.
+ *
+ * @param files      Ordered array of files that together form one credential
+ * @param documentTypeName   Hint for the LLM (e.g. "Driver's License")
+ * @param userProvidedFields Optional fields the user filled in on the upload form
+ */
+export async function parseCredentialFiles(
+  files: CredentialFileInput[],
+  documentTypeName: string,
+  userProvidedFields?: Record<string, unknown>
+): Promise<CredentialParsingResult> {
+  const startTime = Date.now();
+
+  if (files.length === 0) {
+    return {
+      success: false,
+      error: 'No files provided for parsing',
+      processingTimeMs: Date.now() - startTime,
+    };
+  }
+
+  try {
+    const pageTexts: string[] = [];
+    let totalTokens = 0;
+    let ocrProviderName = 'mixed';
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const separator = `\n--- PAGE ${i + 1} (${file.pageRole}) ---\n`;
+
+      if (!isOCRSupported(file.mimeType)) {
+        return {
+          success: false,
+          error: `Unsupported file type: ${file.mimeType}. Only PDFs and images are supported.`,
+          processingTimeMs: Date.now() - startTime,
+        };
+      }
+
+      if (file.mimeType.startsWith('image/')) {
+        // Images: use GPT-4 Vision directly (avoids Tesseract worker issues in Next.js)
+        ocrProviderName = 'gpt-4o-vision';
+        let imageBuffer: Buffer;
+        try {
+          imageBuffer = await downloadS3Buffer(file.s3Key);
+        } catch (err) {
+          console.error(`Failed to download image ${file.s3Key}:`, err);
+          return {
+            success: false,
+            error: `Failed to download file: ${err instanceof Error ? err.message : String(err)}`,
+            ocrProvider: ocrProviderName,
+            processingTimeMs: Date.now() - startTime,
+          };
+        }
+
+        try {
+          const { tokensUsed, extractedText } = await extractMetadataWithVision(
+            imageBuffer,
+            file.mimeType,
+            file.fileName,
+            documentTypeName
+          );
+          pageTexts.push(separator + extractedText);
+          totalTokens += tokensUsed;
+        } catch (err) {
+          console.error(`Vision extraction failed for ${file.fileName}:`, err);
+          return {
+            success: false,
+            error: `Vision analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+            ocrProvider: ocrProviderName,
+            processingTimeMs: Date.now() - startTime,
+          };
+        }
+      } else {
+        // PDFs: use pdf-parse OCR provider
+        ocrProviderName = 'pdf-parse';
+        const ocrProvider = getOCRProvider('pdf');
+        try {
+          const text = await ocrProvider.extractText(file.s3Key);
+          if (!text || text.trim().length < 10) {
+            return {
+              success: false,
+              error: `File ${file.fileName} appears empty or unreadable (< 10 chars extracted).`,
+              ocrProvider: ocrProvider.name,
+              processingTimeMs: Date.now() - startTime,
+            };
+          }
+          pageTexts.push(separator + text);
+        } catch (err) {
+          console.error(`OCR failed for ${file.fileName}:`, err);
+          return {
+            success: false,
+            error: `Failed to extract text from ${file.fileName}: ${err instanceof Error ? err.message : String(err)}`,
+            ocrProvider: ocrProvider.name,
+            processingTimeMs: Date.now() - startTime,
+          };
+        }
+      }
+    }
+
+    // Combine all page texts into one string for the LLM
+    const combinedText = pageTexts.join('\n');
+
+    // Single LLM call on combined text
+    let aiData: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'>;
+    let llmTokens: number;
+    try {
+      ({ data: aiData, tokensUsed: llmTokens } = await extractMetadataWithLLM(
+        combinedText,
+        files[0].fileName,
+        documentTypeName
+      ));
+      totalTokens += llmTokens;
+    } catch (err) {
+      console.error('LLM extraction failed:', err);
+      return {
+        success: false,
+        error: `AI analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+        ocrProvider: ocrProviderName,
+        processingTimeMs: Date.now() - startTime,
+      };
+    }
+
+    // Evaluate review requirements
+    const { requiresReview, reviewReason } = evaluateReviewRequirement(
+      aiData.confidence,
+      aiData.expiresAt !== null,
+      aiData.licenseNumber !== null
+    );
+
+    // Build final result, merging user-provided fields
+    const parsedData: ParsedCredentialData = {
+      ...aiData,
+      extractedText: combinedText,
+      requiresReview,
+      reviewReason,
+      ...(userProvidedFields && Object.keys(userProvidedFields).length > 0
+        ? { __userProvided: userProvidedFields }
+        : {}),
+    };
+
+    return {
+      success: true,
+      data: parsedData,
+      ocrProvider: ocrProviderName,
+      tokensUsed: totalTokens,
+      processingTimeMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    console.error('Credential parsing error:', error);
+    return {
+      success: false,
+      error: `Parsing failed: ${error instanceof Error ? error.message : String(error)}`,
+      processingTimeMs: Date.now() - startTime,
+    };
+  }
+}
+
+/**
+ * Main function: Parse a single credential document (legacy / shim).
+ *
+ * Delegates to parseCredentialFiles with a single-element array.
+ * Kept for backward compatibility with jobQueue.ts and any other callers
+ * that have not yet been updated to the multi-file API.
+ *
+ * @param s3Key          S3 key of uploaded document
+ * @param fileName       Original file name
+ * @param mimeType       MIME type of file
+ * @param documentTypeName  Type of credential (e.g., "Nursing License")
  */
 export async function parseCredentialDocument(
   s3Key: string,
@@ -264,82 +512,10 @@ export async function parseCredentialDocument(
   mimeType: string,
   documentTypeName: string
 ): Promise<CredentialParsingResult> {
-  const startTime = Date.now();
-
-  try {
-    // Step 1: Validate file type
-    if (!isOCRSupported(mimeType)) {
-      return {
-        success: false,
-        error: `Unsupported file type: ${mimeType}. Only PDFs and images are supported.`,
-        processingTimeMs: Date.now() - startTime,
-      };
-    }
-
-    // Step 2: Extract text using OCR
-    const ocrProvider = getOCRProvider('smart');
-    let ocrText: string;
-
-    try {
-      ocrText = await ocrProvider.extractText(s3Key);
-    } catch (error) {
-      console.error('OCR extraction failed:', error);
-      return {
-        success: false,
-        error: `Failed to extract text from document: ${error instanceof Error ? error.message : String(error)}`,
-        ocrProvider: ocrProvider.name,
-        processingTimeMs: Date.now() - startTime,
-      };
-    }
-
-    // Validate OCR output
-    if (!ocrText || ocrText.trim().length < 10) {
-      return {
-        success: false,
-        error: 'Document appears to be empty or unreadable. OCR extracted less than 10 characters.',
-        ocrProvider: ocrProvider.name,
-        processingTimeMs: Date.now() - startTime,
-      };
-    }
-
-    // Step 3: Parse metadata with GPT-4
-    const { data: aiData, tokensUsed } = await extractMetadataWithLLM(
-      ocrText,
-      fileName,
-      documentTypeName
-    );
-
-    // Step 4: Evaluate review requirements
-    const { requiresReview, reviewReason } = evaluateReviewRequirement(
-      aiData.confidence,
-      aiData.expiresAt !== null,
-      aiData.licenseNumber !== null
-    );
-
-    // Step 5: Build final result
-    const parsedData: ParsedCredentialData = {
-      ...aiData,
-      extractedText: ocrText,
-      requiresReview,
-      reviewReason,
-    };
-
-    return {
-      success: true,
-      data: parsedData,
-      ocrProvider: ocrProvider.name,
-      tokensUsed,
-      processingTimeMs: Date.now() - startTime,
-    };
-  } catch (error) {
-    console.error('Credential parsing error:', error);
-
-    return {
-      success: false,
-      error: `Parsing failed: ${error instanceof Error ? error.message : String(error)}`,
-      processingTimeMs: Date.now() - startTime,
-    };
-  }
+  return parseCredentialFiles(
+    [{ s3Key, pageRole: 'SINGLE', fileName, mimeType }],
+    documentTypeName
+  );
 }
 
 /**
@@ -442,6 +618,7 @@ export async function parseCredentialFromBuffer(
 export async function validateParserSetup(): Promise<{
   success: boolean;
   message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: any;
 }> {
   try {

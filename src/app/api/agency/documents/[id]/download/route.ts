@@ -9,22 +9,22 @@ import { getSignedDownloadUrl } from '@/lib/s3';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, agency } = await requireAgency();
-    const documentId = params.id;
+    const { id: documentId } = await params;
 
     // Fetch document with employee info
-    const document = await prisma.employeeDocument.findFirst({
+    const document = await prisma.staffCredential.findFirst({
       where: {
         id: documentId,
-        employee: {
+        staffMember: {
           agencyId: agency.id,
         },
       },
       include: {
-        employee: {
+        staffMember: {
           select: {
             id: true,
             userId: true,
@@ -42,7 +42,7 @@ export async function GET(
 
     // Check permissions for staff users
     const isAdmin = user.role === 'AGENCY_ADMIN' || user.role === 'PLATFORM_ADMIN';
-    if (!isAdmin && document.employee.userId !== user.id) {
+    if (!isAdmin && document.staffMember.userId !== user.id) {
       return NextResponse.json(
         { error: 'You do not have permission to download this document' },
         { status: 403 }

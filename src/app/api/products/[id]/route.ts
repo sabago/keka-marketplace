@@ -6,11 +6,10 @@ import crypto from 'crypto';
 // GET /api/products/[id] - Get a product by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fix the "params should be awaited" error
-    const { id } = await Promise.resolve(params);
+    const { id } = await params;
 
     // Get product with related data
     const product = await prisma.product.findUnique({
@@ -84,7 +83,7 @@ export async function GET(
     });
   } catch (error) {
     // Fix the "params should be awaited" error here too
-    const safeId = params ? await Promise.resolve(params).then(p => p.id) : 'unknown';
+    const safeId = 'unknown';
     console.error(`Error fetching product with ID ${safeId}:`, error);
     return NextResponse.json(
       { error: 'Failed to fetch product' },
@@ -96,11 +95,10 @@ export async function GET(
 // PUT /api/products/[id] - Update a product
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fix the "params should be awaited" error
-    const { id } = await Promise.resolve(params);
+    const { id } = await params;
     
     // Handle FormData instead of JSON
     const formData = await request.formData();
@@ -256,7 +254,7 @@ export async function PUT(
     return NextResponse.json(updatedProduct);
   } catch (error) {
     // Fix the "params should be awaited" error here too
-    const safeId = params ? await Promise.resolve(params).then(p => p.id) : 'unknown';
+    const safeId = 'unknown';
     console.error(`Error updating product with ID ${safeId}:`, error);
     return NextResponse.json(
       { error: 'Failed to update product' },
@@ -268,11 +266,10 @@ export async function PUT(
 // DELETE /api/products/[id] - Delete a product
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Fix the "params should be awaited" error
-    const { id } = await Promise.resolve(params);
+    const { id } = await params;
 
     // Check if product exists
     const existingProduct = await prisma.product.findUnique({
@@ -333,7 +330,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     // Fix the "params should be awaited" error here too
-    const safeId = params ? await Promise.resolve(params).then(p => p.id) : 'unknown';
+    const safeId = 'unknown';
     console.error(`Error deleting product with ID ${safeId}:`, error);
     return NextResponse.json(
       { error: 'Failed to delete product' },

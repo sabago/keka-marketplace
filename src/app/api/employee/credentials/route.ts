@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { uploadFileToS3 } from '@/lib/s3';
 import { validateCredentialFormData } from '@/lib/credentialValidation';
-import { calculateCredentialStatus, updateCredentialCompliance } from '@/lib/credentialHelpers';
+import { calculateCredentialStatus, updateCredentialCompliance, getOrCreateStaffRecord } from '@/lib/credentialHelpers';
 import { sanitizeFilename } from '@/lib/validation';
 import { enqueueParsingJob } from '@/lib/jobQueue';
 
@@ -15,15 +15,10 @@ export async function GET(req: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record linked to this user
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
-      select: { id: true, agencyId: true },
-    });
-
+    const employee = await getOrCreateStaffRecord(user.id);
     if (!employee) {
       return NextResponse.json(
-        { error: 'Employee profile not found. Please contact your administrator.' },
+        { error: 'No agency association found. Please contact your administrator.' },
         { status: 404 }
       );
     }
@@ -35,15 +30,13 @@ export async function GET(req: NextRequest) {
     // Build where clause
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const where: any = {
-      employeeId: employee.id,
+      staffMemberId: employee.id,
+      // Never expose archived (historical) credentials in the employee self-service view
+      ...(status ? { status } : { status: { not: 'ARCHIVED' } }),
     };
 
-    if (status) {
-      where.status = status;
-    }
-
     // Fetch credentials
-    const credentials = await prisma.employeeDocument.findMany({
+    const credentials = await prisma.staffCredential.findMany({
       where,
       include: {
         documentType: true,
@@ -93,9 +86,17 @@ export async function POST(req: NextRequest) {
   try {
     const { user } = await requireAuth();
 
-    // Find employee record linked to this user
-    const employee = await prisma.employee.findUnique({
-      where: { userId: user.id },
+    const staffRecord = await getOrCreateStaffRecord(user.id);
+    if (!staffRecord) {
+      return NextResponse.json(
+        { error: 'No agency association found. Please contact your administrator.' },
+        { status: 404 }
+      );
+    }
+
+    // staffRecord was just created/found, so findUnique by id is guaranteed non-null
+    const employee = (await prisma.staffMember.findUnique({
+      where: { id: staffRecord.id },
       include: {
         agency: {
           select: {
@@ -104,14 +105,7 @@ export async function POST(req: NextRequest) {
           },
         },
       },
-    });
-
-    if (!employee) {
-      return NextResponse.json(
-        { error: 'Employee profile not found. Please contact your administrator.' },
-        { status: 404 }
-      );
-    }
+    }))!;
 
     // Parse multipart form data
     const formData = await req.formData();
@@ -125,7 +119,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { file, metadata } = validation.data;
+    const { file, metadata } = validation.data!;
 
     // Verify employee is uploading for themselves
     if (metadata.employeeId !== employee.id) {
@@ -172,9 +166,9 @@ export async function POST(req: NextRequest) {
     );
 
     // Create credential record
-    const credential = await prisma.employeeDocument.create({
+    const credential = await prisma.staffCredential.create({
       data: {
-        employeeId: employee.id,
+        staffMemberId: employee.id,
         documentTypeId: metadata.documentTypeId,
         s3Key,
         fileName: sanitizedFilename,

@@ -1,13 +1,21 @@
 import { useAuth } from "@/lib/authContext";
 import { useCartStore } from "@/lib/useCart";
 import { useSettings, formatCurrency } from "@/lib/useSettings";
-// import { Product } from "@prisma/client";
 import { Star } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState } from "react";
 import ReviewForm from "./ReviewForm";
-import { Product } from "@/app/page";
 import Image from "next/image";
+
+interface Product {
+	id: string;
+	title: string;
+	description: string;
+	price: number;
+	thumbnail: string;
+	averageRating?: number;
+	reviewCount?: number;
+}
 
 // ProductRow component for the product listing
 export const ProductRow = ({

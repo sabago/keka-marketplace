@@ -1,62 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { requireAgency } from "@/lib/authHelpers";
+import fs from "fs";
+import path from "path";
+import matter from "gray-matter";
 
-const prisma = new PrismaClient();
+function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return fileList;
+  for (const file of fs.readdirSync(dir)) {
+    const filePath = path.join(dir, file);
+    if (fs.statSync(filePath).isDirectory()) {
+      findMarkdownFiles(filePath, fileList);
+    } else if (file.endsWith(".md")) {
+      fileList.push(filePath);
+    }
+  }
+  return fileList;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // In production, get agencyId from authenticated session
-    let agency = await prisma.agency.findFirst({
-      select: {
-        servicesOffered: true,
-        serviceArea: true,
-        agencySize: true,
-        subscriptionPlan: true,
-      },
-    });
+    const { agency } = await requireAgency();
 
-    // Get all published articles
-    const articles = await prisma.knowledgeBaseArticle.findMany({
-      where: {
-        published: true,
-      },
-      select: {
-        slug: true,
-        title: true,
-        category: true,
-        tags: true,
-        state: true,
-      },
-    });
+    const contentDirs = [
+      path.join(process.cwd(), "src/content/knowledge-base"),
+      path.join(process.cwd(), "src/content/massachusetts"),
+    ];
 
-    // Simple recommendation algorithm
+    const allFiles: string[] = [];
+    contentDirs.forEach(dir => findMarkdownFiles(dir, allFiles));
+
+    const articles: { slug: string; title: string; category: string | null; tags: string[]; state: string }[] = [];
+
+    for (const filePath of allFiles) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const { data } = matter(raw);
+        if (!data.slug || !data.title || !data.state) continue;
+
+        const tagArray: string[] = [];
+        if (Array.isArray(data.tags)) tagArray.push(...data.tags);
+        if (data.source_type) tagArray.push(data.source_type);
+        if (data.cost_level) tagArray.push(data.cost_level);
+
+        articles.push({
+          slug: data.slug,
+          title: data.title,
+          category: data.category || null,
+          tags: tagArray,
+          state: data.state,
+        });
+      } catch {
+        // skip
+      }
+    }
+
     const scoredArticles = articles.map((article) => {
-      let score = 50; // Base score
+      let score = 50;
       let reason = "";
 
-      // Boost if in same state
-      if (agency && agency.serviceArea.includes(article.state)) {
+      if (agency.serviceArea && agency.serviceArea.includes(article.state)) {
         score += 20;
         reason = `Located in your service area (${article.state})`;
       }
 
-      // Boost if has "Free" tag for small agencies
-      if (
-        agency &&
-        agency.agencySize === "SMALL" &&
-        article.tags.includes("Free")
-      ) {
+      if (agency.agencySize === "SMALL" && article.tags.some(t => t.toLowerCase() === "free")) {
         score += 15;
         reason = reason
           ? `${reason}. No-cost option ideal for small agencies`
           : "No-cost option ideal for small agencies";
       }
 
-      // Boost if category matches services
       if (
-        agency &&
         article.category &&
-        agency.servicesOffered.some((service) =>
+        agency.servicesOffered &&
+        agency.servicesOffered.some((service: string) =>
           article.category?.toLowerCase().includes(service.toLowerCase())
         )
       ) {
@@ -64,14 +82,6 @@ export async function GET(request: NextRequest) {
         reason = reason
           ? `${reason}. Matches your service offerings`
           : "Matches your service offerings";
-      }
-
-      // Boost if has "State Portal" tag
-      if (article.tags.includes("State Portal")) {
-        score += 10;
-        reason = reason
-          ? `${reason}. Official state resource`
-          : "Official state resource";
       }
 
       if (!reason) {
@@ -84,23 +94,17 @@ export async function GET(request: NextRequest) {
         category: article.category || "General",
         compatibilityScore: Math.min(score, 95),
         reason,
-        tags: article.tags.slice(0, 3), // Limit to 3 tags
+        tags: article.tags.slice(0, 3),
       };
     });
 
-    // Sort by score and return top 5
     const recommendations = scoredArticles
       .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
       .slice(0, 5);
 
-    return NextResponse.json({
-      recommendations,
-    });
+    return NextResponse.json({ recommendations });
   } catch (error) {
     console.error("Error fetching recommendations:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch recommendations" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch recommendations" }, { status: 500 });
   }
 }

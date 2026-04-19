@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { UserRole, ApprovalStatus } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import {
   chatbotRateLimit,
   authRateLimit,
@@ -12,7 +12,6 @@ import {
   createRateLimitResponse,
   createRateLimitHeaders,
 } from '@/lib/rateLimit';
-import { prisma } from '@/lib/db';
 
 /**
  * Middleware for authentication, authorization, rate limiting and security
@@ -51,11 +50,22 @@ export async function middleware(request: NextRequest) {
     '/api/agencies',
     '/pending-approval',
     '/account-suspended',
+    '/request-access',
+    '/api/request-access',
   ];
 
   // Allow public GET requests to settings (reading is public, writing requires admin)
   if (pathname === '/api/admin/settings' && request.method === 'GET') {
     return NextResponse.next();
+  }
+
+  // Redirect signed-in users away from the marketing pricing page
+  if (pathname === '/pricing' && token) {
+    const role = token.role as string;
+    if (role === 'AGENCY_ADMIN') {
+      return NextResponse.redirect(new URL('/agency/subscription', request.url));
+    }
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   const isPublicRoute = publicRoutes.some(
@@ -82,8 +92,8 @@ export async function middleware(request: NextRequest) {
   // AGENCY APPROVAL STATUS CHECKS
   // ============================================================================
 
-  // Check agency approval status for users with agency association (except platform admins)
-  if (token && token.agencyId && token.role !== UserRole.PLATFORM_ADMIN) {
+  // Check agency approval status for users with agency association (except platform/super admins)
+  if (token && token.agencyId && token.role !== UserRole.PLATFORM_ADMIN && token.role !== UserRole.SUPERADMIN) {
     // Routes that require approved agency status
     const protectedFeatureRoutes = [
       '/dashboard',
@@ -105,90 +115,77 @@ export async function middleware(request: NextRequest) {
 
     if (requiresApproval) {
       try {
-        // Fetch agency approval status from database
-        const agency = await prisma.agency.findUnique({
-          where: { id: token.agencyId as string },
-          select: {
-            approvalStatus: true,
-            rejectionReason: true,
-            agencyName: true,
+        // Fetch agency approval status via internal API (Prisma cannot run in Edge Runtime)
+        const statusUrl = new URL('/api/internal/agency-status', request.url);
+        statusUrl.searchParams.set('id', token.agencyId as string);
+        const statusRes = await fetch(statusUrl.toString(), {
+          headers: {
+            'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
           },
         });
 
-        if (agency) {
-          const { approvalStatus } = agency;
+        if (statusRes.ok) {
+          const { agency } = await statusRes.json();
 
-          // Handle PENDING status
-          if (approvalStatus === ApprovalStatus.PENDING) {
-            if (pathname.startsWith('/api')) {
-              return NextResponse.json(
-                {
-                  error: 'Agency approval pending',
-                  message: 'Your agency is currently under review. You will receive an email once approved.',
-                },
-                {
-                  status: 403,
-                  headers: {
-                    'X-Agency-Status': 'PENDING',
+          if (agency) {
+            const { approvalStatus } = agency;
+
+            // Handle PENDING status
+            if (approvalStatus === 'PENDING') {
+              if (pathname.startsWith('/api')) {
+                return NextResponse.json(
+                  {
+                    error: 'Agency approval pending',
+                    message: 'Your agency is currently under review. You will receive an email once approved.',
                   },
-                }
-              );
+                  { status: 403, headers: { 'X-Agency-Status': 'PENDING' } }
+                );
+              }
+              return NextResponse.redirect(new URL('/pending-approval', request.url));
             }
-            return NextResponse.redirect(new URL('/pending-approval', request.url));
-          }
 
-          // Handle REJECTED status
-          if (approvalStatus === ApprovalStatus.REJECTED) {
-            if (pathname.startsWith('/api')) {
-              return NextResponse.json(
-                {
-                  error: 'Agency application not approved',
-                  message: 'Your agency application was not approved.',
-                  reason: agency.rejectionReason || undefined,
-                },
-                {
-                  status: 403,
-                  headers: {
-                    'X-Agency-Status': 'REJECTED',
+            // Handle REJECTED status
+            if (approvalStatus === 'REJECTED') {
+              if (pathname.startsWith('/api')) {
+                return NextResponse.json(
+                  {
+                    error: 'Agency application not approved',
+                    message: 'Your agency application was not approved.',
+                    reason: agency.rejectionReason || undefined,
                   },
-                }
-              );
+                  { status: 403, headers: { 'X-Agency-Status': 'REJECTED' } }
+                );
+              }
+              return NextResponse.redirect(new URL('/account-suspended', request.url));
             }
-            return NextResponse.redirect(new URL('/account-suspended', request.url));
-          }
 
-          // Handle SUSPENDED status
-          if (approvalStatus === ApprovalStatus.SUSPENDED) {
-            if (pathname.startsWith('/api')) {
-              return NextResponse.json(
-                {
-                  error: 'Account suspended',
-                  message: 'Your agency account has been suspended.',
-                  reason: agency.rejectionReason || undefined,
-                },
-                {
-                  status: 403,
-                  headers: {
-                    'X-Agency-Status': 'SUSPENDED',
+            // Handle SUSPENDED status
+            if (approvalStatus === 'SUSPENDED') {
+              if (pathname.startsWith('/api')) {
+                return NextResponse.json(
+                  {
+                    error: 'Account suspended',
+                    message: 'Your agency account has been suspended.',
+                    reason: agency.rejectionReason || undefined,
                   },
-                }
-              );
+                  { status: 403, headers: { 'X-Agency-Status': 'SUSPENDED' } }
+                );
+              }
+              return NextResponse.redirect(new URL('/account-suspended', request.url));
             }
-            return NextResponse.redirect(new URL('/account-suspended', request.url));
-          }
 
-          // APPROVED status - allow access (continue to next checks)
+            // APPROVED status - allow access (continue to next checks)
+          }
         }
       } catch (error) {
         console.error('Error checking agency approval status:', error);
         // On error, allow the request to continue (fail open for availability)
-        // But log the error for monitoring
       }
     }
   }
 
-  // Platform admin routes - only accessible to PLATFORM_ADMIN
-  if (pathname.startsWith('/admin')) {
+  // /admin/superadmins - PLATFORM_ADMIN only
+  if (pathname.startsWith('/admin/superadmins') || pathname.startsWith('/api/admin/invite-superadmin')) {
     if (token?.role !== UserRole.PLATFORM_ADMIN) {
       if (pathname.startsWith('/api')) {
         return NextResponse.json(
@@ -200,9 +197,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Agency admin routes - require AGENCY_ADMIN or PLATFORM_ADMIN
+  // All other /admin routes - PLATFORM_ADMIN or SUPERADMIN
+  if (pathname.startsWith('/admin') || (pathname.startsWith('/api/admin') && !pathname.startsWith('/api/admin/invite-superadmin'))) {
+    if (token?.role !== UserRole.PLATFORM_ADMIN && token?.role !== UserRole.SUPERADMIN) {
+      if (pathname.startsWith('/api')) {
+        return NextResponse.json(
+          { error: 'Administrator access required' },
+          { status: 403 }
+        );
+      }
+      return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', request.url));
+    }
+  }
+
+  // Agency admin routes - require AGENCY_ADMIN, PLATFORM_ADMIN, or SUPERADMIN
   if (pathname.startsWith('/agency/settings') || pathname.startsWith('/agency/users')) {
-    if (token?.role !== UserRole.AGENCY_ADMIN && token?.role !== UserRole.PLATFORM_ADMIN) {
+    if (token?.role !== UserRole.AGENCY_ADMIN && token?.role !== UserRole.PLATFORM_ADMIN && token?.role !== UserRole.SUPERADMIN) {
       if (pathname.startsWith('/api')) {
         return NextResponse.json(
           { error: 'Agency administrator access required' },
@@ -213,9 +223,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Agency routes - require agency association (except platform admins)
+  // Agency routes - require agency association (except platform/super admins)
   if (pathname.startsWith('/agency') || pathname.startsWith('/dashboard')) {
-    if (!token?.agencyId && token?.role !== UserRole.PLATFORM_ADMIN) {
+    if (!token?.agencyId && token?.role !== UserRole.PLATFORM_ADMIN && token?.role !== UserRole.SUPERADMIN) {
       if (pathname.startsWith('/api')) {
         return NextResponse.json(
           { error: 'Agency association required' },
@@ -232,49 +242,54 @@ export async function middleware(request: NextRequest) {
 
   let rateLimitResult = null;
 
-  // Chatbot API: 50 requests/hour per IP
-  if (pathname.startsWith('/api/chatbot')) {
-    rateLimitResult = await checkRateLimit(chatbotRateLimit, ip);
+  // Skip all rate limiting for localhost in development
+  const isLocalhost = ip === '127.0.0.1' || ip === '::1';
+  if (!isLocalhost) {
+    // Chatbot API: 50 requests/hour per IP
+    if (pathname.startsWith('/api/chatbot')) {
+      rateLimitResult = await checkRateLimit(chatbotRateLimit, ip);
 
-    if (!rateLimitResult.success) {
-      return createRateLimitResponse(
-        rateLimitResult.reset,
-        rateLimitResult.limit,
-        rateLimitResult.remaining
-      );
+      if (!rateLimitResult.success) {
+        return createRateLimitResponse(
+          rateLimitResult.reset,
+          rateLimitResult.limit,
+          rateLimitResult.remaining
+        );
+      }
     }
-  }
 
-  // Auth signin: 5 attempts/15min per IP
-  if (pathname.startsWith('/api/auth/signin') || pathname.startsWith('/api/auth/login')) {
-    rateLimitResult = await checkRateLimit(authRateLimit, ip);
+    // Auth signin: 5 attempts/15min per IP
+    if (pathname.startsWith('/api/auth/signin') || pathname.startsWith('/api/auth/login')) {
+      rateLimitResult = await checkRateLimit(authRateLimit, ip);
 
-    if (!rateLimitResult.success) {
-      return createRateLimitResponse(
-        rateLimitResult.reset,
-        rateLimitResult.limit,
-        rateLimitResult.remaining
-      );
+      if (!rateLimitResult.success) {
+        return createRateLimitResponse(
+          rateLimitResult.reset,
+          rateLimitResult.limit,
+          rateLimitResult.remaining
+        );
+      }
     }
-  }
 
-  // Agency API: 100 requests/hour per agency (use agency ID if available)
-  if (pathname.startsWith('/api/agency')) {
-    // Try to get agency ID from token, header, or fall back to IP
-    const agencyId = (token?.agencyId as string) || request.headers.get('x-agency-id') || ip;
-    rateLimitResult = await checkRateLimit(agencyRateLimit, agencyId);
+    // Agency API: 100 requests/hour per agency (use agency ID if available)
+    if (pathname.startsWith('/api/agency')) {
+      // Try to get agency ID from token, header, or fall back to IP
+      const agencyId = (token?.agencyId as string) || request.headers.get('x-agency-id') || ip;
+      rateLimitResult = await checkRateLimit(agencyRateLimit, agencyId);
 
-    if (!rateLimitResult.success) {
-      return createRateLimitResponse(
-        rateLimitResult.reset,
-        rateLimitResult.limit,
-        rateLimitResult.remaining
-      );
+      if (!rateLimitResult.success) {
+        return createRateLimitResponse(
+          rateLimitResult.reset,
+          rateLimitResult.limit,
+          rateLimitResult.remaining
+        );
+      }
     }
   }
 
   // General API rate limiting: 200 requests/hour per IP
-  if (pathname.startsWith('/api') && !rateLimitResult) {
+  // Skip for admin routes (handled separately) and localhost dev
+  if (pathname.startsWith('/api') && !rateLimitResult && !pathname.startsWith('/api/admin') && !isLocalhost) {
     rateLimitResult = await checkRateLimit(generalRateLimit, ip);
 
     if (!rateLimitResult.success) {
@@ -318,7 +333,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - images (public images folder)
      * - api/auth (NextAuth routes)
+     * - api/internal (internal server-to-server routes)
      */
-    '/((?!_next/static|_next/image|favicon.ico|images|api/auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|images|api/auth|api/internal|api/cron|api/dev).*)',
   ],
 };

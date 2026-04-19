@@ -144,21 +144,28 @@ export default function Header() {
 		session?.user?.role === "AGENCY_ADMIN" ||
 		session?.user?.role === "AGENCY_USER";
 
+	// Whether platform/super admin has a linked agency (self-assignment)
+	const isPlatformOrSuperAdmin =
+		session?.user?.role === "PLATFORM_ADMIN" ||
+		session?.user?.role === "SUPERADMIN";
+	const adminHasAgency = isPlatformOrSuperAdmin && !!(session?.user as any)?.agencyId;
+
 	// Check if user is platform admin or agency admin
 	const isAdmin =
 		session?.user?.role === "PLATFORM_ADMIN" ||
+		session?.user?.role === "SUPERADMIN" ||
 		session?.user?.role === "AGENCY_ADMIN";
 
 	// Determine agency management URL based on role
 	const agencyManagementUrl =
-		session?.user?.role === "PLATFORM_ADMIN"
+		isPlatformOrSuperAdmin
 			? "/admin/agencies"
-			: "/agency/settings";
+			: "/agency";
 
 	// Check if we're on agency management pages
 	const isAgencyManagementPage =
 		pathname?.startsWith("/admin/agencies") ||
-		(pathname?.startsWith("/agency") && session?.user?.role === "AGENCY_ADMIN");
+		pathname?.startsWith("/agency");
 
 	return (
 		<header className="bg-white shadow-md">
@@ -202,16 +209,30 @@ export default function Header() {
 							>
 								Directory
 							</Link>
-							<Link
-								href="/pricing"
-								className={`hover:text-[#48ccbc] ${
-									pathname === "/pricing"
-										? "text-[#48ccbc] font-medium"
-										: "text-gray-600"
-								}`}
-							>
-								Pricing
-							</Link>
+							{!session && (
+								<Link
+									href="/pricing"
+									className={`hover:text-[#48ccbc] ${
+										pathname === "/pricing"
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Pricing
+								</Link>
+							)}
+							{session?.user?.role === "AGENCY_ADMIN" && (
+								<Link
+									href="/agency/subscription"
+									className={`hover:text-[#48ccbc] flex items-center gap-1 ${
+										pathname === "/agency/subscription"
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Plan &amp; Billing
+								</Link>
+							)}
 							<Link
 								href="/dashboard"
 								className={`hover:text-[#48ccbc] ${
@@ -231,19 +252,17 @@ export default function Header() {
 											: "text-gray-600"
 									}`}
 								>
-									{session?.user?.role === "PLATFORM_ADMIN"
-										? "Agencies"
-										: "My Agency"}
+									{isPlatformOrSuperAdmin ? "Agencies" : "My Agency"}
 								</Link>
 							)}
-							{hasAgencyAccess && session?.user?.role !== "AGENCY_ADMIN" && (
+							{adminHasAgency && (
 								<Link
 									href="/agency"
 									className={`hover:text-[#48ccbc] ${
 										isAgencyPage ? "text-[#48ccbc] font-medium" : "text-gray-600"
 									}`}
 								>
-									Agency
+									My Agency
 								</Link>
 							)}
 							{session?.user?.role === "PLATFORM_ADMIN" && (
@@ -256,6 +275,18 @@ export default function Header() {
 									}`}
 								>
 									Superadmins
+								</Link>
+							)}
+							{isPlatformOrSuperAdmin && (
+								<Link
+									href="/admin/audit-log"
+									className={`hover:text-[#48ccbc] ${
+										pathname?.startsWith("/admin/audit-log")
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Audit Log
 								</Link>
 							)}
 						</nav>
@@ -335,17 +366,19 @@ export default function Header() {
 							>
 								Directory
 							</Link>
-							<Link
-								href="/pricing"
-								className={`hover:text-blue-600 ${
-									pathname === "/pricing"
-										? "text-[#0B4F96] font-medium"
-										: "text-gray-600"
-								}`}
-								onClick={() => setIsMenuOpen(false)}
-							>
-								Pricing
-							</Link>
+							{!session && (
+								<Link
+									href="/pricing"
+									className={`hover:text-blue-600 ${
+										pathname === "/pricing"
+											? "text-[#0B4F96] font-medium"
+											: "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Pricing
+								</Link>
+							)}
 							<Link
 								href="/dashboard"
 								className={`hover:text-blue-600 ${
@@ -367,12 +400,10 @@ export default function Header() {
 									}`}
 									onClick={() => setIsMenuOpen(false)}
 								>
-									{session?.user?.role === "PLATFORM_ADMIN"
-										? "Agencies"
-										: "My Agency"}
+									{isPlatformOrSuperAdmin ? "Agencies" : "My Agency"}
 								</Link>
 							)}
-							{hasAgencyAccess && session?.user?.role !== "AGENCY_ADMIN" && (
+							{adminHasAgency && (
 								<Link
 									href="/agency"
 									className={`hover:text-blue-600 ${
@@ -380,12 +411,24 @@ export default function Header() {
 									}`}
 									onClick={() => setIsMenuOpen(false)}
 								>
-									Agency
+									My Agency
 								</Link>
 							)}
-
+							{isPlatformOrSuperAdmin && (
+								<Link
+									href="/admin/audit-log"
+									className={`hover:text-blue-600 ${
+										pathname?.startsWith("/admin/audit-log")
+											? "text-[#0B4F96] font-medium"
+											: "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Audit Log
+								</Link>
+							)}
 							{/* Agency Sub-Navigation Items (mobile) */}
-							{hasAgencyAccess && isAgencyPage && (
+							{(hasAgencyAccess || adminHasAgency) && isAgencyPage && (
 								<>
 									<div className="pl-4 border-l-2 border-gray-200 mt-2">
 										<div className="text-xs text-gray-500 mb-2 uppercase">
@@ -403,15 +446,15 @@ export default function Header() {
 											Overview
 										</Link>
 										<Link
-											href="/agency/employees"
+											href="/agency/staff/credentials"
 											className={`block hover:text-blue-600 mb-3 ${
-												pathname?.startsWith("/agency/employees")
+												pathname?.startsWith("/agency/staff/credentials")
 													? "text-[#0B4F96] font-medium"
 													: "text-gray-600"
 											}`}
 											onClick={() => setIsMenuOpen(false)}
 										>
-											Employees
+											Staff Credentials
 										</Link>
 										<Link
 											href="/agency/compliance"
@@ -466,7 +509,29 @@ export default function Header() {
 											}`}
 											onClick={() => setIsMenuOpen(false)}
 										>
-											Subscription
+											Plan &amp; Billing
+										</Link>
+									</div>
+								</>
+							)}
+
+							{/* Dashboard Sub-Navigation (mobile) — credentials link for staff */}
+							{session?.user?.role === "AGENCY_USER" && pathname?.startsWith("/dashboard") && (
+								<>
+									<div className="pl-4 border-l-2 border-gray-200 mt-2">
+										<div className="text-xs text-gray-500 mb-2 uppercase">
+											Dashboard Menu
+										</div>
+										<Link
+											href="/dashboard/credentials"
+											className={`block hover:text-blue-600 mb-3 ${
+												pathname?.startsWith("/dashboard/credentials")
+													? "text-[#0B4F96] font-medium"
+													: "text-gray-600"
+											}`}
+											onClick={() => setIsMenuOpen(false)}
+										>
+											Credentials
 										</Link>
 									</div>
 								</>

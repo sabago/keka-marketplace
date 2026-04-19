@@ -11,18 +11,19 @@ import { ApprovalStatus } from '@prisma/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Require platform admin authentication
     const admin = await requireSuperadmin();
+    const { id } = await params;
 
     const body = await request.json().catch(() => ({}));
     const { notes } = body;
 
     // Get the agency
     const agency = await prisma.agency.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!agency) {
@@ -43,7 +44,7 @@ export async function POST(
     await prisma.$transaction(async (tx) => {
       // Reactivate agency
       await tx.agency.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           approvalStatus: ApprovalStatus.APPROVED,
           rejectionReason: null,
@@ -55,7 +56,7 @@ export async function POST(
         data: {
           adminId: admin.id,
           actionType: 'REACTIVATE_AGENCY',
-          targetAgencyId: params.id,
+          targetAgencyId: id,
           notes: notes || null,
         },
       });

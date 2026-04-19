@@ -48,44 +48,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate price ID matches one of our subscription tiers
-    // Support both legacy (single price per plan) and new (size-based pricing)
-    const validPriceIds = [
-      // Legacy pricing (backwards compatibility)
-      process.env.STRIPE_PRICE_PRO,
-      process.env.STRIPE_PRICE_BUSINESS,
-      process.env.STRIPE_PRICE_ENTERPRISE,
-      // Size-based pricing
-      process.env.STRIPE_PRICE_PRO_SMALL,
-      process.env.STRIPE_PRICE_PRO_MEDIUM,
-      process.env.STRIPE_PRICE_PRO_LARGE,
-      process.env.STRIPE_PRICE_BUSINESS_SMALL,
-      process.env.STRIPE_PRICE_BUSINESS_MEDIUM,
-      process.env.STRIPE_PRICE_BUSINESS_LARGE,
-      process.env.STRIPE_PRICE_ENTERPRISE_SMALL,
-      process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM,
-      process.env.STRIPE_PRICE_ENTERPRISE_LARGE,
-    ].filter(Boolean); // Remove undefined values
-
-    if (!validPriceIds.includes(priceId)) {
+    // Validate price ID — must resolve to a known plan/size/cycle combination
+    const planInfo = getPlanAndSizeFromPriceId(priceId);
+    if (!planInfo) {
       return NextResponse.json(
         { error: 'Invalid price ID' },
         { status: 400 }
       );
     }
 
-    // Get plan and size from price ID (if using size-based pricing)
-    const planInfo = getPlanAndSizeFromPriceId(priceId);
-
-    // If using size-based pricing, update the agency size
-    if (planInfo) {
-      await prisma.agency.update({
-        where: { id: agencyId },
-        data: {
-          agencySize: planInfo.agencySize,
-        },
-      });
-    }
+    // Update agency size to match what they selected
+    await prisma.agency.update({
+      where: { id: agencyId },
+      data: { agencySize: planInfo.agencySize },
+    });
 
     // Get or create Stripe customer for the agency
     const stripe = getStripe();

@@ -12,14 +12,14 @@ import { getS3DownloadUrl } from '@/lib/s3';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user } = await requireAuth();
-    const credentialId = params.id;
+    const { id: credentialId } = await params;
 
     // Find employee record
-    const employee = await prisma.employee.findUnique({
+    const employee = await prisma.staffMember.findUnique({
       where: { userId: user.id },
       select: { id: true, agencyId: true },
     });
@@ -32,7 +32,7 @@ export async function GET(
     }
 
     // Get credential with all details
-    const credential = await prisma.employeeDocument.findUnique({
+    const credential = await prisma.staffCredential.findUnique({
       where: { id: credentialId },
       include: {
         documentType: {
@@ -53,7 +53,7 @@ export async function GET(
     }
 
     // Verify credential belongs to employee
-    if (credential.employeeId !== employee.id) {
+    if (credential.staffMemberId !== employee.id) {
       return NextResponse.json(
         { error: 'You do not have permission to access this credential' },
         { status: 403 }

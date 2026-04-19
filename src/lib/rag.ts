@@ -15,7 +15,7 @@ const openai = new OpenAI({
 // Configuration
 const EMBEDDING_MODEL = 'text-embedding-3-large';
 const CHAT_MODEL = 'gpt-4-turbo';
-const RELEVANCE_THRESHOLD = 0.7;
+const RELEVANCE_THRESHOLD = 0.4;
 const DEFAULT_TOP_K = 5;
 
 export interface RAGQueryResult {
@@ -156,6 +156,49 @@ Do NOT:
     console.error('Error generating answer:', error);
     throw error;
   }
+}
+
+export const DIRECTORY_SYSTEM_PROMPT = `You are a helpful AI assistant for Massachusetts home care agencies seeking referral sources. Your role is to:
+
+1. Answer questions ONLY based on the provided context from the referral source articles
+2. Cite specific sources by name when providing information
+3. Be concise but thorough - aim for 2-4 paragraphs
+4. If the context doesn't contain relevant information, say "I don't have specific information about that in the current knowledge base"
+5. Focus on practical, actionable information for home care agencies
+6. Use a professional but friendly tone
+7. When mentioning hospitals, organizations, or programs, include key details like location, contact methods, or requirements
+
+Do NOT:
+- Make up information not in the context
+- Provide medical advice
+- Share outdated contact information
+- Make assumptions about services not explicitly mentioned`;
+
+export interface RAGRetrievalResult {
+  chunks: RetrievedChunk[];
+  context: string;
+  sources: string[];
+  sourceTitles: string[];
+}
+
+/**
+ * Retrieve relevant chunks without generating an answer (used by chatbot route)
+ */
+export async function ragRetrieve(
+  query: string,
+  topK: number = DEFAULT_TOP_K
+): Promise<RAGRetrievalResult> {
+  if (!query || query.trim().length < 3) {
+    throw new Error('Query must be at least 3 characters long');
+  }
+
+  const queryEmbedding = await generateQueryEmbedding(query);
+  const chunks = await retrieveRelevantChunks(queryEmbedding, topK);
+  const context = buildContext(chunks);
+  const sources = Array.from(new Set(chunks.map((c) => c.slug)));
+  const sourceTitles = Array.from(new Set(chunks.map((c) => c.title)));
+
+  return { chunks, context, sources, sourceTitles };
 }
 
 /**

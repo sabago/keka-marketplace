@@ -10,14 +10,8 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 // Get the database connection string
 const connectionString = getConnectionString();
 
-// If we're in a production environment, log the connection string (without password)
-// if (process.env.NODE_ENV === 'production') {
-//   const sanitizedUrl = connectionString.replace(/\/\/[^:]+:[^@]+@/, '//[REDACTED]:[REDACTED]@');
-// }
-
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
+function createPrismaClient() {
+  return new PrismaClient({
     datasources: {
       db: {
         url: connectionString,
@@ -25,6 +19,13 @@ export const prisma =
     },
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
+}
+
+// Validate cached client still has the expected models (guards against stale hot-reload cache)
+const cached = globalForPrisma.prisma;
+const isValid = cached && typeof (cached as any).staffMember !== 'undefined';
+
+export const prisma = isValid ? cached : createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 

@@ -19,6 +19,6 @@ export function getConnectionString(): string {
     return `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDatabase}`;
   }
 
-  // Otherwise, use the DATABASE_URL environment variable
-  return process.env.DATABASE_URL || '';
+  // Otherwise, use the DATABASE_URL or MARKETPLACE_DATABASE_URL environment variable
+  return process.env.MARKETPLACE_DATABASE_URL || process.env.DATABASE_URL || '';
 }

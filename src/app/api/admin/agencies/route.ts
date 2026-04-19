@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireSuperadmin } from '@/lib/authHelpers';
 import { ApprovalStatus, UserRole, AgencySize } from '@prisma/client';
 import { z } from 'zod';
+import { generatePasswordSetupToken, sendAgencyApprovalEmail } from '@/lib/email';
 
 /**
  * GET /api/admin/agencies
@@ -125,11 +126,11 @@ const adminAgencyCreationSchema = z.object({
   contactName: z.string().min(2, 'Contact name is required'),
   contactEmail: z.string().email('Invalid email address'),
   contactRole: z.enum(['AGENCY_ADMIN', 'AGENCY_USER'], {
-    errorMap: () => ({ message: 'Role must be either AGENCY_ADMIN or AGENCY_USER' }),
+    error: () => ({ message: 'Role must be either AGENCY_ADMIN or AGENCY_USER' }),
   }),
 
   // Optional
-  agencySize: z.enum(['SMALL', 'MEDIUM', 'LARGE', '']).optional(),
+  agencySize: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional(),
 
   // Intake Analytics
   intakeMethods: z.array(z.string()).min(1, 'At least one intake method is required'),
@@ -211,7 +212,7 @@ export async function POST(request: NextRequest) {
           // Profile data
           servicesOffered: [],
           serviceArea: [data.state],
-          agencySize: data.agencySize && data.agencySize !== ''
+          agencySize: data.agencySize
             ? (data.agencySize as AgencySize)
             : AgencySize.SMALL,
 
@@ -227,22 +228,24 @@ export async function POST(request: NextRequest) {
           followUpFrequency: data.followUpFrequency || null,
           followUpMethods: data.followUpMethods,
 
-          // All agencies must go through the approval workflow
-          approvalStatus: ApprovalStatus.PENDING,
+          // Admin-created agencies are auto-approved; self-assignments link immediately
+          approvalStatus: ApprovalStatus.APPROVED,
           approvalEmailSent: false,
-          approvedAt: null,
+          approvedAt: new Date(),
+          approvedBy: adminUser.id,
         },
       });
 
       let user;
       if (isSelfAssignment && existingUser) {
-        // Link the existing platform admin user to the new agency
+        // Link the existing platform/super admin to the new agency — preserve their original role
+        const preserveRole = existingUser.role === UserRole.PLATFORM_ADMIN || existingUser.role === UserRole.SUPERADMIN;
         user = await tx.user.update({
           where: { id: existingUser.id },
           data: {
             agencyId: agency.id,
             isPrimaryContact: true,
-            role: data.contactRole as UserRole,
+            role: preserveRole ? existingUser.role : data.contactRole as UserRole,
           },
         });
       } else {
@@ -263,6 +266,25 @@ export async function POST(request: NextRequest) {
       return { agency, user };
     });
 
+    // For invite mode (non-self-assignment), send invitation email immediately
+    let emailSent = false;
+    if (!isSelfAssignment) {
+      const token = await generatePasswordSetupToken(result.user.id);
+      if (token) {
+        emailSent = await sendAgencyApprovalEmail(
+          { email: result.user.email, name: result.user.name || 'User' },
+          token,
+          result.agency.agencyName
+        );
+        if (emailSent) {
+          await prisma.agency.update({
+            where: { id: result.agency.id },
+            data: { approvalEmailSent: true },
+          });
+        }
+      }
+    }
+
     // Return success response
     return NextResponse.json(
       {
@@ -270,6 +292,7 @@ export async function POST(request: NextRequest) {
         message: 'Agency created successfully',
         agency: result.agency,
         user: result.user,
+        emailSent,
       },
       { status: 201 }
     );

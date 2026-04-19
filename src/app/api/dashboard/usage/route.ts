@@ -1,70 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { getQueryLimit, hasUnlimitedQueries, getCredentialLimit, hasUnlimitedCredentials } from "@/lib/subscriptionHelpers";
 
 export async function GET(request: NextRequest) {
   try {
-    // In production, get agencyId from authenticated session
-    // For now, return mock data
-    const mockAgencyId = "mock-agency-id";
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
 
-    // Fetch agency data
-    const agency = await prisma.agency.findFirst({
+    const agencyId = (session.user as any).agencyId;
+    if (!agencyId) {
+      return NextResponse.json({ error: "No agency associated" }, { status: 403 });
+    }
+
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
       select: {
-        queriesThisMonth: true,
         subscriptionPlan: true,
+        queriesThisMonth: true,
+        queriesAllTime: true,
+        credentialUploadsTotal: true,
         billingPeriodEnd: true,
       },
     });
 
     if (!agency) {
-      // Return mock data for development
-      const resetDate = new Date();
-      resetDate.setMonth(resetDate.getMonth() + 1);
-      resetDate.setDate(1);
-
-      const daysUntilReset = Math.ceil(
-        (resetDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      return NextResponse.json({
-        queriesUsed: 47,
-        queriesLimit: 200,
-        isUnlimited: false,
-        resetDate: resetDate.toISOString(),
-        daysUntilReset,
-      });
+      return NextResponse.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    // Determine query limit based on plan
-    const queryLimits = {
-      FREE: 50,
-      PRO: 200,
-      BUSINESS: 500,
-      ENTERPRISE: -1, // Unlimited
-    };
+    const plan = agency.subscriptionPlan;
+    const isLifetime = plan === "FREE";
+    const unlimited = hasUnlimitedQueries(plan);
+    const queriesLimit = getQueryLimit(plan);
+    const queriesUsed = isLifetime ? agency.queriesAllTime : agency.queriesThisMonth;
 
-    const queriesLimit = queryLimits[agency.subscriptionPlan] || 50;
-    const isUnlimited = agency.subscriptionPlan === "ENTERPRISE";
+    const credLimit = getCredentialLimit(plan);
+    const credUnlimited = hasUnlimitedCredentials(plan);
 
-    const resetDate = agency.billingPeriodEnd;
-    const daysUntilReset = Math.ceil(
-      (new Date(resetDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const daysUntilReset = isLifetime
+      ? null
+      : Math.max(0, Math.ceil((new Date(agency.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
     return NextResponse.json({
-      queriesUsed: agency.queriesThisMonth,
+      plan,
+      queriesUsed,
       queriesLimit,
-      isUnlimited,
-      resetDate: resetDate.toISOString(),
+      isUnlimited: unlimited,
+      isLifetime,
+      resetDate: isLifetime ? null : agency.billingPeriodEnd,
       daysUntilReset,
+      credentialUploadsUsed: agency.credentialUploadsTotal,
+      credentialUploadsLimit: credLimit,
+      credentialUploadsUnlimited: credUnlimited,
     });
   } catch (error) {
     console.error("Error fetching usage data:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch usage data" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch usage data" }, { status: 500 });
   }
 }

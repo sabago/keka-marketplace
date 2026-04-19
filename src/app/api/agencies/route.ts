@@ -31,14 +31,13 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { agencyName: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-        { state: { contains: search, mode: 'insensitive' } },
+        { serviceArea: { has: search } },
       ];
     }
 
-    // State filter
+    // State filter — match against serviceArea array
     if (stateFilter) {
-      where.state = stateFilter;
+      where.serviceArea = { has: stateFilter };
     }
 
     // Get agencies with pagination
@@ -52,11 +51,8 @@ export async function GET(request: NextRequest) {
           id: true,
           agencyName: true,
           licenseNumber: true,
-          city: true,
-          state: true,
-          phoneNumber: true,
           primaryContactEmail: true,
-          websiteUrl: true,
+          primaryContactPhone: true,
           servicesOffered: true,
           serviceArea: true,
           agencySize: true,
@@ -70,11 +66,8 @@ export async function GET(request: NextRequest) {
       id: agency.id,
       agencyName: agency.agencyName,
       licenseNumber: agency.licenseNumber,
-      city: agency.city,
-      state: agency.state,
-      phone: agency.phoneNumber,
+      phone: agency.primaryContactPhone,
       email: agency.primaryContactEmail,
-      website: agency.websiteUrl,
       services: agency.servicesOffered,
       serviceArea: agency.serviceArea,
       size: agency.agencySize,

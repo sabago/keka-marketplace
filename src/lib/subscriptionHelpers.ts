@@ -16,41 +16,52 @@ const QUERY_LIMITS: Record<PlanType, number> = {
 };
 
 /**
- * Stripe Price IDs for each plan and agency size combination
- * Format: STRIPE_PRICES[PlanType][AgencySize] = priceId
- *
- * To set up in Stripe:
- * 1. Create products for each plan (PRO, BUSINESS, ENTERPRISE)
- * 2. For each product, create 3 price tiers (SMALL, MEDIUM, LARGE)
- * 3. Add the price IDs to your .env file
+ * Stripe Price IDs for each plan, agency size, and billing cycle combination
  *
  * Environment variables needed:
- * - STRIPE_PRICE_PRO_SMALL, STRIPE_PRICE_PRO_MEDIUM, STRIPE_PRICE_PRO_LARGE
- * - STRIPE_PRICE_BUSINESS_SMALL, STRIPE_PRICE_BUSINESS_MEDIUM, STRIPE_PRICE_BUSINESS_LARGE
- * - STRIPE_PRICE_ENTERPRISE_SMALL, STRIPE_PRICE_ENTERPRISE_MEDIUM, STRIPE_PRICE_ENTERPRISE_LARGE
+ * Monthly: STRIPE_PRICE_PRO_SMALL_MONTHLY, _MEDIUM_MONTHLY, _LARGE_MONTHLY (same pattern for BUSINESS, ENTERPRISE)
+ * Annual:  STRIPE_PRICE_PRO_SMALL_ANNUAL,  _MEDIUM_ANNUAL,  _LARGE_ANNUAL
+ *
+ * Legacy env vars (STRIPE_PRICE_PRO_SMALL etc.) are still checked for backwards compatibility.
  */
-const STRIPE_PRICES: Record<PlanType, Record<AgencySize, string | undefined>> = {
-  FREE: {
-    SMALL: undefined, // Free plan doesn't have Stripe prices
-    MEDIUM: undefined,
-    LARGE: undefined,
+const STRIPE_PRICES = {
+  monthly: {
+    FREE: { SMALL: undefined, MEDIUM: undefined, LARGE: undefined },
+    PRO: {
+      SMALL: process.env.STRIPE_PRICE_PRO_SMALL_MONTHLY || process.env.STRIPE_PRICE_PRO_SMALL,
+      MEDIUM: process.env.STRIPE_PRICE_PRO_MEDIUM_MONTHLY || process.env.STRIPE_PRICE_PRO_MEDIUM,
+      LARGE: process.env.STRIPE_PRICE_PRO_LARGE_MONTHLY || process.env.STRIPE_PRICE_PRO_LARGE,
+    },
+    BUSINESS: {
+      SMALL: process.env.STRIPE_PRICE_BUSINESS_SMALL_MONTHLY || process.env.STRIPE_PRICE_BUSINESS_SMALL,
+      MEDIUM: process.env.STRIPE_PRICE_BUSINESS_MEDIUM_MONTHLY || process.env.STRIPE_PRICE_BUSINESS_MEDIUM,
+      LARGE: process.env.STRIPE_PRICE_BUSINESS_LARGE_MONTHLY || process.env.STRIPE_PRICE_BUSINESS_LARGE,
+    },
+    ENTERPRISE: {
+      SMALL: process.env.STRIPE_PRICE_ENTERPRISE_SMALL_MONTHLY || process.env.STRIPE_PRICE_ENTERPRISE_SMALL,
+      MEDIUM: process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM_MONTHLY || process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM,
+      LARGE: process.env.STRIPE_PRICE_ENTERPRISE_LARGE_MONTHLY || process.env.STRIPE_PRICE_ENTERPRISE_LARGE,
+    },
   },
-  PRO: {
-    SMALL: process.env.STRIPE_PRICE_PRO_SMALL,
-    MEDIUM: process.env.STRIPE_PRICE_PRO_MEDIUM,
-    LARGE: process.env.STRIPE_PRICE_PRO_LARGE,
+  annual: {
+    FREE: { SMALL: undefined, MEDIUM: undefined, LARGE: undefined },
+    PRO: {
+      SMALL: process.env.STRIPE_PRICE_PRO_SMALL_ANNUAL,
+      MEDIUM: process.env.STRIPE_PRICE_PRO_MEDIUM_ANNUAL,
+      LARGE: process.env.STRIPE_PRICE_PRO_LARGE_ANNUAL,
+    },
+    BUSINESS: {
+      SMALL: process.env.STRIPE_PRICE_BUSINESS_SMALL_ANNUAL,
+      MEDIUM: process.env.STRIPE_PRICE_BUSINESS_MEDIUM_ANNUAL,
+      LARGE: process.env.STRIPE_PRICE_BUSINESS_LARGE_ANNUAL,
+    },
+    ENTERPRISE: {
+      SMALL: process.env.STRIPE_PRICE_ENTERPRISE_SMALL_ANNUAL,
+      MEDIUM: process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM_ANNUAL,
+      LARGE: process.env.STRIPE_PRICE_ENTERPRISE_LARGE_ANNUAL,
+    },
   },
-  BUSINESS: {
-    SMALL: process.env.STRIPE_PRICE_BUSINESS_SMALL,
-    MEDIUM: process.env.STRIPE_PRICE_BUSINESS_MEDIUM,
-    LARGE: process.env.STRIPE_PRICE_BUSINESS_LARGE,
-  },
-  ENTERPRISE: {
-    SMALL: process.env.STRIPE_PRICE_ENTERPRISE_SMALL,
-    MEDIUM: process.env.STRIPE_PRICE_ENTERPRISE_MEDIUM,
-    LARGE: process.env.STRIPE_PRICE_ENTERPRISE_LARGE,
-  },
-};
+} as const;
 
 /**
  * Default pricing structure (in USD per month)
@@ -84,10 +95,30 @@ export const PLAN_PRICING: Record<PlanType, Record<AgencySize, number>> = {
  * Used to determine how many staff members can be invited
  */
 export const STAFF_LIMITS: Record<AgencySize, number> = {
-  SMALL: 5,    // Up to 5 staff members
-  MEDIUM: 15,  // Up to 15 staff members
+  SMALL: 10,   // Up to 10 staff members
+  MEDIUM: 50,  // Up to 50 staff members
   LARGE: -1,   // Unlimited staff members
 };
+
+/**
+ * Lifetime credential upload limits per plan type
+ * FREE plan: 10 lifetime uploads (never resets — trial only)
+ * Paid plans: unlimited
+ */
+export const CREDENTIAL_LIMITS: Record<PlanType, number> = {
+  FREE: 10,
+  PRO: -1,
+  BUSINESS: -1,
+  ENTERPRISE: -1,
+};
+
+export function getCredentialLimit(planType: PlanType): number {
+  return CREDENTIAL_LIMITS[planType];
+}
+
+export function hasUnlimitedCredentials(planType: PlanType): boolean {
+  return CREDENTIAL_LIMITS[planType] === -1;
+}
 
 // Error class for subscription-related errors
 export class SubscriptionError extends Error {
@@ -319,52 +350,44 @@ export async function getOrCreateStripeCustomer(
 
 /**
  * Downgrade agency to FREE plan (used when subscription is canceled/expired)
+ * NOTE: Does NOT reset queriesAllTime or credentialUploadsTotal — these are lifetime
+ * counters. An agency that used up its free trial quota and then canceled should not
+ * get a fresh bank of free queries/uploads.
  */
 export async function downgradeToFree(agencyId: string): Promise<void> {
   await prisma.agency.update({
     where: { id: agencyId },
     data: {
       subscriptionPlan: PlanType.FREE,
-      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      subscriptionStatus: SubscriptionStatus.CANCELED,
       stripeSubscriptionId: null,
-      // Reset queries on downgrade
-      queriesThisMonth: 0,
-      billingPeriodStart: new Date(),
-      billingPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
 }
 
 /**
  * Get plan name from Stripe price ID (legacy - for backwards compatibility)
- * Use getPlanAndSizeFromPriceId for new size-based pricing
  */
 export function getPlanTypeFromPriceId(priceId: string): PlanType | null {
-  if (priceId === process.env.STRIPE_PRICE_PRO) {
-    return PlanType.PRO;
-  } else if (priceId === process.env.STRIPE_PRICE_BUSINESS) {
-    return PlanType.BUSINESS;
-  } else if (priceId === process.env.STRIPE_PRICE_ENTERPRISE) {
-    return PlanType.ENTERPRISE;
-  }
-
-  // Check size-based pricing
   const result = getPlanAndSizeFromPriceId(priceId);
   return result?.planType || null;
 }
 
 /**
- * Get plan type and agency size from Stripe price ID
+ * Get plan type and agency size from Stripe price ID (checks both monthly and annual)
  */
 export function getPlanAndSizeFromPriceId(priceId: string): {
   planType: PlanType;
   agencySize: AgencySize;
+  billingCycle: 'monthly' | 'annual';
 } | null {
-  // Check all plan types and sizes
-  for (const planType of Object.keys(STRIPE_PRICES) as PlanType[]) {
-    for (const agencySize of Object.keys(STRIPE_PRICES[planType]) as AgencySize[]) {
-      if (STRIPE_PRICES[planType][agencySize] === priceId) {
-        return { planType, agencySize };
+  for (const billingCycle of ['monthly', 'annual'] as const) {
+    for (const planType of Object.keys(STRIPE_PRICES[billingCycle]) as PlanType[]) {
+      const sizes = STRIPE_PRICES[billingCycle][planType] as Record<string, string | undefined>;
+      for (const agencySize of Object.keys(sizes) as AgencySize[]) {
+        if (sizes[agencySize] === priceId) {
+          return { planType, agencySize, billingCycle };
+        }
       }
     }
   }
@@ -372,14 +395,15 @@ export function getPlanAndSizeFromPriceId(priceId: string): {
 }
 
 /**
- * Get Stripe price ID for a specific plan and agency size
+ * Get Stripe price ID for a specific plan, agency size, and billing cycle
  */
 export function getPriceIdForPlan(
   planType: PlanType,
-  agencySize: AgencySize
+  agencySize: AgencySize,
+  billingCycle: 'monthly' | 'annual' = 'monthly'
 ): string | null {
-  const priceId = STRIPE_PRICES[planType]?.[agencySize];
-  return priceId || null;
+  const prices = STRIPE_PRICES[billingCycle][planType] as Record<string, string | undefined>;
+  return prices?.[agencySize] || null;
 }
 
 /**
@@ -387,6 +411,47 @@ export function getPriceIdForPlan(
  */
 export function getPricing(planType: PlanType, agencySize: AgencySize): number {
   return PLAN_PRICING[planType]?.[agencySize] || 0;
+}
+
+/**
+ * Check if an agency can upload another credential document
+ * FREE plan has a lifetime cap; paid plans are unlimited
+ */
+export async function canUploadCredential(agencyId: string): Promise<{
+  canUpload: boolean;
+  currentCount: number;
+  limit: number;
+  isUnlimited: boolean;
+}> {
+  const agency = await prisma.agency.findUnique({
+    where: { id: agencyId },
+    select: { subscriptionPlan: true, credentialUploadsTotal: true },
+  });
+
+  if (!agency) {
+    throw new SubscriptionError('Agency not found', 'AGENCY_NOT_FOUND');
+  }
+
+  const limit = getCredentialLimit(agency.subscriptionPlan);
+  const isUnlimited = hasUnlimitedCredentials(agency.subscriptionPlan);
+
+  return {
+    canUpload: isUnlimited || agency.credentialUploadsTotal < limit,
+    currentCount: agency.credentialUploadsTotal,
+    limit,
+    isUnlimited,
+  };
+}
+
+/**
+ * Increment lifetime credential upload counter for an agency
+ * Should be called after a successful credential document parse
+ */
+export async function incrementCredentialUploadCount(agencyId: string): Promise<void> {
+  await prisma.agency.update({
+    where: { id: agencyId },
+    data: { credentialUploadsTotal: { increment: 1 } },
+  });
 }
 
 /**
