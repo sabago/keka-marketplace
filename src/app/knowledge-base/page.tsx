@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -62,7 +62,7 @@ const starterTips = [
   },
 ];
 
-export default function KnowledgeBasePage() {
+function KnowledgeBasePageInner() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -408,5 +408,13 @@ export default function KnowledgeBasePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function KnowledgeBasePage() {
+  return (
+    <Suspense>
+      <KnowledgeBasePageInner />
+    </Suspense>
   );
 }
