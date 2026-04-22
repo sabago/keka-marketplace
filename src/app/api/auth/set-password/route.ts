@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import { sendWelcomeEmail } from '@/lib/email';
 
 const setPasswordSchema = z.object({
   token: z.string().uuid('Invalid token format'),
@@ -119,6 +120,13 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+
+    // Send role-specific welcome email — fire-and-forget, must not block the response
+    const agencyName = tokenRecord.user.agency?.agencyName ?? undefined;
+    sendWelcomeEmail(
+      { email: tokenRecord.user.email, name: tokenRecord.user.name, role: tokenRecord.user.role },
+      agencyName
+    ).catch((err) => console.error('Welcome email failed (non-fatal):', err));
 
     return NextResponse.json({
       success: true,

@@ -865,6 +865,151 @@ The Platform Team`;
 }
 
 /**
+ * Send a role-specific welcome email after a user sets their password
+ * @param user User details including role
+ * @param agencyName Agency name (undefined for PLATFORM_ADMIN / SUPERADMIN)
+ */
+export async function sendWelcomeEmail(
+  user: { email: string; name: string | null; role: string },
+  agencyName?: string
+): Promise<boolean> {
+  const isAdmin = user.role === 'PLATFORM_ADMIN' || user.role === 'SUPERADMIN';
+  const isAgencyAdmin = user.role === 'AGENCY_ADMIN';
+  const dashboardUrl = `${SITE_URL}/dashboard`;
+  const adminUrl = `${SITE_URL}/admin`;
+
+  let subject: string;
+  let headingHtml: string;
+  let bodyHtml: string;
+  let bodyText: string;
+
+  if (isAdmin) {
+    subject = 'Your admin account is ready';
+    headingHtml = 'Your Admin Account Is Ready';
+    bodyHtml = `
+      <p>Hi ${user.name || 'there'},</p>
+      <p>Your platform admin account is fully set up. You now have access to the admin console.</p>
+      <div style="text-align:center;">
+        <a href="${adminUrl}" class="cta-button">Go to Admin Console</a>
+      </div>
+      <div class="info-box">
+        <p><strong>What you can do:</strong></p>
+        <ul style="margin:10px 0;padding-left:20px;">
+          <li>Review and approve agency applications</li>
+          <li>Manage platform users and permissions</li>
+          <li>View the HIPAA audit log</li>
+          <li>Configure platform settings</li>
+        </ul>
+      </div>`;
+    bodyText = `Hi ${user.name || 'there'},
+
+Your platform admin account is fully set up.
+
+Go to the admin console: ${adminUrl}
+
+From there you can review agency applications, manage users, view the audit log, and configure platform settings.
+
+Best regards,
+The Platform Team`;
+  } else if (isAgencyAdmin) {
+    subject = `Welcome to Mastering Home Care, ${user.name?.split(' ')[0] || 'there'}!`;
+    headingHtml = `Welcome, ${user.name?.split(' ')[0] || 'there'}!`;
+    bodyHtml = `
+      <p>Hi ${user.name || 'there'},</p>
+      <p>Your agency <strong>${agencyName}</strong> is set up and ready to go. Here's where to start:</p>
+      <div style="text-align:center;">
+        <a href="${dashboardUrl}" class="cta-button">Go to Your Dashboard</a>
+      </div>
+      <div class="info-box">
+        <p><strong>What to do first:</strong></p>
+        <ul style="margin:10px 0;padding-left:20px;">
+          <li>Complete your <a href="${SITE_URL}/agency/profile">agency profile</a></li>
+          <li>Browse referral sources in the <a href="${SITE_URL}/directory">Referral Directory</a></li>
+          <li>Invite staff members and track credential compliance</li>
+          <li>Ask our <a href="${SITE_URL}/chatbot">AI Chatbot</a> anything about patient acquisition</li>
+        </ul>
+      </div>`;
+    bodyText = `Hi ${user.name || 'there'},
+
+Your agency ${agencyName} is set up and ready to go.
+
+Dashboard: ${dashboardUrl}
+
+Next steps:
+- Complete your agency profile: ${SITE_URL}/agency/profile
+- Browse the Referral Directory: ${SITE_URL}/directory
+- Invite staff and track credential compliance
+- Try the AI Chatbot: ${SITE_URL}/chatbot
+
+Best regards,
+The Platform Team`;
+  } else {
+    // AGENCY_USER — staff member
+    subject = `You're all set — welcome to ${agencyName || 'the team'}!`;
+    headingHtml = `Welcome to ${agencyName || 'the Team'}!`;
+    bodyHtml = `
+      <p>Hi ${user.name || 'there'},</p>
+      <p>Your account is active. Your next step is to upload your required credentials so your agency stays compliant.</p>
+      <div style="text-align:center;">
+        <a href="${dashboardUrl}" class="cta-button">Go to Your Dashboard</a>
+      </div>
+      <div class="info-box">
+        <p><strong>Getting started:</strong></p>
+        <ul style="margin:10px 0;padding-left:20px;">
+          <li>Upload your credentials (CPR, HHA cert, RN license, etc.)</li>
+          <li>Keep an eye on expiration dates — we'll remind you automatically</li>
+          <li>Check your compliance status anytime from the dashboard</li>
+        </ul>
+      </div>`;
+    bodyText = `Hi ${user.name || 'there'},
+
+Your account is active. Upload your required credentials to keep your agency compliant.
+
+Dashboard: ${dashboardUrl}
+
+Getting started:
+- Upload credentials (CPR, HHA cert, RN license, etc.)
+- We'll send you reminders before anything expires
+- Check your compliance status anytime from the dashboard
+
+Best regards,
+The Platform Team`;
+  }
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${subject}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #0B4F96 0%, #48ccbc 100%); padding: 30px 20px; text-align: center; color: white; }
+        .content { padding: 30px 20px; }
+        .cta-button { display: inline-block; background-color: #48ccbc; color: white !important; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+        .info-box { background-color: #f0f7ff; border-left: 4px solid #0B4F96; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { font-size: 12px; color: #6c757d; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>${headingHtml}</h1>
+      </div>
+      <div class="content">
+        ${bodyHtml}
+        <p>Best regards,<br>The Platform Team</p>
+      </div>
+      <div class="footer">
+        <p>&copy; ${new Date().getFullYear()} Healthcare Agency Platform. All rights reserved.</p>
+        <p>This email was sent to ${user.email}</p>
+      </div>
+    </body>
+    </html>`;
+
+  return sendEmail(user.email, subject, htmlContent, bodyText);
+}
+
+/**
  * Send access request notification to all platform admins
  */
 export async function sendAccessRequestNotification(data: {
