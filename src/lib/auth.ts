@@ -187,7 +187,10 @@ export const authOptions: NextAuthOptions = {
     },
 
     async redirect({ url, baseUrl }) {
-      // Redirect to dashboard after sign in
+      // Never redirect back to the sign-in page after a successful login
+      if (url.includes('/auth/signin') || url.includes('/auth/signout')) {
+        return `${baseUrl}/dashboard`;
+      }
       if (url.startsWith('/')) return `${baseUrl}${url}`;
       if (new URL(url).origin === baseUrl) return url;
       return `${baseUrl}/dashboard`;

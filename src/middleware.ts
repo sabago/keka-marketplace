@@ -54,6 +54,8 @@ export async function middleware(request: NextRequest) {
     '/account-suspended',
     '/request-access',
     '/api/request-access',
+    '/privacy',
+    '/terms',
   ];
 
   // Allow public GET requests to settings (reading is public, writing requires admin)
