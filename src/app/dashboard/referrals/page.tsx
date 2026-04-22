@@ -532,9 +532,14 @@ export default function ReferralsPage() {
                   onChange={(e) => {
                     const newStatus = e.target.value;
                     const updates: Partial<typeof editForm> = { status: newStatus };
-                    // Auto-calculate response time (in minutes) when moving past SUBMITTED
-                    // Use createdAt (exact creation time) not submissionDate (date-only, midnight)
-                    if (newStatus !== "SUBMITTED" && editingReferral) {
+                    // Auto-calculate response time (in minutes) only when first moving to RESPONDED
+                    // and only if no response time has been recorded yet.
+                    if (
+                      newStatus === "RESPONDED" &&
+                      editingReferral &&
+                      !editForm.responseTime &&
+                      !editingReferral.responseTime
+                    ) {
                       const submittedMs = new Date(editingReferral.createdAt).getTime();
                       const minutesElapsed = Math.round((Date.now() - submittedMs) / 60_000);
                       updates.responseTime = String(minutesElapsed);

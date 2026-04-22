@@ -291,7 +291,7 @@ export default function HomePage() {
 												<ShieldCheck className="h-5 w-5" />
 											</div>
 											<div>
-												<div className="font-bold text-lg">1,200+</div>
+												<div className="font-bold text-lg">100+</div>
 												<div className="text-sm text-white/80">MA Referral Sources</div>
 											</div>
 										</div>
@@ -302,8 +302,8 @@ export default function HomePage() {
 												<TrendingUp className="h-5 w-5" />
 											</div>
 											<div>
-												<div className="font-bold text-lg">500+</div>
-												<div className="text-sm text-white/80">Agencies Using Platform</div>
+												<div className="font-bold text-lg">Realtime</div>
+												<div className="text-sm text-white/80">Credential Tracking</div>
 											</div>
 										</div>
 									</div>

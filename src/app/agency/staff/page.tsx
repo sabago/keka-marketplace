@@ -3,10 +3,114 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { UserPlus, Users, Loader2, AlertCircle } from "lucide-react";
+import { UserPlus, Users, Loader2, AlertCircle, UserCheck, ChevronDown, ChevronRight } from "lucide-react";
 import StaffList from "@/components/StaffList";
 import InviteStaffModal from "@/components/InviteStaffModal";
 import { UserRole } from "@prisma/client";
+
+interface RemovedStaffListProps {
+  staffMembers: StaffMember[];
+  onReactivate: (staffId: string) => void;
+  actionLoading: boolean;
+}
+
+function RemovedStaffList({ staffMembers, onReactivate, actionLoading }: RemovedStaffListProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mt-6">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700 mb-3"
+      >
+        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        Removed Staff ({staffMembers.length})
+      </button>
+      {expanded && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff Member</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {staffMembers.map((staff) => (
+                  <tr key={staff.id} className="bg-gray-50 opacity-75">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-gray-400 flex items-center justify-center text-white font-medium">
+                          {staff.name?.charAt(0).toUpperCase() || "?"}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-500">{staff.name || "Unnamed"}</div>
+                          <div className="text-xs text-red-500">Removed</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{staff.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{staff.role === UserRole.AGENCY_ADMIN ? "Admin" : "Staff"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{new Date(staff.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => {
+                          if (confirm(`Reactivate ${staff.name || staff.email}? They will regain access to the agency.`)) {
+                            onReactivate(staff.id);
+                          }
+                        }}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs text-green-700 border border-green-600 rounded hover:bg-green-600 hover:text-white transition-colors disabled:opacity-50 ml-auto"
+                      >
+                        <UserCheck className="h-3.5 w-3.5" />
+                        Reactivate
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {staffMembers.map((staff) => (
+              <div key={staff.id} className="p-4 bg-gray-50 opacity-75">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gray-400 flex items-center justify-center text-white font-medium flex-shrink-0">
+                      {staff.name?.charAt(0).toUpperCase() || "?"}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-500">{staff.name || "Unnamed"}</div>
+                      <div className="text-xs text-gray-400">{staff.email}</div>
+                      <div className="text-xs text-red-500">Removed</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Reactivate ${staff.name || staff.email}?`)) {
+                        onReactivate(staff.id);
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-green-700 border border-green-600 rounded hover:bg-green-600 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Reactivate
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface StaffMember {
   id: string;
@@ -15,6 +119,7 @@ interface StaffMember {
   role: UserRole;
   emailVerified: Date | null;
   isPrimaryContact: boolean;
+  isActive: boolean;
   createdAt: Date;
   image: string | null;
   invitationStatus: "active" | "pending" | "expired";
@@ -80,16 +185,14 @@ export default function AgencyStaffPage() {
     }
   }, [session, status]);
 
-  // Handle remove staff member
+  // Handle remove staff member (soft deactivate)
   const handleRemoveStaff = async (staffId: string) => {
     try {
       setActionLoading(true);
 
       const response = await fetch(`/api/agency/staff/${staffId}`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       });
 
       const data = await response.json();
@@ -98,11 +201,35 @@ export default function AgencyStaffPage() {
         throw new Error(data.error || "Failed to remove staff member");
       }
 
-      // Refresh the staff list
       await fetchStaffMembers();
     } catch (err: any) {
       console.error("Error removing staff member:", err);
       alert(err.message || "Failed to remove staff member. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle reactivate staff member
+  const handleReactivateStaff = async (staffId: string) => {
+    try {
+      setActionLoading(true);
+
+      const response = await fetch(`/api/agency/staff/${staffId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reactivate staff member");
+      }
+
+      await fetchStaffMembers();
+    } catch (err: any) {
+      console.error("Error reactivating staff member:", err);
+      alert(err.message || "Failed to reactivate staff member. Please try again.");
     } finally {
       setActionLoading(false);
     }
@@ -232,57 +359,80 @@ export default function AgencyStaffPage() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Users className="h-6 w-6 text-[#0B4F96]" />
+        {(() => {
+          const active = staffMembers.filter((s) => s.isActive);
+          const removed = staffMembers.filter((s) => !s.isActive);
+          return (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-6 w-6 text-[#0B4F96]" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Active</p>
+                      <p className="text-2xl font-bold text-gray-900">{active.length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Active</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {active.filter((s) => s.invitationStatus === "active").length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-6 w-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Pending</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {active.filter((s) => s.invitationStatus === "pending").length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-red-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-6 w-6 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Removed</p>
+                      <p className="text-2xl font-bold text-gray-900">{removed.length}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Staff</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {staffMembers.length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Users className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Active</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {staffMembers.filter((s) => s.invitationStatus === "active").length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <Users className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {
-                    staffMembers.filter((s) => s.invitationStatus === "pending")
-                      .length
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Staff List */}
-        <StaffList
-          staffMembers={staffMembers}
-          onRemove={handleRemoveStaff}
-          onResendInvitation={handleResendInvitation}
-        />
+              {/* Active Staff List */}
+              <StaffList
+                staffMembers={active}
+                onRemove={handleRemoveStaff}
+                onResendInvitation={handleResendInvitation}
+              />
+
+              {/* Removed Staff */}
+              {removed.length > 0 && (
+                <RemovedStaffList
+                  staffMembers={removed}
+                  onReactivate={handleReactivateStaff}
+                  actionLoading={actionLoading}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Invite Staff Modal */}

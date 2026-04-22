@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     // Require agency admin authentication
     const { user, agency } = await requireAgencyAdmin();
 
-    // Get all users in the agency
+    // Get all users in the agency (active and inactive)
     const staffMembers = await prisma.user.findMany({
       where: {
         agencyId: agency.id,
@@ -24,13 +24,15 @@ export async function GET(req: NextRequest) {
         role: true,
         emailVerified: true,
         isPrimaryContact: true,
+        isActive: true,
         createdAt: true,
         updatedAt: true,
         image: true,
       },
       orderBy: [
-        { role: 'asc' }, // AGENCY_ADMIN first, then AGENCY_USER
-        { createdAt: 'asc' }, // Then by creation date
+        { isActive: 'desc' }, // Active staff first
+        { role: 'asc' },      // AGENCY_ADMIN before AGENCY_USER
+        { createdAt: 'asc' },
       ],
     });
 

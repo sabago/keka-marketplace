@@ -23,6 +23,7 @@ interface StaffMember {
   role: UserRole;
   emailVerified: Date | null;
   isPrimaryContact: boolean;
+  isActive: boolean;
   createdAt: Date;
   image: string | null;
   invitationStatus: "active" | "pending" | "expired";

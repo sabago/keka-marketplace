@@ -81,9 +81,10 @@ export async function DELETE(
       );
     }
 
-    // Delete the staff member
-    await prisma.user.delete({
+    // Deactivate the staff member (soft remove — preserves credentials, audit history)
+    await prisma.user.update({
       where: { id: staffId },
+      data: { isActive: false },
     });
 
     // Log the admin action
@@ -125,6 +126,69 @@ export async function DELETE(
       { error: 'Failed to remove staff member. Please try again.' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * PATCH /api/agency/staff/[id]
+ * Reactivate a previously removed staff member
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { user, agency } = await requireAgencyAdmin();
+    const { id: staffId } = await params;
+
+    if (!staffId) {
+      return NextResponse.json({ error: 'Staff member ID is required' }, { status: 400 });
+    }
+
+    const staffMember = await prisma.user.findUnique({
+      where: { id: staffId },
+      select: { id: true, email: true, name: true, role: true, agencyId: true, isActive: true },
+    });
+
+    if (!staffMember) {
+      return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
+    }
+
+    if (staffMember.agencyId !== agency.id) {
+      return NextResponse.json({ error: 'Staff member does not belong to your agency' }, { status: 403 });
+    }
+
+    if (staffMember.isActive) {
+      return NextResponse.json({ error: 'Staff member is already active' }, { status: 400 });
+    }
+
+    await prisma.user.update({
+      where: { id: staffId },
+      data: { isActive: true },
+    });
+
+    await prisma.adminAction.create({
+      data: {
+        adminId: user.id,
+        actionType: 'STAFF_REACTIVATED',
+        targetAgencyId: agency.id,
+        details: {
+          staffId,
+          staffEmail: staffMember.email,
+          staffName: staffMember.name,
+          staffRole: staffMember.role,
+          agencyName: agency.agencyName,
+        },
+      },
+    });
+
+    return NextResponse.json({ message: 'Staff member reactivated successfully' }, { status: 200 });
+  } catch (error: any) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    console.error('Error reactivating staff member:', error);
+    return NextResponse.json({ error: 'Failed to reactivate staff member.' }, { status: 500 });
   }
 }
 

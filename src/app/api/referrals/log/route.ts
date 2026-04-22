@@ -60,6 +60,12 @@ export async function POST(request: NextRequest) {
         patientType,
         notes,
         status: "SUBMITTED",
+        statusHistory: {
+          create: {
+            status: "SUBMITTED",
+            notes: notes || null,
+          },
+        },
       },
     });
 
