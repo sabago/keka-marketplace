@@ -179,7 +179,7 @@ export default function CredentialReviewModal({
 								<p className="text-sm text-gray-500">
 									Employee:{" "}
 									<span className="font-medium text-gray-700">
-										{credential.employee?.firstName} {credential.employee?.lastName}
+										{credential.staffMember?.firstName} {credential.staffMember?.lastName}
 									</span>
 								</p>
 							</div>

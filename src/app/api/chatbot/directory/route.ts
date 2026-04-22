@@ -10,11 +10,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAgency } from '@/lib/authHelpers';
 import { checkQueryLimit, incrementQueryCount, logChatbotQuery } from '@/lib/chatbotAuth';
 import { ragRetrieve, DIRECTORY_SYSTEM_PROMPT } from '@/lib/rag';
+import { logAuditEvent, getRequestMetadata } from '@/lib/auditLog';
+import { chatbotRateLimit, checkRateLimit, getIP, createRateLimitResponse } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
+    // 0. IP-level rate limit — blocks DDoS before any auth or DB work
+    const rl = await checkRateLimit(chatbotRateLimit, getIP(request));
+    if (!rl.success) return createRateLimitResponse(rl.reset, rl.limit, rl.remaining);
+
     // 1. Require authenticated user (agency member OR platform admin)
     let user: any;
     let agency: any = null;
@@ -25,11 +31,16 @@ export async function POST(request: NextRequest) {
       if (!session?.user) throw new Error('Not authenticated');
       user = session.user;
 
-      // Platform admins don't need an agency
-      if (user.role !== 'PLATFORM_ADMIN' && user.role !== 'SUPERADMIN') {
+      // Always try to resolve agency — platform/super admins may also have one
+      try {
         const agencyContext = await requireAgency();
         user = agencyContext.user;
         agency = agencyContext.agency;
+      } catch {
+        // Platform/super admins without an agency can still use the chatbot, uncounted
+        if (user.role !== 'PLATFORM_ADMIN' && user.role !== 'SUPERADMIN') {
+          throw new Error('Agency association required');
+        }
       }
     } catch {
       return NextResponse.json(
@@ -51,9 +62,32 @@ export async function POST(request: NextRequest) {
 
     const { message } = body;
 
-    if (!message || typeof message !== 'string' || message.trim().length < 3) {
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Message must be at least 3 characters long' },
+        { error: 'Message cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    // Prompt injection guard
+    const INJECTION_PATTERNS = [
+      /ignore\s+(previous|prior|above|all)\s+instructions?/i,
+      /disregard\s+(previous|prior|above|all)\s+instructions?/i,
+      /forget\s+(everything|all|previous)/i,
+      /you\s+are\s+now\s+(a\s+)?(?!an?\s+assistant)/i,
+      /system\s*prompt/i,
+      /jailbreak/i,
+      /\bdan\b.*mode/i,
+    ];
+
+    if (INJECTION_PATTERNS.some((p) => p.test(message))) {
+      void logAuditEvent(
+        'security_alert',
+        { userId: user.id, agencyId: agency?.id, action: 'prompt_injection_attempt', metadata: { queryLength: message.length } },
+        getRequestMetadata(request)
+      ).catch(() => {});
+      return NextResponse.json(
+        { error: 'Message contains content that cannot be processed.' },
         { status: 400 }
       );
     }
@@ -80,7 +114,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Retrieve relevant chunks from Pinecone
-    let retrieval;
+    // For short messages that don't yield meaningful embeddings, retrieval returns empty chunks
+    // and Claude responds with a prompt to ask a real question — query still counts.
+    let retrieval: Awaited<ReturnType<typeof ragRetrieve>>;
     try {
       retrieval = await ragRetrieve(message.trim(), 5);
     } catch (error) {
@@ -126,7 +162,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Increment query count (skip for platform admins)
+    // 6. Increment query count
     if (agency) {
       await incrementQueryCount(agency.id);
     }

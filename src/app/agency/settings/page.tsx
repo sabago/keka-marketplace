@@ -138,29 +138,46 @@ export default function AgencySettingsPage() {
     "Mental Health",
   ];
 
-  // Check authentication
+  // Auth check + fetch trigger in one effect so loading state is always resolved
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/signin");
-    } else if (
-      session?.user &&
-      session.user.role !== UserRole.AGENCY_ADMIN &&
-      session.user.role !== UserRole.PLATFORM_ADMIN && session.user.role !== UserRole.SUPERADMIN
-    ) {
-      router.push("/dashboard");
-    }
-  }, [session, status, router]);
+    if (status === "loading") return; // still waiting for session — don't touch loading state
 
-  // Fetch agency settings
-  useEffect(() => {
-    if (
-      status === "authenticated" &&
-      (session?.user.role === UserRole.AGENCY_ADMIN ||
-        session?.user.role === UserRole.PLATFORM_ADMIN || session?.user.role === UserRole.SUPERADMIN)
-    ) {
-      fetchSettings();
+    if (status === "unauthenticated") {
+      setLoading(false);
+      router.push("/auth/signin");
+      return;
     }
-  }, [session, status]);
+
+    const role = session?.user?.role;
+    const isAllowed = role === UserRole.AGENCY_ADMIN || role === UserRole.PLATFORM_ADMIN || role === UserRole.SUPERADMIN;
+
+    if (!isAllowed) {
+      setLoading(false);
+      router.push("/dashboard");
+      return;
+    }
+
+    fetchSettings();
+  }, [status, session?.user?.role]);
+
+  // Refresh query count whenever the chatbot uses a query
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const res = await fetch("/api/agency/subscription", { cache: "no-store" });
+        if (!res.ok) return;
+        const sub = await res.json();
+        setStatsData((prev) => prev ? {
+          ...prev,
+          queriesThisMonth: sub.agency?.queriesThisMonth ?? prev.queriesThisMonth,
+          queriesAllTime: sub.agency?.queriesAllTime ?? prev.queriesAllTime,
+          queriesRemaining: sub.queriesRemaining ?? prev.queriesRemaining,
+        } : prev);
+      } catch {}
+    };
+    window.addEventListener("chatbot-query-used", handler);
+    return () => window.removeEventListener("chatbot-query-used", handler);
+  }, []);
 
   const fetchSettings = async () => {
     try {
@@ -170,7 +187,7 @@ export default function AgencySettingsPage() {
         fetch("/api/agency/subscription"),
         fetch("/api/referrals"),
         fetch("/api/favorites"),
-        fetch("/api/agency/compliance/dashboard"),
+        fetch("/api/agency/compliance/dashboard?countsOnly=true"),
       ]);
 
       const data = await settingsRes.json();

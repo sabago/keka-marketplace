@@ -33,23 +33,23 @@ function normalizeQuery(query: string): string {
 }
 
 /**
- * Generate cache key from query
+ * Generate cache key from query and model identifier
  */
-function getCacheKey(query: string): string {
+function getCacheKey(query: string, model: string): string {
   const normalized = normalizeQuery(query);
-  return `${CACHE_PREFIX}${normalized}`;
+  return `${CACHE_PREFIX}${model}:${normalized}`;
 }
 
 /**
  * Get cached query result
  */
-export async function getCachedQuery<T = any>(query: string): Promise<T | null> {
+export async function getCachedQuery<T = any>(query: string, model: string): Promise<T | null> {
   if (!redis) {
     return null;
   }
 
   try {
-    const cacheKey = getCacheKey(query);
+    const cacheKey = getCacheKey(query, model);
     const cached = await redis.get(cacheKey);
 
     if (cached) {
@@ -67,13 +67,13 @@ export async function getCachedQuery<T = any>(query: string): Promise<T | null> 
 /**
  * Set cached query result
  */
-export async function setCachedQuery(query: string, result: any): Promise<void> {
+export async function setCachedQuery(query: string, model: string, result: any): Promise<void> {
   if (!redis) {
     return;
   }
 
   try {
-    const cacheKey = getCacheKey(query);
+    const cacheKey = getCacheKey(query, model);
     await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
 
     console.log(`Cached query: "${query.substring(0, 50)}..."`);
@@ -86,13 +86,13 @@ export async function setCachedQuery(query: string, result: any): Promise<void> 
 /**
  * Invalidate cache for a specific query
  */
-export async function invalidateQuery(query: string): Promise<void> {
+export async function invalidateQuery(query: string, model: string = ''): Promise<void> {
   if (!redis) {
     return;
   }
 
   try {
-    const cacheKey = getCacheKey(query);
+    const cacheKey = getCacheKey(query, model);
     await redis.del(cacheKey);
 
     console.log(`Invalidated cache for query: "${query.substring(0, 50)}..."`);

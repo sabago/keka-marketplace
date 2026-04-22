@@ -105,15 +105,12 @@ export async function getSignedDownloadUrl(
     });
 
     // On dev, the IAM user has explicit deny on GetObject so the signed URL
-    // will return AccessDenied when the browser tries to fetch it. If we have
-    // the file in the local cache, return a local API URL instead.
+    // will return AccessDenied when the browser tries to fetch it.
+    // Always route through the local dev file API which handles cache + S3 fallback.
     if (process.env.NODE_ENV === 'development') {
-      const cachePath = devCachePath(key);
-      if (cachePath && fs.existsSync(cachePath)) {
-        const encodedKey = encodeURIComponent(key);
-        const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        return `${appUrl}/api/dev/file?key=${encodedKey}${fileName ? `&name=${encodeURIComponent(fileName)}` : ''}`;
-      }
+      const encodedKey = encodeURIComponent(key);
+      const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      return `${appUrl}/api/dev/file?key=${encodedKey}${fileName ? `&name=${encodeURIComponent(fileName)}` : ''}`;
     }
 
     return url;

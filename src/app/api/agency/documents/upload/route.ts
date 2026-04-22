@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CredentialPageRole, DocumentStatus } from '@prisma/client';
 import { requireAgency } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
-import { uploadFileToS3 } from '@/lib/s3';
+import { uploadToS3 } from '@/lib/s3';
 import { enqueueParsingJob } from '@/lib/jobQueue';
+import { incrementCredentialUploadCount } from '@/lib/subscriptionHelpers';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME_TYPES = [
@@ -194,7 +195,8 @@ export async function POST(req: NextRequest) {
       const sanitized = entry.file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const s3Key = `documents/${agency.id}/${staffRecordId}/${timestamp}_${entry.order}_${sanitized}`;
       const bytes = await entry.file.arrayBuffer();
-      await uploadFileToS3(Buffer.from(bytes), s3Key, entry.file.type, 'documents');
+      const uploadResult = await uploadToS3(Buffer.from(bytes), s3Key, entry.file.type);
+      if (!uploadResult.success) throw new Error(`Failed to upload file: ${uploadResult.error}`);
       uploadedFiles.push({
         s3Key,
         fileName: entry.file.name,
@@ -262,15 +264,20 @@ export async function POST(req: NextRequest) {
       return cred;
     });
 
+    // ── Increment lifetime upload counter ─────────────────────────────────────
+    await incrementCredentialUploadCount(agency.id);
+
     // ── Enqueue AI parsing job (was missing from this route previously) ────────
+    let jobId: string | undefined;
     if (documentType.aiParsingEnabled !== false) {
-      await enqueueParsingJob(
+      const enqueued = await enqueueParsingJob(
         document.id,
         document.s3Key,
         document.fileName,
         document.mimeType,
         agency.id
       );
+      jobId = enqueued.jobId;
     }
 
     return NextResponse.json(
@@ -278,6 +285,7 @@ export async function POST(req: NextRequest) {
         message: 'Document uploaded successfully',
         document,
         fileCount: uploadedFiles.length,
+        jobId,
       },
       { status: 201 }
     );

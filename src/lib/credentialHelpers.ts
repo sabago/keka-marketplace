@@ -391,7 +391,8 @@ export async function batchUpdateAgencyCompliance(agencyId: string): Promise<num
     },
   });
 
-  let updatedCount = 0;
+  const now = new Date();
+  const updates: Array<{ id: string; status: DocumentStatus; isCompliant: boolean }> = [];
 
   for (const credential of credentials) {
     const warningDays = credential.staffMember.agency.credentialWarningDays;
@@ -404,20 +405,23 @@ export async function batchUpdateAgencyCompliance(agencyId: string): Promise<num
 
     // Only update if status or compliance changed
     if (credential.status !== newStatus || credential.isCompliant !== isCompliant) {
-      await prisma.staffCredential.update({
-        where: { id: credential.id },
-        data: {
-          status: newStatus,
-          isCompliant,
-          complianceCheckedAt: new Date(),
-        },
-      });
-
-      updatedCount++;
+      updates.push({ id: credential.id, status: newStatus, isCompliant });
     }
   }
 
-  return updatedCount;
+  if (updates.length > 0) {
+    // Single transaction — one round-trip regardless of how many credentials changed
+    await prisma.$transaction(
+      updates.map((u) =>
+        prisma.staffCredential.update({
+          where: { id: u.id },
+          data: { status: u.status, isCompliant: u.isCompliant, complianceCheckedAt: now },
+        })
+      )
+    );
+  }
+
+  return updates.length;
 }
 
 /**
@@ -485,62 +489,40 @@ export async function getCredentialStatsByType(agencyId: string): Promise<
     complianceRate: number;
   }>
 > {
-  const credentials = await prisma.staffCredential.findMany({
-    where: {
-      staffMember: {
-        agencyId,
-        status: 'ACTIVE',
-      },
-    },
-    include: {
-      documentType: true,
-    },
-  });
+  // Use DB-level groupBy instead of fetching all rows and aggregating in JS
+  const [grouped, typeNames] = await Promise.all([
+    prisma.staffCredential.groupBy({
+      by: ['documentTypeId', 'status', 'isCompliant'],
+      where: { staffMember: { agencyId, status: 'ACTIVE' } },
+      _count: { id: true },
+    }),
+    prisma.documentType.findMany({
+      where: { OR: [{ isGlobal: true }, { agencyId }], isActive: true },
+      select: { id: true, name: true },
+    }),
+  ]);
 
-  // Group by type
-  const statsByType = new Map<
-    string,
-    {
-      typeName: string;
-      total: number;
-      valid: number;
-      expiringSoon: number;
-      expired: number;
+  const typeNameMap = new Map(typeNames.map((t) => [t.id, t.name]));
+
+  const statsByType = new Map<string, { typeName: string; total: number; valid: number; expiringSoon: number; expired: number }>();
+
+  for (const row of grouped) {
+    const typeName = typeNameMap.get(row.documentTypeId);
+    if (!typeName) continue;
+    if (!statsByType.has(row.documentTypeId)) {
+      statsByType.set(row.documentTypeId, { typeName, total: 0, valid: 0, expiringSoon: 0, expired: 0 });
     }
-  >();
-
-  for (const credential of credentials) {
-    const typeName = credential.documentType.name;
-
-    if (!statsByType.has(typeName)) {
-      statsByType.set(typeName, {
-        typeName,
-        total: 0,
-        valid: 0,
-        expiringSoon: 0,
-        expired: 0,
-      });
-    }
-
-    const stats = statsByType.get(typeName)!;
-    stats.total++;
-
-    if (credential.status === 'ACTIVE' && credential.isCompliant) {
-      stats.valid++;
-    } else if (credential.status === 'EXPIRING_SOON') {
-      stats.expiringSoon++;
-    } else if (credential.status === 'EXPIRED') {
-      stats.expired++;
-    }
+    const s = statsByType.get(row.documentTypeId)!;
+    const count = row._count.id;
+    s.total += count;
+    if (row.status === 'ACTIVE' && row.isCompliant) s.valid += count;
+    else if (row.status === 'EXPIRING_SOON') s.expiringSoon += count;
+    else if (row.status === 'EXPIRED') s.expired += count;
   }
 
-  // Convert to array and add compliance rate
-  return Array.from(statsByType.values()).map((stats) => ({
-    ...stats,
-    complianceRate:
-      stats.total > 0
-        ? Math.round((stats.valid / stats.total) * 100 * 100) / 100
-        : 0,
+  return Array.from(statsByType.values()).map((s) => ({
+    ...s,
+    complianceRate: s.total > 0 ? Math.round((s.valid / s.total) * 100 * 100) / 100 : 0,
   }));
 }
 
@@ -636,7 +618,7 @@ export async function getOrCreateStaffRecord(userId: string) {
 export async function detectCredentialGaps(
   staffMemberId: string,
   agencyId: string
-): Promise<Array<{ documentTypeId: string; documentTypeName: string; recheckCadenceDays: number }>> {
+): Promise<Array<{ documentTypeId: string; documentTypeName: string; recheckCadenceDays: number; pendingReview: boolean }>> {
   // Fetch all document types for this agency that require periodic renewal
   const requiredTypes = await prisma.documentType.findMany({
     where: {
@@ -649,18 +631,34 @@ export async function detectCredentialGaps(
 
   if (requiredTypes.length === 0) return [];
 
-  // Find which of those types the staff member currently has covered
-  const activeCredentials = await prisma.staffCredential.findMany({
-    where: {
-      staffMemberId,
-      documentTypeId: { in: requiredTypes.map((t) => t.id) },
-      reviewStatus: 'APPROVED',
-      status: { in: ['ACTIVE', 'EXPIRING_SOON'] },
-    },
-    select: { documentTypeId: true },
-  });
+  const typeIds = requiredTypes.map((t) => t.id);
+
+  // Fetch active coverage and pending review status in parallel (independent queries)
+  const [activeCredentials, pendingCredentials] = await Promise.all([
+    // Find which types are fully covered (approved + active/expiring)
+    prisma.staffCredential.findMany({
+      where: {
+        staffMemberId,
+        documentTypeId: { in: typeIds },
+        reviewStatus: 'APPROVED',
+        status: { in: ['ACTIVE', 'EXPIRING_SOON'] },
+      },
+      select: { documentTypeId: true },
+    }),
+    // Find which types have been uploaded but are awaiting review
+    prisma.staffCredential.findMany({
+      where: {
+        staffMemberId,
+        documentTypeId: { in: typeIds },
+        reviewStatus: 'PENDING_REVIEW',
+        status: { not: 'ARCHIVED' },
+      },
+      select: { documentTypeId: true },
+    }),
+  ]);
 
   const coveredTypeIds = new Set(activeCredentials.map((c) => c.documentTypeId));
+  const pendingTypeIds = new Set(pendingCredentials.map((c) => c.documentTypeId));
 
   return requiredTypes
     .filter((t) => !coveredTypeIds.has(t.id))
@@ -668,5 +666,6 @@ export async function detectCredentialGaps(
       documentTypeId: t.id,
       documentTypeName: t.name,
       recheckCadenceDays: t.recheckCadenceDays!,
+      pendingReview: pendingTypeIds.has(t.id),
     }));
 }

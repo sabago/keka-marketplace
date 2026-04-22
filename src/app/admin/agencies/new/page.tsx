@@ -59,7 +59,7 @@ interface FormData {
 
 export default function AdminCreateAgencyPage() {
 	const router = useRouter();
-	const { data: session, status } = useSession();
+	const { data: session, status, update } = useSession();
 	const [formData, setFormData] = useState<FormData>({
 		agencyName: "",
 		licenseNumber: "",
@@ -237,7 +237,10 @@ export default function AdminCreateAgencyPage() {
 				throw new Error(data.error || "Failed to create agency");
 			}
 
-			// Success
+			// Success — if self-assignment, refresh session so agencyId is in JWT immediately
+			if (adminMode === "self") {
+				await update({ agencyId: data.agency.id });
+			}
 			setCreatedAgencyId(data.agency.id);
 			router.push("/admin/agencies");
 		} catch (err) {

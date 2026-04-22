@@ -22,13 +22,17 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password are required');
         }
 
-        // Find user by email
+        // Find user by email — select only what authorize needs; agency row is not used here
         const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email,
-          },
-          include: {
-            agency: true,
+          where: { email: credentials.email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            password: true,
+            role: true,
+            agencyId: true,
+            image: true,
           },
         });
 
@@ -85,7 +89,7 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === 'google' && user) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          include: { agency: true },
+          select: { role: true, agencyId: true },
         });
 
         if (dbUser) {
@@ -133,8 +137,8 @@ export const authOptions: NextAuthOptions = {
     // newUser: '/auth/new-user',
   },
 
-  // Enable debug messages in development
-  debug: process.env.NODE_ENV === 'development',
+  // Debug mode only when explicitly requested — always-on debug adds overhead on every session call
+  debug: process.env.NEXTAUTH_DEBUG === 'true',
 
   // Secret for JWT encryption
   secret: process.env.NEXTAUTH_SECRET,

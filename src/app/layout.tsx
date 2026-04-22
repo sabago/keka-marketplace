@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import Header from "@/components/Header";
-import AIChatbot from "@/components/AIChatbot";
+import DirectoryChatbot from "@/components/DirectoryChatbot";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -33,7 +33,7 @@ export default function RootLayout({
 				<Providers>
 					<Header />
 					<main className="flex-grow">{children}</main>
-					<AIChatbot />
+					<DirectoryChatbot />
 				</Providers>
 			</body>
 		</html>

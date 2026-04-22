@@ -295,9 +295,14 @@ export async function updateSubscriptionFromStripe(
     agencySize?: AgencySize;
   }
 ) {
+  const { planType, status, ...rest } = data;
   return await prisma.agency.update({
     where: { id: agencyId },
-    data,
+    data: {
+      ...rest,
+      ...(planType !== undefined && { subscriptionPlan: planType }),
+      ...(status !== undefined && { subscriptionStatus: status }),
+    },
   });
 }
 
@@ -451,6 +456,7 @@ export async function incrementCredentialUploadCount(agencyId: string): Promise<
   await prisma.agency.update({
     where: { id: agencyId },
     data: { credentialUploadsTotal: { increment: 1 } },
+    select: { id: true },
   });
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Download, Trash2, FileText, Calendar, AlertCircle, ClipboardCheck, Eye, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Download, Trash2, FileText, Calendar, AlertCircle, ClipboardCheck, Eye, X, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import DocumentStatusBadge from "./DocumentStatusBadge";
 import {
 	formatExpirationMessage,
@@ -19,17 +19,20 @@ interface Document {
 	expirationDate: string | null;
 	status: "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "ARCHIVED";
 	reviewStatus: "PENDING_UPLOAD" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "NEEDS_CORRECTION" | null;
+	reviewNotes: string | null;
 	notes: string | null;
 	createdAt: string;
 	documentType: {
 		id: string;
 		name: string;
 	};
+	parsingJob?: { id: string; status: string } | null;
 }
 
 interface GapItem {
 	documentTypeId: string;
 	documentTypeName: string;
+	pendingReview?: boolean;
 }
 
 interface DocumentListProps {
@@ -41,6 +44,8 @@ interface DocumentListProps {
 	credentialHistory?: Record<string, Document[]>;
 	gaps?: GapItem[];
 	onUploadForType?: (documentTypeId: string) => void;
+	onParsingComplete?: () => void;
+	onRefresh?: () => void;
 }
 
 interface PreviewState {
@@ -139,10 +144,75 @@ export default function DocumentList({
 	credentialHistory,
 	gaps,
 	onUploadForType,
+	onParsingComplete,
+	onRefresh,
 }: DocumentListProps) {
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
 	const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
+	const [pollingJobs, setPollingJobs] = useState<Record<string, string>>({});
+	// Tracks completed job IDs across re-renders so the interval doesn't reset on document refresh.
+	const completedJobsRef = useRef<Set<string>>(new Set());
+	// Stable ref for onParsingComplete so we don't retrigger the effect when the callback identity changes.
+	const onParsingCompleteRef = useRef(onParsingComplete);
+	useEffect(() => { onParsingCompleteRef.current = onParsingComplete; }, [onParsingComplete]);
+
+	// Poll parsing job status for any PENDING_REVIEW rows that have a parsingJob attached.
+	// Single interval polls all pending jobs in one batch request instead of N concurrent intervals.
+	// Depends on a stable key (sorted job IDs) rather than the full documents array, so a
+	// silentRefresh that updates documents does NOT tear down and recreate the interval.
+	const pendingJobIds = documents
+		.filter((d) => d.parsingJob?.id && d.reviewStatus === "PENDING_REVIEW")
+		.map((d) => d.parsingJob!.id)
+		.sort()
+		.join(",");
+
+	useEffect(() => {
+		if (!pendingJobIds) return;
+
+		const jobIdToDocId = new Map(
+			documents
+				.filter((d) => d.parsingJob?.id && d.reviewStatus === "PENDING_REVIEW")
+				.map((d) => [d.parsingJob!.id, d.id])
+		);
+		const jobIds = pendingJobIds.split(",");
+
+		const interval = setInterval(async () => {
+			try {
+				const res = await fetch(`/api/internal/parsing?ids=${jobIds.join(',')}`);
+				if (!res.ok) return;
+				const { jobs } = await res.json() as { jobs: Array<{ id: string; status: string }> };
+				const updates: Record<string, string> = {};
+				let newlyCompleted = false;
+				for (const job of jobs) {
+					const docId = jobIdToDocId.get(job.id);
+					if (!docId) continue;
+					updates[docId] = job.status;
+					if ((job.status === "COMPLETED" || job.status === "FAILED") && !completedJobsRef.current.has(job.id)) {
+						completedJobsRef.current.add(job.id);
+						newlyCompleted = true;
+					}
+				}
+				if (Object.keys(updates).length > 0) {
+					setPollingJobs((prev) => ({ ...prev, ...updates }));
+				}
+				// Trigger parent refresh only once when a job first finishes, not on every tick
+				if (newlyCompleted) {
+					onParsingCompleteRef.current?.();
+				}
+				// Stop polling once all jobs in this batch are done
+				if (jobIds.every((id) => completedJobsRef.current.has(id))) {
+					clearInterval(interval);
+				}
+			} catch {
+				// ignore transient errors
+			}
+		}, 4000);
+
+		return () => clearInterval(interval);
+	// pendingJobIds is a stable string derived from job IDs — only changes when the set of pending jobs changes
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pendingJobIds]);
 
 	const handlePreview = async (doc: Document) => {
 		setLoadingPreviewId(doc.id);
@@ -150,7 +220,16 @@ export default function DocumentList({
 			const res = await fetch(`/api/agency/documents/${doc.id}/download`);
 			if (!res.ok) throw new Error("Failed to get preview URL");
 			const { downloadUrl } = await res.json();
-			setPreview({ url: downloadUrl, fileName: doc.fileName, mimeType: doc.mimeType });
+
+			// Fetch the file bytes and create a blob: URL so the iframe can display it
+			// without being blocked by X-Frame-Options (blob: URLs bypass that header).
+			const fileRes = await fetch(downloadUrl);
+			if (!fileRes.ok) throw new Error("Failed to fetch file for preview");
+			const arrayBuf = await fileRes.arrayBuffer();
+			// Force the correct MIME type — response may come back as octet-stream
+			const blob = new Blob([arrayBuf], { type: doc.mimeType || "application/octet-stream" });
+			const blobUrl = URL.createObjectURL(blob);
+			setPreview({ url: blobUrl, fileName: doc.fileName, mimeType: doc.mimeType });
 		} catch {
 			// fall back to download
 			onDownload(doc.id);
@@ -187,7 +266,10 @@ export default function DocumentList({
 
 	return (
 		<div className="space-y-3">
-			{preview && <DocumentPreviewModal preview={preview} onClose={() => setPreview(null)} />}
+			{preview && <DocumentPreviewModal preview={preview} onClose={() => {
+				URL.revokeObjectURL(preview.url);
+				setPreview(null);
+			}} />}
 
 			{/* Gap banner — missing coverage alert */}
 			{gaps && gaps.length > 0 && (
@@ -197,16 +279,26 @@ export default function DocumentList({
 					</p>
 					<ul className="space-y-1">
 						{gaps.map((g) => (
-							<li key={g.documentTypeId} className="flex items-center gap-2 text-sm text-red-700">
-								<span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0" />
-								{g.documentTypeName}
-								{onUploadForType && (
-									<button
-										onClick={() => onUploadForType(g.documentTypeId)}
-										className="text-xs text-red-600 underline hover:text-red-800 ml-1"
-									>
-										Upload now
-									</button>
+							<li key={g.documentTypeId} className="flex items-center gap-2 text-sm">
+								{g.pendingReview ? (
+									<>
+										<span className="w-1.5 h-1.5 bg-amber-400 rounded-full flex-shrink-0" />
+										<span className="text-amber-700">{g.documentTypeName}</span>
+										<span className="text-xs text-amber-600 ml-1">Pending review</span>
+									</>
+								) : (
+									<>
+										<span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0" />
+										<span className="text-red-700">{g.documentTypeName}</span>
+										{onUploadForType && (
+											<button
+												onClick={() => onUploadForType(g.documentTypeId)}
+												className="text-xs text-red-600 underline hover:text-red-800 ml-1"
+											>
+												Upload now
+											</button>
+										)}
+									</>
 								)}
 							</li>
 						))}
@@ -295,6 +387,36 @@ export default function DocumentList({
 												<DocumentStatusBadge status={doc.status} />
 											)}
 											<ReviewStatusBadge status={doc.reviewStatus} />
+											{/* Parsing job live status */}
+											{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "PROCESSING" && (
+												<span className="flex items-center gap-1 text-xs text-blue-600">
+													<Loader2 className="h-3 w-3 animate-spin" /> Parsing…
+												</span>
+											)}
+											{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "PENDING" && (
+												<span className="text-xs text-gray-400">In queue…</span>
+											)}
+											{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "FAILED" && (
+												<span className="text-xs text-red-500">Parse failed</span>
+											)}
+											{/* Name mismatch warning */}
+											{doc.reviewNotes?.includes("Name on document") && (
+												<span
+													title={doc.reviewNotes}
+													className="flex items-center gap-1 text-xs text-amber-600 cursor-help"
+												>
+													<AlertTriangle className="h-3 w-3 flex-shrink-0" /> Name mismatch
+												</span>
+											)}
+											{/* Category mismatch warning */}
+											{doc.reviewNotes?.includes("Document type mismatch") && (
+												<span
+													title={doc.reviewNotes}
+													className="flex items-center gap-1 text-xs text-red-600 cursor-help"
+												>
+													<AlertTriangle className="h-3 w-3 flex-shrink-0" /> Wrong doc type
+												</span>
+											)}
 										</div>
 										{daysExpired && (
 											<p className="text-xs text-red-600 mt-1">
@@ -309,6 +431,16 @@ export default function DocumentList({
 									</td>
 									<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
 										<div className="flex items-center justify-end gap-2">
+											{/* Refresh button for docs that are still being parsed */}
+											{doc.reviewStatus === "PENDING_REVIEW" && onRefresh && (
+												<button
+													onClick={onRefresh}
+													title="Refresh parsing status"
+													className="text-gray-400 hover:text-[#0B4F96] p-1"
+												>
+													<RefreshCw className="h-4 w-4" />
+												</button>
+											)}
 											{onReview && (
 												<button
 													onClick={() => onReview(doc.id)}
@@ -422,6 +554,36 @@ export default function DocumentList({
 										<DocumentStatusBadge status={doc.status} />
 									)}
 									<ReviewStatusBadge status={doc.reviewStatus} />
+									{/* Parsing live status — mobile */}
+									{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "PROCESSING" && (
+										<span className="flex items-center gap-1 text-xs text-blue-600">
+											<Loader2 className="h-3 w-3 animate-spin" /> Parsing…
+										</span>
+									)}
+									{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "PENDING" && (
+										<span className="text-xs text-gray-400">In queue…</span>
+									)}
+									{doc.reviewStatus === "PENDING_REVIEW" && pollingJobs[doc.id] === "FAILED" && (
+										<span className="text-xs text-red-500">Parse failed</span>
+									)}
+									{/* Name mismatch — mobile */}
+									{doc.reviewNotes?.includes("Name on document") && (
+										<span
+											title={doc.reviewNotes}
+											className="flex items-center gap-1 text-xs text-amber-600 cursor-help"
+										>
+											<AlertTriangle className="h-3 w-3" /> Name mismatch
+										</span>
+									)}
+									{/* Category mismatch — mobile */}
+									{doc.reviewNotes?.includes("Document type mismatch") && (
+										<span
+											title={doc.reviewNotes}
+											className="flex items-center gap-1 text-xs text-red-600 cursor-help"
+										>
+											<AlertTriangle className="h-3 w-3" /> Wrong doc type
+										</span>
+									)}
 								</div>
 							</div>
 
@@ -449,6 +611,16 @@ export default function DocumentList({
 
 							{/* Actions */}
 							<div className="flex gap-2 pt-2 border-t border-gray-200">
+								{/* Refresh button — mobile */}
+								{doc.reviewStatus === "PENDING_REVIEW" && onRefresh && (
+									<button
+										onClick={onRefresh}
+										title="Refresh parsing status"
+										className="px-3 py-2 border border-gray-300 text-gray-500 rounded-lg hover:border-[#0B4F96] hover:text-[#0B4F96] text-sm"
+									>
+										<RefreshCw className="h-4 w-4" />
+									</button>
+								)}
 								{onReview && (
 									<button
 										onClick={() => onReview(doc.id)}

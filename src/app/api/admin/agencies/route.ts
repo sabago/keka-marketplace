@@ -44,14 +44,29 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get agencies with pagination
+    // Get agencies with pagination — select only what the list UI needs
     const [agencies, total] = await Promise.all([
       prisma.agency.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          agencyName: true,
+          licenseNumber: true,
+          approvalStatus: true,
+          subscriptionPlan: true,
+          subscriptionStatus: true,
+          agencySize: true,
+          primaryContactName: true,
+          primaryContactEmail: true,
+          primaryContactPhone: true,
+          serviceArea: true,
+          credentialWarningDays: true,
+          autoReminderEnabled: true,
+          createdAt: true,
+          updatedAt: true,
           users: {
             where: { isPrimaryContact: true },
             select: {

@@ -9,8 +9,9 @@
 
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getOrCreateStripeCustomer, getPlanAndSizeFromPriceId } from '@/lib/subscriptionHelpers';
+import { getOrCreateStripeCustomer, getPlanAndSizeFromPriceId, getPriceIdForPlan } from '@/lib/subscriptionHelpers';
 import { prisma } from '@/lib/db';
+import { PlanType, AgencySize } from '@prisma/client';
 
 // Lazy initialize Stripe to avoid build-time errors
 let stripeInstance: Stripe | null = null;
@@ -31,12 +32,28 @@ function getStripe(): Stripe {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { priceId, agencyId } = body;
+    const { agencyId, billingCycle = 'monthly' } = body;
 
-    // Validate required fields
+    // Support both direct priceId (legacy) and planType+agencySize (preferred — resolves server-side)
+    let priceId: string = body.priceId;
+    let resolvedAgencySize: AgencySize | undefined;
+
+    if (!priceId && body.planType && body.agencySize) {
+      // Resolve price ID on the server where env vars are available
+      const resolved = getPriceIdForPlan(body.planType as PlanType, body.agencySize as AgencySize, billingCycle);
+      if (!resolved) {
+        return NextResponse.json(
+          { error: 'Price ID not found for this plan and agency size' },
+          { status: 400 }
+        );
+      }
+      priceId = resolved;
+      resolvedAgencySize = body.agencySize as AgencySize;
+    }
+
     if (!priceId) {
       return NextResponse.json(
-        { error: 'Missing required field: priceId' },
+        { error: 'Missing required field: priceId or planType+agencySize' },
         { status: 400 }
       );
     }
@@ -60,7 +77,7 @@ export async function POST(request: Request) {
     // Update agency size to match what they selected
     await prisma.agency.update({
       where: { id: agencyId },
-      data: { agencySize: planInfo.agencySize },
+      data: { agencySize: resolvedAgencySize ?? planInfo.agencySize },
     });
 
     // Get or create Stripe customer for the agency
@@ -82,13 +99,12 @@ export async function POST(request: Request) {
         metadata: {
           agencyId,
         },
-        trial_period_days: 14, // Optional: Add 14-day free trial
       },
       metadata: {
         agencyId,
       },
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/subscription?canceled=true`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/agency/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/agency/subscription?canceled=true`,
       allow_promotion_codes: true,
       billing_address_collection: 'required',
     });

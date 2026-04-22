@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireChatbotAuth, checkQueryLimit, incrementQueryCount, logChatbotQuery } from '@/lib/chatbotAuth';
 import { ragQuery } from '@/lib/rag';
 import { getCachedQuery, setCachedQuery } from '@/lib/queryCache';
+import { logAuditEvent, getRequestMetadata } from '@/lib/auditLog';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -39,9 +40,32 @@ export async function POST(request: NextRequest) {
     const { query } = body;
 
     // 3. Validate query
-    if (!query || typeof query !== 'string' || query.trim().length < 3) {
+    if (!query || typeof query !== 'string' || query.trim().length < 10) {
       return NextResponse.json(
-        { error: 'Query must be at least 3 characters long' },
+        { error: 'Query must be at least 10 characters long' },
+        { status: 400 }
+      );
+    }
+
+    // Prompt injection guard
+    const INJECTION_PATTERNS = [
+      /ignore\s+(previous|prior|above|all)\s+instructions?/i,
+      /disregard\s+(previous|prior|above|all)\s+instructions?/i,
+      /forget\s+(everything|all|previous)/i,
+      /you\s+are\s+now\s+(a\s+)?(?!an?\s+assistant)/i,
+      /system\s*prompt/i,
+      /jailbreak/i,
+      /\bdan\b.*mode/i,
+    ];
+
+    if (INJECTION_PATTERNS.some((p) => p.test(query))) {
+      void logAuditEvent(
+        'security_alert',
+        { userId: user.userId, agencyId: user.agencyId, action: 'prompt_injection_attempt', metadata: { queryLength: query.length } },
+        getRequestMetadata(request)
+      ).catch(() => {});
+      return NextResponse.json(
+        { error: 'Query contains content that cannot be processed.' },
         { status: 400 }
       );
     }
@@ -65,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Check cache first
-    const cachedResult = await getCachedQuery(query);
+    const cachedResult = await getCachedQuery(query, 'gpt-4-turbo');
 
     if (cachedResult) {
       // Return cached result without incrementing counter
@@ -117,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 9. Cache the result
-    await setCachedQuery(query, {
+    await setCachedQuery(query, 'gpt-4-turbo', {
       answer: ragResult.answer,
       sources: ragResult.sources,
       sourceTitles: ragResult.sourceTitles,

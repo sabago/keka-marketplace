@@ -14,6 +14,8 @@ import {
 	ExternalLink,
 	BookOpen,
 	ShieldCheck,
+	Sparkles,
+	ShieldAlert,
 } from "lucide-react";
 
 type Mode = "directory" | "credentials";
@@ -22,6 +24,7 @@ interface Message {
 	role: "user" | "assistant";
 	content: string;
 	sources?: { slug: string; title: string }[];
+	timestamp: Date;
 }
 
 interface ChatbotResponse {
@@ -51,6 +54,19 @@ const SUGGESTED_QUESTIONS: Record<Mode, string[]> = {
 	],
 };
 
+const QUICK_PILLS: Record<Mode, { label: string; query: string }[]> = {
+	directory: [
+		{ label: "Boston hospitals", query: "Which hospitals in Boston have online referral portals?" },
+		{ label: "Veteran sources", query: "Show me free referral sources for veterans" },
+		{ label: "Mass General", query: "How do I refer to Mass General?" },
+	],
+	credentials: [
+		{ label: "Expired licenses", query: "Who has an expired license on my team?" },
+		{ label: "Missing docs", query: "Which staff are missing required documents?" },
+		{ label: "Send reminders", query: "Send a reminder to staff with expiring credentials" },
+	],
+};
+
 function storageKey(userId: string, mode: Mode) {
 	return `chatbot:${userId}:${mode}`;
 }
@@ -58,7 +74,10 @@ function storageKey(userId: string, mode: Mode) {
 function loadMessages(userId: string, mode: Mode): Message[] {
 	try {
 		const raw = localStorage.getItem(storageKey(userId, mode));
-		return raw ? JSON.parse(raw) : [];
+		if (!raw) return [];
+		const parsed = JSON.parse(raw);
+		// Rehydrate timestamp strings back to Date objects
+		return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
 	} catch {
 		return [];
 	}
@@ -79,6 +98,19 @@ function clearMessages(userId: string) {
 	} catch {}
 }
 
+function formatTime(d: Date): string {
+	const now = new Date();
+	const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+	const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+	const startOfWeek = new Date(startOfToday.getTime() - 6 * 86400000);
+
+	if (d >= startOfToday) return time;
+	if (d >= startOfYesterday) return `Yesterday ${time}`;
+	if (d >= startOfWeek) return `${d.toLocaleDateString([], { weekday: "short" })} ${time}`;
+	return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
+
 export default function DirectoryChatbot() {
 	const { data: session, status } = useSession();
 	const [isOpen, setIsOpen] = useState(false);
@@ -96,6 +128,9 @@ export default function DirectoryChatbot() {
 	const isLoggedIn = !!session?.user;
 	const userId = (session?.user as any)?.id as string | undefined;
 	const userRole = (session?.user as any)?.role as string | undefined;
+	const userInitial = (
+		(session?.user?.name?.[0] ?? (session?.user?.email?.[0] ?? "U"))
+	).toUpperCase();
 	const isUnlimited =
 		session?.user &&
 		["BUSINESS", "ENTERPRISE"].includes((session.user as any).plan);
@@ -159,14 +194,14 @@ export default function DirectoryChatbot() {
 		const trimmed = text.trim();
 		if (!trimmed || loading || limitReached) return;
 
-		const userMessage: Message = { role: "user", content: trimmed };
+		const userMessage: Message = { role: "user", content: trimmed, timestamp: new Date() };
 		setMessages((prev) => [...prev, userMessage]);
 		setInput("");
 		setLoading(true);
 
 		const endpoint =
-			mode === "credentials" ? "/api/chatbot/query" : "/api/chatbot/directory";
-		const bodyKey = mode === "credentials" ? "query" : "message";
+			mode === "credentials" ? "/api/chatbot/credentials" : "/api/chatbot/directory";
+		const bodyKey = "message";
 
 		try {
 			const res = await fetch(endpoint, {
@@ -186,6 +221,7 @@ export default function DirectoryChatbot() {
 						content:
 							data.message ||
 							"Your agency has used all its AI queries for this month.",
+						timestamp: new Date(),
 					},
 				]);
 				return;
@@ -196,7 +232,8 @@ export default function DirectoryChatbot() {
 					...prev,
 					{
 						role: "assistant",
-						content: data.message || "Sorry, something went wrong. Please try again.",
+						content: data.message || data.error || "Sorry, something went wrong. Please try again.",
+						timestamp: new Date(),
 					},
 				]);
 				return;
@@ -205,6 +242,9 @@ export default function DirectoryChatbot() {
 			const remaining = data.queriesRemaining ?? data.remaining;
 			if (remaining !== undefined) setQueriesRemaining(remaining);
 			if (data.limit !== undefined) setQueryLimit(data.limit);
+
+			// Notify any usage widgets on the page to refresh their count
+			window.dispatchEvent(new CustomEvent("chatbot-query-used"));
 
 			// Normalize sources: directory returns [{slug, title}], query route returns string[]
 			let normalizedSources: { slug: string; title: string }[] = [];
@@ -226,6 +266,7 @@ export default function DirectoryChatbot() {
 					role: "assistant",
 					content: data.answer || "",
 					sources: normalizedSources,
+					timestamp: new Date(),
 				},
 			]);
 		} catch {
@@ -235,6 +276,7 @@ export default function DirectoryChatbot() {
 					role: "assistant",
 					content:
 						"Unable to reach the assistant. Please check your connection and try again.",
+					timestamp: new Date(),
 				},
 			]);
 		} finally {
@@ -378,11 +420,25 @@ export default function DirectoryChatbot() {
 							<div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
 								{messages.length === 0 && (
 									<div className="space-y-3">
-										<p className="text-sm text-gray-500 text-center">
-											{mode === "credentials"
-												? "Ask about staff credentials, expiring documents, or compliance."
-												: "Ask anything about finding referral sources in Massachusetts."}
-										</p>
+										{/* Welcome bubble */}
+										<div className="flex items-start gap-2 justify-start">
+											<div className="w-6 h-6 rounded-full bg-[#48ccbc] flex items-center justify-center flex-shrink-0 mt-0.5">
+												<Sparkles className="w-3.5 h-3.5 text-white" />
+											</div>
+											<div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm bg-gray-100 text-gray-800">
+												{mode === "credentials"
+													? "Hi! I can help you check your staff's credential status, find expiring documents, and send compliance reminders. What would you like to know?"
+													: "Hi! I'm your AI assistant for Massachusetts home care referral sources. I can help you find information about hospitals, insurance programs, veteran services, and community platforms. Ask me anything!"}
+											</div>
+										</div>
+										{/* PHI disclaimer */}
+										<div className="flex items-start gap-2 px-1 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+											<ShieldAlert className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+											<p className="text-xs text-amber-700 leading-snug">
+												Do not enter patient names, SSNs, or other protected health information (PHI). This assistant is for operational use only.
+											</p>
+										</div>
+										{/* Suggested questions */}
 										<div className="space-y-2">
 											{SUGGESTED_QUESTIONS[mode].map((q) => (
 												<button
@@ -400,45 +456,68 @@ export default function DirectoryChatbot() {
 								{messages.map((msg, i) => (
 									<div
 										key={i}
-										className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+										className={`flex items-start gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
 									>
-										<div
-											className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
-												msg.role === "user"
-													? "bg-[#0B4F96] text-white rounded-br-sm"
-													: "bg-gray-100 text-gray-800 rounded-bl-sm"
-											}`}
-										>
-											{msg.role === "assistant" ? (
-												<div className="prose prose-sm max-w-none leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mt-2 [&_h2]:mt-2 [&_h3]:mt-2 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-semibold prose-a:text-blue-600">
-													<ReactMarkdown remarkPlugins={[remarkGfm]}>
-														{msg.content}
-													</ReactMarkdown>
-												</div>
-											) : (
-												<p className="leading-relaxed">{msg.content}</p>
-											)}
-											{msg.sources && msg.sources.length > 0 && (
-												<div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
-													<p className="text-xs text-gray-500 font-medium">Sources:</p>
-													{msg.sources.map((s) => (
-														<Link
-															key={s.slug}
-															href={`/knowledge-base/${s.slug}`}
-															className="flex items-center gap-1 text-xs text-[#0B4F96] hover:underline"
-														>
-															<ExternalLink className="w-3 h-3 flex-shrink-0" />
-															{s.title}
-														</Link>
-													))}
-												</div>
-											)}
+										{/* Bot icon — left, assistant only */}
+										{msg.role === "assistant" && (
+											<div className="w-6 h-6 rounded-full bg-[#48ccbc] flex items-center justify-center flex-shrink-0 mt-0.5">
+												<Sparkles className="w-3.5 h-3.5 text-white" />
+											</div>
+										)}
+
+										<div className="flex flex-col gap-0.5 max-w-[80%]">
+											<div
+												className={`rounded-2xl px-3.5 py-2.5 text-sm ${
+													msg.role === "user"
+														? "bg-[#0B4F96] text-white rounded-br-sm"
+														: "bg-gray-100 text-gray-800 rounded-bl-sm"
+												}`}
+											>
+												{msg.role === "assistant" ? (
+													<div className="prose prose-sm max-w-none leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mt-2 [&_h2]:mt-2 [&_h3]:mt-2 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-semibold prose-a:text-blue-600">
+														<ReactMarkdown remarkPlugins={[remarkGfm]}>
+															{msg.content}
+														</ReactMarkdown>
+													</div>
+												) : (
+													<p className="leading-relaxed">{msg.content}</p>
+												)}
+												{msg.sources && msg.sources.length > 0 && (
+													<div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
+														<p className="text-xs text-gray-500 font-medium">Sources:</p>
+														{msg.sources.map((s) => (
+															<Link
+																key={s.slug}
+																href={`/knowledge-base/${s.slug}`}
+																className="flex items-center gap-1 text-xs text-[#0B4F96] hover:underline"
+															>
+																<ExternalLink className="w-3 h-3 flex-shrink-0" />
+																{s.title}
+															</Link>
+														))}
+													</div>
+												)}
+											</div>
+											{/* Timestamp */}
+											<span className={`text-[10px] text-gray-400 ${msg.role === "user" ? "text-right" : "text-left"}`}>
+												{formatTime(msg.timestamp)}
+											</span>
 										</div>
+
+										{/* User icon — right, user only */}
+										{msg.role === "user" && (
+											<div className="w-6 h-6 rounded-full bg-[#0B4F96] flex items-center justify-center flex-shrink-0 mt-0.5">
+												<span className="text-[10px] font-bold text-white">{userInitial}</span>
+											</div>
+										)}
 									</div>
 								))}
 
 								{loading && (
-									<div className="flex justify-start">
+									<div className="flex items-start gap-2 justify-start">
+										<div className="w-6 h-6 rounded-full bg-[#48ccbc] flex items-center justify-center flex-shrink-0">
+											<Sparkles className="w-3.5 h-3.5 text-white" />
+										</div>
 										<div className="bg-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
 											<Loader2 className="w-4 h-4 animate-spin text-gray-400" />
 										</div>
@@ -465,7 +544,7 @@ export default function DirectoryChatbot() {
 							{/* Input */}
 							<form
 								onSubmit={handleSubmit}
-								className="flex items-center gap-2 px-3 py-3 border-t border-gray-100 flex-shrink-0"
+								className="flex items-center gap-2 px-3 pt-3 pb-2 border-t border-gray-100 flex-shrink-0"
 							>
 								<input
 									ref={inputRef}
@@ -491,6 +570,23 @@ export default function DirectoryChatbot() {
 									<Send className="w-4 h-4" />
 								</button>
 							</form>
+
+							{/* Quick-pick pills — visible while conversation is fresh */}
+							{messages.length <= 1 && !limitReached && (
+								<div className="flex flex-wrap gap-1.5 px-3 pb-3 flex-shrink-0">
+									{QUICK_PILLS[mode].map((pill) => (
+										<button
+											key={pill.label}
+											type="button"
+											onClick={() => sendMessage(pill.query)}
+											disabled={loading}
+											className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full hover:bg-blue-50 hover:text-[#0B4F96] transition-colors disabled:opacity-40"
+										>
+											{pill.label}
+										</button>
+									))}
+								</div>
+							)}
 						</>
 					)}
 				</div>

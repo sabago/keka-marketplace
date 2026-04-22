@@ -93,7 +93,7 @@ export const CREDENTIAL_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'get_compliance_summary',
       description:
-        'Get the overall compliance summary for the agency: total employees, compliant count, expiring soon, expired, missing, and overall compliance rate percentage.',
+        'Get the overall compliance summary for the agency. Returns totalStaffMembers (number of people), totalCredentials (number of credential documents), plus counts of valid/expiring/expired/missing credentials and overall compliance rate percentage. Use totalStaffMembers when the user asks how many staff or team members there are.',
       parameters: {
         type: 'object',
         properties: {

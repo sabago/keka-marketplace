@@ -14,9 +14,10 @@ import {
   Users as UsersIcon,
   CheckCircle,
   XCircle,
+  X,
 } from "lucide-react";
 import { UserRole, PlanType, AgencySize } from "@prisma/client";
-import { PLAN_PRICING, STAFF_LIMITS, getPriceIdForPlan } from "@/lib/subscriptionHelpers";
+import { PLAN_PRICING, STAFF_LIMITS } from "@/lib/subscriptionHelpers";
 
 const ANNUAL_PRICING: Record<PlanType, Record<AgencySize, number>> = {
   FREE: { SMALL: 0, MEDIUM: 0, LARGE: 0 },
@@ -59,6 +60,11 @@ export default function SubscriptionManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
+  const [enterpriseForm, setEnterpriseForm] = useState({ name: '', email: '', agencyName: '', phone: '', message: '' });
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
+  const [enterpriseError, setEnterpriseError] = useState<string | null>(null);
+  const [enterpriseSuccess, setEnterpriseSuccess] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -105,17 +111,15 @@ export default function SubscriptionManagementPage() {
 
     try {
       setUpgrading(true);
-      const priceId = getPriceIdForPlan(planType, data.agency.agencySize, billingCycle);
 
-      if (!priceId) {
-        throw new Error("Price ID not found for this plan and agency size");
-      }
-
+      // Send planType + billingCycle to the server — price ID lookup happens there
+      // because STRIPE_PRICE_* env vars are server-only (no NEXT_PUBLIC_ prefix)
       const response = await fetch("/api/subscription/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          priceId,
+          planType,
+          agencySize: data.agency.agencySize,
           agencyId: data.agency.id,
           billingCycle,
         }),
@@ -136,10 +140,12 @@ export default function SubscriptionManagementPage() {
   };
 
   const handleManageSubscription = async () => {
+    if (!data) return;
     try {
       const response = await fetch("/api/subscription/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agencyId: data.agency.id }),
       });
 
       const portalData = await response.json();
@@ -151,6 +157,26 @@ export default function SubscriptionManagementPage() {
       window.location.href = portalData.url;
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  const handleEnterpriseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEnterpriseLoading(true);
+    setEnterpriseError(null);
+    try {
+      const res = await fetch('/api/contact/enterprise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(enterpriseForm),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to send');
+      setEnterpriseSuccess(true);
+    } catch (err: any) {
+      setEnterpriseError(err.message);
+    } finally {
+      setEnterpriseLoading(false);
     }
   };
 
@@ -205,6 +231,7 @@ export default function SubscriptionManagementPage() {
   const queriesUsedDisplay = isFreeplan ? data.agency.queriesAllTime : data.agency.queriesThisMonth;
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -555,20 +582,10 @@ export default function SubscriptionManagementPage() {
                   <Crown className="h-6 w-6 text-gray-600" />
                   <h3 className="text-xl font-bold text-gray-900">Enterprise</h3>
                 </div>
-                {billingCycle === "monthly" ? (
-                  <p className="text-3xl font-bold text-[#0B4F96] mb-1">
-                    ${PLAN_PRICING.ENTERPRISE[data.agency.agencySize]}<span className="text-lg font-normal">/mo</span>
-                  </p>
-                ) : (
-                  <div className="mb-1">
-                    <p className="text-3xl font-bold text-[#0B4F96]">
-                      ${ANNUAL_PRICING.ENTERPRISE[data.agency.agencySize]}<span className="text-lg font-normal">/yr</span>
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      ${Math.round(ANNUAL_PRICING.ENTERPRISE[data.agency.agencySize] / 12)}/mo · Save ${PLAN_PRICING.ENTERPRISE[data.agency.agencySize] * 2}
-                    </p>
-                  </div>
-                )}
+                <div className="mb-1">
+                  <p className="text-3xl font-bold text-[#0B4F96]">Custom</p>
+                  <p className="text-sm text-gray-500 mt-1">Pricing tailored to your needs</p>
+                </div>
                 <ul className="space-y-2 mb-6 mt-4">
                   <li className="flex items-start gap-2 text-sm text-gray-700">
                     <CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
@@ -584,10 +601,12 @@ export default function SubscriptionManagementPage() {
                   </li>
                 </ul>
                 <button
-                  onClick={() =>
-                    (window.location.href =
-                      "mailto:sales@example.com?subject=Enterprise Plan Inquiry")
-                  }
+                  onClick={() => {
+                    setEnterpriseSuccess(false);
+                    setEnterpriseError(null);
+                    setEnterpriseForm({ name: '', email: '', agencyName: data?.agency ? '' : '', phone: '', message: '' });
+                    setShowEnterpriseModal(true);
+                  }}
                   className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors"
                 >
                   Contact Sales <ArrowRight className="h-5 w-5" />
@@ -604,5 +623,69 @@ export default function SubscriptionManagementPage() {
         )}
       </div>
     </div>
+
+    {/* Enterprise Contact Modal */}
+
+    {showEnterpriseModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          <div className="flex items-center justify-between p-6 border-b">
+            <h2 className="text-xl font-bold text-gray-900">Contact Sales — Enterprise</h2>
+            <button onClick={() => setShowEnterpriseModal(false)} className="text-gray-400 hover:text-gray-600">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          {enterpriseSuccess ? (
+            <div className="p-6 text-center">
+              <div className="text-green-600 text-lg font-semibold mb-2">Message sent!</div>
+              <p className="text-gray-600 mb-6">We'll be in touch within 1 business day.</p>
+              <button onClick={() => setShowEnterpriseModal(false)} className="bg-[#0B4F96] text-white px-6 py-2 rounded-lg font-semibold hover:bg-[#48ccbc] transition-colors">
+                Close
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleEnterpriseSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+                  <input type="text" required value={enterpriseForm.name} onChange={e => setEnterpriseForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B4F96]" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
+                  <input type="email" required value={enterpriseForm.email} onChange={e => setEnterpriseForm(f => ({ ...f, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B4F96]" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agency Name <span className="text-red-500">*</span></label>
+                  <input type="text" required value={enterpriseForm.agencyName} onChange={e => setEnterpriseForm(f => ({ ...f, agencyName: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B4F96]" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input type="tel" value={enterpriseForm.phone} onChange={e => setEnterpriseForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B4F96]" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tell us about your needs</label>
+                <textarea rows={3} value={enterpriseForm.message} onChange={e => setEnterpriseForm(f => ({ ...f, message: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B4F96] resize-none" placeholder="Number of locations, staff size, specific requirements..." />
+              </div>
+              {enterpriseError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{enterpriseError}</div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowEnterpriseModal(false)} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="submit" disabled={enterpriseLoading} className="flex items-center gap-2 px-6 py-2 text-sm font-semibold bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors disabled:opacity-50">
+                  {enterpriseLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Send Message
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }

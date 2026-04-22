@@ -34,34 +34,29 @@ export async function GET(req: NextRequest) {
       ],
     });
 
-    // Check for pending invitations (users without password set)
-    const staffWithInvitationStatus = await Promise.all(
-      staffMembers.map(async (staff) => {
-        // Check if user has set their password
-        const hasPassword = await prisma.user.findUnique({
-          where: { id: staff.id },
-          select: { password: true },
-        });
+    // Batch-fetch password status and pending tokens in 2 queries instead of 2N
+    const staffIds = staffMembers.map((s) => s.id);
+    const [passwordRows, tokenRows] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: staffIds } },
+        select: { id: true, password: true },
+      }),
+      prisma.passwordSetupToken.findMany({
+        where: { userId: { in: staffIds }, used: false, expiresAt: { gt: new Date() } },
+        select: { userId: true },
+      }),
+    ]);
+    const passwordMap = new Map(passwordRows.map((r) => [r.id, !!r.password]));
+    const pendingTokenSet = new Set(tokenRows.map((r) => r.userId));
 
-        // Check for pending password setup token
-        const pendingToken = await prisma.passwordSetupToken.findFirst({
-          where: {
-            userId: staff.id,
-            used: false,
-            expiresAt: { gt: new Date() },
-          },
-        });
-
-        return {
-          ...staff,
-          invitationStatus: hasPassword?.password
-            ? 'active'
-            : pendingToken
-            ? 'pending'
-            : 'expired',
-        };
-      })
-    );
+    const staffWithInvitationStatus = staffMembers.map((staff) => ({
+      ...staff,
+      invitationStatus: passwordMap.get(staff.id)
+        ? 'active'
+        : pendingTokenSet.has(staff.id)
+        ? 'pending'
+        : 'expired',
+    }));
 
     return NextResponse.json(
       {

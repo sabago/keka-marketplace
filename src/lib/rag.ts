@@ -15,8 +15,11 @@ const openai = new OpenAI({
 // Configuration
 const EMBEDDING_MODEL = 'text-embedding-3-large';
 const CHAT_MODEL = 'gpt-4-turbo';
-const RELEVANCE_THRESHOLD = 0.4;
+const RELEVANCE_THRESHOLD = 0.6;
 const DEFAULT_TOP_K = 5;
+
+const STALE_DATA_DISCLAIMER =
+  '\n\n---\n*Note: Knowledge base content was last reviewed January 2025. Please verify contact details and program availability directly with each organization before making referrals.*';
 
 export interface RAGQueryResult {
   answer: string;
@@ -125,7 +128,7 @@ async function generateAnswer(
 1. Answer questions ONLY based on the provided context from the referral source articles
 2. Cite specific sources by name when providing information
 3. Be concise but thorough - aim for 2-4 paragraphs
-4. If the context doesn't contain relevant information, say "I don't have specific information about that in the current knowledge base"
+4. If the context doesn't contain relevant information, say "I don't have specific information about that in the current knowledge base" — do not fill gaps with general knowledge, hedged language, or phrases like "likely", "probably", or "typically"
 5. Focus on practical, actionable information for home care agencies
 6. Use a professional but friendly tone
 7. When mentioning hospitals, organizations, or programs, include key details like location, contact methods, or requirements
@@ -134,7 +137,9 @@ Do NOT:
 - Make up information not in the context
 - Provide medical advice
 - Share outdated contact information
-- Make assumptions about services not explicitly mentioned`;
+- Make assumptions about services not explicitly mentioned
+- Infer, extrapolate, or speculate about details not explicitly stated in the provided sources
+- If a question appears to assume prior context from an earlier message, ask the user to restate the full question — each query is answered independently with no memory of previous messages`;
 
     const userPrompt = `Context from knowledge base:\n\n${context}\n\n---\n\nUser question: ${query}\n\nPlease provide a helpful answer based on the context above. Remember to cite your sources.`;
 
@@ -144,7 +149,7 @@ Do NOT:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.3, // Lower temperature for more factual responses
+      temperature: 0.1, // Near-deterministic for factual retrieval
       max_tokens: 800,
     });
 
@@ -163,7 +168,7 @@ export const DIRECTORY_SYSTEM_PROMPT = `You are a helpful AI assistant for Massa
 1. Answer questions ONLY based on the provided context from the referral source articles
 2. Cite specific sources by name when providing information
 3. Be concise but thorough - aim for 2-4 paragraphs
-4. If the context doesn't contain relevant information, say "I don't have specific information about that in the current knowledge base"
+4. If the context doesn't contain relevant information, say "I don't have specific information about that in the current knowledge base" — do not fill gaps with general knowledge, hedged language, or phrases like "likely", "probably", or "typically"
 5. Focus on practical, actionable information for home care agencies
 6. Use a professional but friendly tone
 7. When mentioning hospitals, organizations, or programs, include key details like location, contact methods, or requirements
@@ -172,7 +177,9 @@ Do NOT:
 - Make up information not in the context
 - Provide medical advice
 - Share outdated contact information
-- Make assumptions about services not explicitly mentioned`;
+- Make assumptions about services not explicitly mentioned
+- Infer, extrapolate, or speculate about details not explicitly stated in the provided sources
+- If a question appears to assume prior context from an earlier message, ask the user to restate the full question — each query is answered independently with no memory of previous messages`;
 
 export interface RAGRetrievalResult {
   chunks: RetrievedChunk[];
@@ -188,8 +195,8 @@ export async function ragRetrieve(
   query: string,
   topK: number = DEFAULT_TOP_K
 ): Promise<RAGRetrievalResult> {
-  if (!query || query.trim().length < 3) {
-    throw new Error('Query must be at least 3 characters long');
+  if (!query || !query.trim()) {
+    throw new Error('Query cannot be empty');
   }
 
   const queryEmbedding = await generateQueryEmbedding(query);
@@ -212,8 +219,8 @@ export async function ragQuery(
 
   try {
     // Validate query
-    if (!query || query.trim().length < 3) {
-      throw new Error('Query must be at least 3 characters long');
+    if (!query || !query.trim()) {
+      throw new Error('Query cannot be empty');
     }
 
     // Step 1: Generate query embedding
@@ -224,7 +231,7 @@ export async function ragQuery(
 
     if (chunks.length === 0) {
       return {
-        answer: "I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing your question or ask about specific hospitals, programs, or referral sources in Massachusetts.",
+        answer: "I couldn't find information that closely matches your question in the knowledge base. Try rephrasing with more specific terms — for example, name a specific hospital, program type (e.g., 'discharge planning', 'home health referral'), or geographic area. You can also browse the Referral Directory directly to find sources by category.",
         sources: [],
         sourceTitles: [],
         tokensUsed: 0,
@@ -237,7 +244,8 @@ export async function ragQuery(
     const context = buildContext(chunks);
 
     // Step 4: Generate answer
-    const { answer, tokensUsed } = await generateAnswer(query, context);
+    const { answer: rawAnswer, tokensUsed } = await generateAnswer(query, context);
+    const answer = rawAnswer + STALE_DATA_DISCLAIMER;
 
     // Step 5: Extract unique sources
     const uniqueSlugs = Array.from(new Set(chunks.map((c) => c.slug)));

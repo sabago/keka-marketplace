@@ -17,16 +17,23 @@ export async function GET(
     const { agency } = await requireAgencyAdmin();
     const { id: userId } = await params;
 
-    // Look up the staff credential record linked to this user within this agency
-    const staffRecord = await prisma.staffMember.findFirst({
-      where: { userId, agencyId: agency.id },
-    });
-
-    // Also look up the user's basic info for display
-    const staffUser = await prisma.user.findFirst({
-      where: { id: userId, agencyId: agency.id },
-      select: { id: true, name: true, email: true, role: true },
-    });
+    // Phase 1: fetch staffRecord, staffUser, and documentTypes in parallel (all independent)
+    const [staffRecord, staffUser, documentTypes] = await Promise.all([
+      prisma.staffMember.findFirst({
+        where: { userId, agencyId: agency.id },
+      }),
+      prisma.user.findFirst({
+        where: { id: userId, agencyId: agency.id },
+        select: { id: true, name: true, email: true, role: true },
+      }),
+      prisma.documentType.findMany({
+        where: {
+          OR: [{ isGlobal: true }, { agencyId: agency.id }],
+          isActive: true,
+        },
+        orderBy: [{ isGlobal: 'desc' }, { category: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
 
     if (!staffUser) {
       return NextResponse.json(
@@ -34,14 +41,6 @@ export async function GET(
         { status: 404 }
       );
     }
-
-    const documentTypes = await prisma.documentType.findMany({
-      where: {
-        OR: [{ isGlobal: true }, { agencyId: agency.id }],
-        isActive: true,
-      },
-      orderBy: [{ isGlobal: 'desc' }, { category: 'asc' }, { name: 'asc' }],
-    });
 
     if (!staffRecord) {
       // No credential tracking record yet — return empty state
@@ -56,25 +55,42 @@ export async function GET(
       });
     }
 
-    // Current credentials (non-archived) — main list
-    const documents = await prisma.staffCredential.findMany({
-      where: {
-        staffMemberId: staffRecord.id,
-        status: { not: 'ARCHIVED' },
-      },
-      include: { documentType: true },
-      orderBy: [{ status: 'desc' }, { expirationDate: 'asc' }],
-    });
-
-    // Archived credentials — history, grouped by documentTypeId
-    const archivedCredentials = await prisma.staffCredential.findMany({
-      where: {
-        staffMemberId: staffRecord.id,
-        status: 'ARCHIVED',
-      },
-      include: { documentType: { select: { id: true, name: true } } },
-      orderBy: { expirationDate: 'desc' },
-    });
+    // Phase 2: fetch all credential data in parallel (all depend on staffRecord.id)
+    const [documents, archivedCredentials, gaps, parsingQueue] = await Promise.all([
+      // Current credentials (non-archived) — main list
+      prisma.staffCredential.findMany({
+        where: {
+          staffMemberId: staffRecord.id,
+          status: { not: 'ARCHIVED' },
+        },
+        include: {
+          documentType: true,
+          parsingJob: { select: { id: true, status: true } },
+        },
+        orderBy: [{ status: 'desc' }, { expirationDate: 'asc' }],
+      }),
+      // Archived credentials — history, grouped by documentTypeId
+      prisma.staffCredential.findMany({
+        where: {
+          staffMemberId: staffRecord.id,
+          status: 'ARCHIVED',
+        },
+        include: { documentType: { select: { id: true, name: true } } },
+        orderBy: { expirationDate: 'desc' },
+      }),
+      // Gap detection — types with recheckCadenceDays but no active approved credential
+      detectCredentialGaps(staffRecord.id, agency.id),
+      // Count jobs currently queued or processing for this agency (for the queue depth card).
+      // Exclude jobs that have processingCompletedAt set but were never updated to COMPLETED
+      // (can happen if the server crashed mid-update).
+      prisma.credentialParsingJob.count({
+        where: {
+          agencyId: agency.id,
+          status: { in: ['PENDING', 'PROCESSING'] },
+          processingCompletedAt: null,
+        },
+      }),
+    ]);
 
     const credentialHistory = archivedCredentials.reduce<Record<string, typeof archivedCredentials>>(
       (acc, c) => {
@@ -84,15 +100,13 @@ export async function GET(
       {}
     );
 
-    // Gap detection — types with recheckCadenceDays but no active approved credential
-    const gaps = await detectCredentialGaps(staffRecord.id, agency.id);
-
     const stats = {
       total: documents.length,
       active: documents.filter((d) => d.status === 'ACTIVE' && d.reviewStatus === 'APPROVED').length,
       expiringSoon: documents.filter((d) => d.status === 'EXPIRING_SOON' && d.reviewStatus === 'APPROVED').length,
       expired: documents.filter((d) => d.status === 'EXPIRED').length,
       pendingReview: documents.filter((d) => d.reviewStatus === 'PENDING_REVIEW').length,
+      parsingQueue,
     };
 
     return NextResponse.json({

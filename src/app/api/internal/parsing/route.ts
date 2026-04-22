@@ -9,25 +9,36 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processParsingQueue, getQueueStats } from '@/lib/jobQueue';
-import { requirePlatformAdmin } from '@/lib/authHelpers';
+import { requirePlatformAdmin, requireAuth } from '@/lib/authHelpers';
+import { prisma } from '@/lib/db';
 
 /**
- * GET - Get queue statistics
- * Requires platform admin authentication
+ * GET - Batch job status poll (authenticated users) or queue statistics (platform admin)
+ *
+ * ?ids=id1,id2,id3  → returns status for those specific job IDs (any authenticated user)
+ * no params          → returns full queue stats (platform admin only)
  */
 export async function GET(req: NextRequest) {
   try {
-    // Require platform admin access
+    const ids = req.nextUrl.searchParams.get('ids');
+
+    if (ids) {
+      // Batch job status poll — available to any authenticated user
+      await requireAuth();
+      const jobIds = ids.split(',').filter(Boolean).slice(0, 20); // cap at 20
+      const jobs = await prisma.credentialParsingJob.findMany({
+        where: { id: { in: jobIds } },
+        select: { id: true, status: true, error: true, result: true, attemptCount: true },
+      });
+      return NextResponse.json({ success: true, jobs });
+    }
+
+    // No ids param — return queue stats (platform admin only)
     await requirePlatformAdmin();
-
     const stats = await getQueueStats();
-
-    return NextResponse.json({
-      success: true,
-      stats,
-    });
+    return NextResponse.json({ success: true, stats });
   } catch (error) {
-    console.error('Error fetching queue stats:', error);
+    console.error('Error fetching parsing status:', error);
 
     return NextResponse.json(
       {

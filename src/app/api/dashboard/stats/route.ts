@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,28 +71,18 @@ export async function GET(request: NextRequest) {
           )
         : 0;
 
-    // Calculate average response time
-    const referralsWithResponse = await prisma.referralTracking.findMany({
+    // Calculate average response time using DB-level aggregation (no row fetch)
+    const responseTimeAgg = await prisma.referralTracking.aggregate({
+      _avg: { responseTime: true },
       where: {
-        responseTime: {
-          not: null,
-        },
-        createdAt: {
-          gte: thirtyDaysAgo,
-        },
-      },
-      select: {
-        responseTime: true,
+        responseTime: { not: null },
+        createdAt: { gte: thirtyDaysAgo },
       },
     });
 
-    const avgResponseTime =
-      referralsWithResponse.length > 0
-        ? Math.round(
-            referralsWithResponse.reduce((sum, r) => sum + (r.responseTime || 0), 0) /
-              referralsWithResponse.length
-          )
-        : 24;
+    const avgResponseTime = responseTimeAgg._avg.responseTime
+      ? Math.round(responseTimeAgg._avg.responseTime)
+      : 24;
 
     // Calculate success rate
     const totalReferrals = await prisma.referralTracking.count({

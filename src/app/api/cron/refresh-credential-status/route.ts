@@ -41,46 +41,63 @@ export async function GET(req: NextRequest) {
     console.log('[CRON-REFRESH] Starting credential status refresh');
 
     // ----------------------------------------------------------------
-    // Step 1: Refresh document statuses
+    // Step 1: Refresh document statuses (cursor-paginated to avoid loading entire table)
     // ----------------------------------------------------------------
 
-    // Fetch all credentials that could need a status update (exclude archived)
-    const credentials = await prisma.staffCredential.findMany({
-      where: {
-        status: { not: 'ARCHIVED' },
-      },
-      include: {
-        staffMember: {
-          include: { agency: { select: { id: true, credentialWarningDays: true } } },
-        },
-      },
-    });
-
+    const BATCH_SIZE = 500;
+    let cursor: string | undefined;
     let statusUpdated = 0;
+    const now = new Date();
 
-    for (const credential of credentials) {
-      const warningDays = credential.staffMember.agency.credentialWarningDays ?? 30;
-      const newStatus = calculateCredentialStatus(credential.expirationDate, warningDays);
-      const newIsCompliant = isCredentialCompliant(
-        newStatus,
-        credential.reviewStatus,
-        credential.expirationDate
-      );
-
-      if (credential.status !== newStatus || credential.isCompliant !== newIsCompliant) {
-        await prisma.staffCredential.update({
-          where: { id: credential.id },
-          data: {
-            status: newStatus,
-            isCompliant: newIsCompliant,
-            complianceCheckedAt: new Date(),
+    let batchCount = 0;
+    do {
+      const credentials = await prisma.staffCredential.findMany({
+        where: { status: { not: 'ARCHIVED' } },
+        include: {
+          staffMember: {
+            include: { agency: { select: { id: true, credentialWarningDays: true } } },
           },
-        });
-        statusUpdated++;
-      }
-    }
+        },
+        orderBy: { id: 'asc' },
+        take: BATCH_SIZE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
 
-    console.log(`[CRON-REFRESH] Updated ${statusUpdated} credential statuses`);
+      if (credentials.length === 0) break;
+      cursor = credentials[credentials.length - 1].id;
+      batchCount++;
+
+      const updates: Array<{ id: string; status: import('@prisma/client').DocumentStatus; isCompliant: boolean }> = [];
+
+      for (const credential of credentials) {
+        const warningDays = credential.staffMember.agency.credentialWarningDays ?? 30;
+        const newStatus = calculateCredentialStatus(credential.expirationDate, warningDays);
+        const newIsCompliant = isCredentialCompliant(
+          newStatus,
+          credential.reviewStatus,
+          credential.expirationDate
+        );
+        if (credential.status !== newStatus || credential.isCompliant !== newIsCompliant) {
+          updates.push({ id: credential.id, status: newStatus, isCompliant: newIsCompliant });
+        }
+      }
+
+      if (updates.length > 0) {
+        await prisma.$transaction(
+          updates.map((u) =>
+            prisma.staffCredential.update({
+              where: { id: u.id },
+              data: { status: u.status, isCompliant: u.isCompliant, complianceCheckedAt: now },
+            })
+          )
+        );
+        statusUpdated += updates.length;
+      }
+
+      if (credentials.length < BATCH_SIZE) break;
+    } while (true);
+
+    console.log(`[CRON-REFRESH] Updated ${statusUpdated} credential statuses across ${batchCount} batch(es)`);
 
     // ----------------------------------------------------------------
     // Step 2: Create a ComplianceSnapshot per agency

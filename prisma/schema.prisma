@@ -955,5 +955,6 @@ model CredentialParsingJob {
 
   @@index([status, priority])
   @@index([agencyId, status])
+  @@index([agencyId, status, processingCompletedAt])
   @@index([createdAt])
 }

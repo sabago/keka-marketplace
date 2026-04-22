@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker deployment
   output: 'standalone',
+  // Prevent webpack from bundling PDF/OCR packages — they use Node.js internals
+  // (worker threads, fs, etc.) that break when processed by the RSC bundler.
+  // These packages run only in server-side API routes, never in the browser.
+  serverExternalPackages: ['pdfjs-dist', 'pdf-parse', 'tesseract.js', 'canvas'],
   eslint: {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors.

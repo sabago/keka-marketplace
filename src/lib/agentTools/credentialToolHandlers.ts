@@ -160,8 +160,28 @@ export async function handleGetComplianceSummary(
   agencyId: string
 ): Promise<ToolResult> {
   try {
-    const summary = await getAgencyComplianceSummary(agencyId, params.includeInactiveEmployees ?? false);
-    return { success: true, data: summary };
+    const includeInactive = params.includeInactiveEmployees ?? false;
+    const [summary, staffCount] = await Promise.all([
+      getAgencyComplianceSummary(agencyId, includeInactive),
+      prisma.staffMember.count({
+        where: {
+          agencyId,
+          ...(includeInactive ? {} : { status: 'ACTIVE' }),
+        },
+      }),
+    ]);
+
+    // Rename 'total' to 'totalCredentials' so the model doesn't confuse
+    // credential count with staff member count.
+    const { total, ...rest } = summary;
+    return {
+      success: true,
+      data: {
+        totalStaffMembers: staffCount,
+        totalCredentials: total,
+        ...rest,
+      },
+    };
   } catch (error: any) {
     return { success: false, data: null, error: error.message };
   }

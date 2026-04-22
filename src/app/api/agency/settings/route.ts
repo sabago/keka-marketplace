@@ -123,10 +123,21 @@ export async function PUT(req: NextRequest) {
       updateData.avgReferralsPerMonth = avgReferralsPerMonth;
     if (specializations !== undefined) updateData.specializations = specializations;
 
-    // Update the agency
+    // Update the agency — select only what we need in the response below
     const updatedAgency = await prisma.agency.update({
       where: { id: agency.id },
       data: updateData,
+      select: {
+        id: true,
+        agencyName: true,
+        agencySize: true,
+        servicesOffered: true,
+        serviceArea: true,
+        primaryContactName: true,
+        primaryContactRole: true,
+        primaryContactEmail: true,
+        primaryContactPhone: true,
+      },
     });
 
     // Log the admin action

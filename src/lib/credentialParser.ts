@@ -39,7 +39,7 @@ function getOpenAI(): OpenAI {
 }
 
 // Configuration
-const CHAT_MODEL = 'gpt-4-turbo';
+const CHAT_MODEL = 'gpt-4o';
 const CONFIDENCE_THRESHOLD = 0.7; // Below this = requires manual review
 const MAX_TEXT_LENGTH = 15000; // Limit OCR text sent to LLM (token management)
 
@@ -65,6 +65,7 @@ export interface ParsedCredentialData {
   issuedAt: string | null; // ISO date string
   expiresAt: string | null; // ISO date string
   verificationUrl: string | null;
+  credentialHolderName: string | null; // Person the credential was issued TO
 
   // AI metadata
   confidence: number; // 0.0 - 1.0
@@ -93,34 +94,104 @@ export interface CredentialParsingResult {
 }
 
 /**
+ * Category-specific extraction guidance.
+ * Replaces the ever-growing list of generic rules with focused instructions
+ * per document category so GPT doesn't need to guess document semantics.
+ */
+const CATEGORY_GUIDANCE: Record<string, string> = {
+  LICENSE: `This is a professional license or certificate issued by a state board or certifying body.
+- issuer: the licensing board or certifying organization (e.g. "Massachusetts Board of Nursing", "American Red Cross")
+- licenseNumber: the license/certificate number printed on the document
+- issuedAt: the issue or effective date
+- expiresAt: the expiration or renewal date
+- credentialHolderName: the licensee's full name as printed`,
+
+  BACKGROUND_CHECK: `This is a background check or exclusion search result page, NOT a license.
+- issuer: the database or agency that was searched (e.g. "OIG LEIE", "SAM.gov", "DCJIS", "CORI")
+- licenseNumber: null — these checks have no license number
+- issuedAt: the date the search was CONDUCTED (look for "Search conducted", "Search date", "Date of search", or a timestamp at the top/bottom of the page)
+- expiresAt: null — expiry is calculated by the system, not printed on the document
+- credentialHolderName: the person who was searched (may appear as "Last, First" — convert to "First Last")
+- A result of "No results found" or "Not excluded" is a PASSING result — do NOT lower confidence because of this
+- confidence: 0.90+ if search date and subject name are clearly present`,
+
+  TRAINING: `This is a training completion certificate or course record.
+- issuer: the training provider or organization that delivered the course
+- licenseNumber: the certificate number if present, otherwise null
+- issuedAt: the completion date or course date
+- expiresAt: the expiration date if printed; otherwise null (system derives it)
+- credentialHolderName: the trainee's full name`,
+
+  VACCINATION: `This is a vaccination record, immunization card, TB test result, or medical clearance.
+- issuer: the clinic, hospital, or medical practice that administered/performed it (NOT the employer)
+- licenseNumber: null — vaccinations have no license number
+- issuedAt: the date the vaccine was given OR the date the TB test/physical was performed (look for "Date of Service", "Date:", "administered on", "performed on", "done on")
+- expiresAt: null unless explicitly printed on the document (system derives from issue date)
+- credentialHolderName: the patient's full name`,
+
+  HR: `This is an HR or employment document (I-9, W-4, offer letter, job description, etc.).
+- issuer: the employer or agency name if visible
+- licenseNumber: null
+- issuedAt: the document date or signature date
+- expiresAt: null unless explicitly stated
+- credentialHolderName: the employee's full name`,
+
+  ID: `This is a government-issued ID (driver's license, passport, state ID, social security card).
+- issuer: the issuing government agency (e.g. "Massachusetts RMV", "U.S. Department of State")
+- licenseNumber: the ID or document number
+- issuedAt: the issue date
+- expiresAt: the expiration date printed on the ID
+- credentialHolderName: the full name printed on the ID`,
+
+  INSURANCE: `This is an insurance certificate or policy document.
+- issuer: the insurance company
+- licenseNumber: the policy number
+- issuedAt: the policy effective date
+- expiresAt: the policy expiration date
+- credentialHolderName: the insured person's full name`,
+
+  COMPETENCY: `This is a competency checklist or skills evaluation.
+- issuer: the evaluating supervisor or organization
+- licenseNumber: null
+- issuedAt: the evaluation or completion date
+- expiresAt: null unless explicitly stated
+- credentialHolderName: the staff member being evaluated`,
+};
+
+/**
  * Build system prompt for credential extraction
  */
-function buildSystemPrompt(documentTypeName: string): string {
-  return `You are a specialized AI that extracts structured metadata from professional credentials and licenses for home care workers.
+function buildSystemPrompt(documentTypeName: string, category?: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const categoryGuidance = category && CATEGORY_GUIDANCE[category]
+    ? `\nDOCUMENT CATEGORY — ${category}:\n${CATEGORY_GUIDANCE[category]}`
+    : '';
 
-Your task is to analyze the provided OCR text and extract the following fields:
-- credentialType: The type of credential (e.g., "Nursing License", "CNA Certificate", "CPR Certification")
-- issuer: The organization that issued the credential (e.g., "Massachusetts Board of Nursing", "American Red Cross")
-- licenseNumber: The unique license or certificate number
-- issuedAt: Issue date in ISO format (YYYY-MM-DD)
-- expiresAt: Expiration date in ISO format (YYYY-MM-DD)
-- verificationUrl: URL to verify the credential online (if present)
-- confidence: Your confidence score (0.0 - 1.0) in the accuracy of extracted data
-- parsingNotes: Brief explanation of what you found and any uncertainties
+  return `You are a specialized AI that extracts structured metadata from professional credentials and compliance documents for home care workers.
 
-Document type hint: "${documentTypeName}"
+Today's date is ${today}. All dates you extract must be plausible relative to today. Two-digit years are always 20XX — never 19XX.
 
-IMPORTANT RULES:
-1. Only extract information explicitly present in the text
-2. If a field is not found or unclear, return null for that field
-3. Be conservative with confidence scores - if unsure, score it lower
-4. Dates must be in YYYY-MM-DD format or null
-5. License numbers should be the exact alphanumeric code (no extra formatting)
-6. In parsingNotes, explain what you found and what you couldn't find
-7. If the document appears to be the wrong type or unreadable, score confidence very low
-8. When multiple pages are present (front, back, or numbered pages), synthesize across all pages
+Document type: "${documentTypeName}"${categoryGuidance}
 
-Return ONLY valid JSON with this structure (no markdown, no explanation):
+Extract the following fields from the OCR text:
+- credentialType: type of document
+- issuer: organization that issued or conducted it
+- licenseNumber: license/certificate/policy number (null if not applicable)
+- issuedAt: issue, completion, or search date (YYYY-MM-DD)
+- expiresAt: expiration date (YYYY-MM-DD), null if not present
+- verificationUrl: URL to verify online, if present
+- credentialHolderName: full name of the PERSON this document belongs to
+- confidence: 0.0–1.0 confidence in accuracy
+- parsingNotes: brief explanation of what was found and any uncertainties
+
+UNIVERSAL RULES:
+1. Only extract what is explicitly in the text — no guessing
+2. Return null for any field not found
+3. Dates: handle M/D/YY, M/D/YYYY, written months — always output YYYY-MM-DD
+4. When multiple pages are present, synthesize across all of them
+5. If the document is unreadable or clearly wrong type, set confidence below 0.4
+
+Return ONLY valid JSON, no markdown:
 {
   "credentialType": "string or null",
   "issuer": "string or null",
@@ -128,8 +199,9 @@ Return ONLY valid JSON with this structure (no markdown, no explanation):
   "issuedAt": "YYYY-MM-DD or null",
   "expiresAt": "YYYY-MM-DD or null",
   "verificationUrl": "string or null",
+  "credentialHolderName": "string or null",
   "confidence": 0.85,
-  "parsingNotes": "Brief explanation of what was found"
+  "parsingNotes": "string"
 }`;
 }
 
@@ -149,7 +221,8 @@ OCR extracted text:
 ${truncatedText}
 ---
 
-Please analyze the above text and extract credential metadata as JSON.`;
+Please analyze the above text and extract credential metadata as JSON.
+For credentialType: identify what the document ACTUALLY IS based solely on its content — do not use the document type hint or file name to determine this field. This is used to verify the correct document was uploaded.`;
 }
 
 /**
@@ -189,6 +262,7 @@ function parseAIResponse(content: string): Omit<ParsedCredentialData, 'extracted
       issuedAt: parsed.issuedAt || null,
       expiresAt: parsed.expiresAt || null,
       verificationUrl: parsed.verificationUrl || null,
+      credentialHolderName: parsed.credentialHolderName || null,
       confidence: parsed.confidence,
       parsingNotes: parsed.parsingNotes || 'No notes provided',
     };
@@ -205,10 +279,11 @@ function parseAIResponse(content: string): Omit<ParsedCredentialData, 'extracted
 async function extractMetadataWithLLM(
   ocrText: string,
   fileName: string,
-  documentTypeName: string
+  documentTypeName: string,
+  category?: string
 ): Promise<{ data: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'>; tokensUsed: number }> {
   try {
-    const systemPrompt = buildSystemPrompt(documentTypeName);
+    const systemPrompt = buildSystemPrompt(documentTypeName, category);
     const userPrompt = buildUserPrompt(ocrText, fileName);
 
     const openai = getOpenAI();
@@ -244,12 +319,13 @@ async function extractMetadataWithVision(
   imageBuffer: Buffer,
   mimeType: string,
   fileName: string,
-  documentTypeName: string
+  documentTypeName: string,
+  category?: string
 ): Promise<{ data: Omit<ParsedCredentialData, 'extractedText' | 'requiresReview' | 'reviewReason' | '__userProvided'>; tokensUsed: number; extractedText: string }> {
   const openai = getOpenAI();
   const base64 = imageBuffer.toString('base64');
   const dataUrl = `data:${mimeType};base64,${base64}`;
-  const systemPrompt = buildSystemPrompt(documentTypeName);
+  const systemPrompt = buildSystemPrompt(documentTypeName, category);
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
@@ -346,7 +422,8 @@ function evaluateReviewRequirement(
 export async function parseCredentialFiles(
   files: CredentialFileInput[],
   documentTypeName: string,
-  userProvidedFields?: Record<string, unknown>
+  userProvidedFields?: Record<string, unknown>,
+  category?: string
 ): Promise<CredentialParsingResult> {
   const startTime = Date.now();
 
@@ -396,7 +473,8 @@ export async function parseCredentialFiles(
             imageBuffer,
             file.mimeType,
             file.fileName,
-            documentTypeName
+            documentTypeName,
+            category
           );
           pageTexts.push(separator + extractedText);
           totalTokens += tokensUsed;
@@ -410,26 +488,53 @@ export async function parseCredentialFiles(
           };
         }
       } else {
-        // PDFs: use pdf-parse OCR provider
-        ocrProviderName = 'pdf-parse';
-        const ocrProvider = getOCRProvider('pdf');
+        // PDFs: try text extraction first, then fall back to Tesseract OCR via pdftoppm.
+        // Many credential PDFs (e.g. MA state licenses) embed variable data (license number,
+        // dates, name) as images — the text layer only contains the static template.
+        // We always run both and concatenate so the LLM sees everything.
+        ocrProviderName = 'smart';
+        const pdfProvider = getOCRProvider('pdf');
+        const tesseractProvider = getOCRProvider('tesseract');
         try {
-          const text = await ocrProvider.extractText(file.s3Key);
-          if (!text || text.trim().length < 10) {
+          const texts: string[] = [];
+
+          // 1. Text layer
+          try {
+            const textLayerText = await pdfProvider.extractText(file.s3Key);
+            if (textLayerText && textLayerText.trim().length >= 10) {
+              texts.push(textLayerText);
+            }
+          } catch {
+            // text layer extraction failed — that's fine, Tesseract will cover it
+          }
+
+          // 2. Tesseract OCR on rendered page images (catches image-based data)
+          try {
+            const ocrText = await tesseractProvider.extractText(file.s3Key);
+            if (ocrText && ocrText.trim().length >= 10) {
+              texts.push(ocrText);
+            }
+          } catch {
+            // Tesseract failed — rely on text layer only
+          }
+
+          if (texts.length === 0) {
             return {
               success: false,
-              error: `File ${file.fileName} appears empty or unreadable (< 10 chars extracted).`,
-              ocrProvider: ocrProvider.name,
+              error: `File ${file.fileName} appears empty or unreadable.`,
+              ocrProvider: ocrProviderName,
               processingTimeMs: Date.now() - startTime,
             };
           }
-          pageTexts.push(separator + text);
+
+          // Deduplicate and join — text layer + OCR often overlap partially
+          pageTexts.push(separator + texts.join('\n\n--- OCR ---\n\n'));
         } catch (err) {
           console.error(`OCR failed for ${file.fileName}:`, err);
           return {
             success: false,
             error: `Failed to extract text from ${file.fileName}: ${err instanceof Error ? err.message : String(err)}`,
-            ocrProvider: ocrProvider.name,
+            ocrProvider: ocrProviderName,
             processingTimeMs: Date.now() - startTime,
           };
         }
@@ -446,7 +551,8 @@ export async function parseCredentialFiles(
       ({ data: aiData, tokensUsed: llmTokens } = await extractMetadataWithLLM(
         combinedText,
         files[0].fileName,
-        documentTypeName
+        documentTypeName,
+        category
       ));
       totalTokens += llmTokens;
     } catch (err) {
@@ -510,11 +616,14 @@ export async function parseCredentialDocument(
   s3Key: string,
   fileName: string,
   mimeType: string,
-  documentTypeName: string
+  documentTypeName: string,
+  category?: string
 ): Promise<CredentialParsingResult> {
   return parseCredentialFiles(
     [{ s3Key, pageRole: 'SINGLE', fileName, mimeType }],
-    documentTypeName
+    documentTypeName,
+    undefined,
+    category
   );
 }
 

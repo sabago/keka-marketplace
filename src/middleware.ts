@@ -44,6 +44,8 @@ export async function middleware(request: NextRequest) {
     '/kb',
     '/pricing',
     '/api/webhooks',
+    '/api/webhook',
+    '/api/contact',
     '/api/products',
     '/api/categories',
     '/api/knowledge-base',

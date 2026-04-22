@@ -46,6 +46,45 @@ async function sendEmail(to: string, subject: string, html: string, text: string
 }
 
 /**
+ * Send an Enterprise plan inquiry email to the sales team
+ */
+export async function sendEnterpriseInquiryEmail({
+  name,
+  email,
+  agencyName,
+  phone,
+  message,
+}: {
+  name: string;
+  email: string;
+  agencyName: string;
+  phone?: string;
+  message?: string;
+}): Promise<void> {
+  const subject = `Enterprise Plan Inquiry — ${agencyName}`;
+  const html = `
+    <h2>New Enterprise Plan Inquiry</h2>
+    <table style="border-collapse:collapse;width:100%">
+      <tr><td style="padding:8px;font-weight:bold">Name</td><td style="padding:8px">${name}</td></tr>
+      <tr><td style="padding:8px;font-weight:bold">Email</td><td style="padding:8px">${email}</td></tr>
+      <tr><td style="padding:8px;font-weight:bold">Agency</td><td style="padding:8px">${agencyName}</td></tr>
+      ${phone ? `<tr><td style="padding:8px;font-weight:bold">Phone</td><td style="padding:8px">${phone}</td></tr>` : ''}
+      ${message ? `<tr><td style="padding:8px;font-weight:bold">Message</td><td style="padding:8px">${message}</td></tr>` : ''}
+    </table>
+  `;
+  const text = [
+    'New Enterprise Plan Inquiry',
+    `Name: ${name}`,
+    `Email: ${email}`,
+    `Agency: ${agencyName}`,
+    phone ? `Phone: ${phone}` : '',
+    message ? `Message: ${message}` : '',
+  ].filter(Boolean).join('\n');
+
+  await sendEmail('info@masteringhomecare.com', subject, html, text);
+}
+
+/**
  * Send an order confirmation email with download links
  * @param order Order details
  * @param downloads Download information

@@ -49,9 +49,45 @@ export async function requireAgency() {
     throw new Error('Agency association required. Please contact support to link your account to an agency.');
   }
 
-  // Verify agency exists and fetch full agency data
+  // Verify agency exists and fetch the fields needed by the majority of routes.
+  // Add to this select only when a route genuinely needs the extra column — don't
+  // add "just in case" columns; each one wastes bandwidth on every single API call.
   const agency = await prisma.agency.findUnique({
     where: { id: agencyId },
+    select: {
+      id: true,
+      agencyName: true,
+      licenseNumber: true,
+      approvalStatus: true,
+      subscriptionPlan: true,
+      subscriptionStatus: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+      queriesThisMonth: true,
+      queriesAllTime: true,
+      credentialUploadsTotal: true,
+      billingPeriodStart: true,
+      billingPeriodEnd: true,
+      lastQueryReset: true,
+      agencySize: true,
+      credentialWarningDays: true,
+      autoReminderEnabled: true,
+      reminderFrequency: true,
+      servicesOffered: true,
+      serviceArea: true,
+      primaryContactName: true,
+      primaryContactRole: true,
+      primaryContactEmail: true,
+      primaryContactPhone: true,
+      intakeMethod: true,
+      intakeMethods: true,
+      followUpFrequency: true,
+      followUpMethods: true,
+      avgReferralsPerMonth: true,
+      specializations: true,
+      consentToAnalytics: true,
+      taxId: true,
+    },
   });
 
   if (!agency) {
@@ -179,6 +215,7 @@ export async function incrementQueryCount(agencyId: string) {
       queriesThisMonth: { increment: 1 },
       queriesAllTime: { increment: 1 },
     },
+    select: { id: true },
   });
 
   return limitStatus;

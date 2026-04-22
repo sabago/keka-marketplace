@@ -1,41 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAgency } from "@/lib/authHelpers";
-import fs from "fs";
-import path from "path";
-import matter from "gray-matter";
-
-function getArticleTitleFromFiles(slug: string): string | undefined {
-  const contentDirs = [
-    path.join(process.cwd(), "src/content/knowledge-base"),
-    path.join(process.cwd(), "src/content/massachusetts"),
-  ];
-  for (const dir of contentDirs) {
-    const result = searchDirForSlug(dir, slug);
-    if (result) return result;
-  }
-  return undefined;
-}
-
-function searchDirForSlug(dir: string, slug: string): string | undefined {
-  if (!fs.existsSync(dir)) return undefined;
-  for (const entry of fs.readdirSync(dir)) {
-    const filePath = path.join(dir, entry);
-    if (fs.statSync(filePath).isDirectory()) {
-      const result = searchDirForSlug(filePath, slug);
-      if (result) return result;
-    } else if (entry.endsWith(".md")) {
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const { data } = matter(raw);
-        if (data.slug === slug) return data.title;
-      } catch {
-        // skip
-      }
-    }
-  }
-  return undefined;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,11 +25,25 @@ export async function GET(request: NextRequest) {
           }),
     ]);
 
-    const withTitles = (list: typeof agencyReferrals) =>
-      list.map((r) => ({ ...r, referralSourceTitle: getArticleTitleFromFiles(r.referralSourceSlug) }));
+    // Resolve article titles via DB (KnowledgeBaseArticle has slug + title indexed)
+    // instead of synchronous filesystem walks that block the event loop
+    const allReferrals = isAgencyUser ? myReferrals : agencyReferrals;
+    const uniqueSlugs = [...new Set(
+      [...myReferrals, ...agencyReferrals].map((r) => r.referralSourceSlug).filter(Boolean)
+    )];
+    const articles = uniqueSlugs.length
+      ? await prisma.knowledgeBaseArticle.findMany({
+          where: { slug: { in: uniqueSlugs } },
+          select: { slug: true, title: true },
+        })
+      : [];
+    const titleMap = new Map(articles.map((a) => [a.slug, a.title]));
+
+    const withTitles = <T extends { referralSourceSlug: string }>(list: T[]) =>
+      list.map((r) => ({ ...r, referralSourceTitle: titleMap.get(r.referralSourceSlug) ?? undefined }));
 
     return NextResponse.json({
-      referrals: isAgencyUser ? withTitles(myReferrals) : withTitles(agencyReferrals),
+      referrals: withTitles(allReferrals),
       myReferrals: withTitles(myReferrals),
       agencyReferrals: withTitles(agencyReferrals),
     });

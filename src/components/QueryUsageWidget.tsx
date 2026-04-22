@@ -33,12 +33,20 @@ export default function QueryUsageWidget() {
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchUsage = (showLoading = false) => {
+    if (showLoading) setLoading(true);
     fetch("/api/dashboard/usage")
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchUsage(true);
+    const handler = () => fetchUsage(false);
+    window.addEventListener("chatbot-query-used", handler);
+    return () => window.removeEventListener("chatbot-query-used", handler);
   }, []);
 
   if (loading) {

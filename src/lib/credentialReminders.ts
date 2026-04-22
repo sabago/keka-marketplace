@@ -98,43 +98,54 @@ export async function processCredentialReminders(): Promise<{
   try {
     console.log('[REMINDERS] Starting credential reminder processing...');
 
-    // Get all active, approved credentials with expiration dates
-    const credentials = await prisma.staffCredential.findMany({
-      where: {
-        expirationDate: { not: null },
-        reviewStatus: 'APPROVED',
-        status: { in: ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED'] },
-      },
-      include: {
-        staffMember: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            agencyId: true,
-            notificationPreferences: true,
-          },
-        },
-        documentType: {
-          select: {
-            name: true,
-          },
-        },
-        reminders: {
-          where: {
-            reminderType: { in: ['EXPIRING_SOON', 'EXPIRED'] },
-          },
-          orderBy: {
-            sentAt: 'desc',
-          },
-          take: 1,
-        },
-      },
-    });
+    // Process credentials in cursor-paginated batches to avoid loading entire table into memory
+    const REMINDER_BATCH_SIZE = 500;
+    let cursor: string | undefined;
 
-    checked = credentials.length;
-    console.log(`[REMINDERS] Found ${checked} credentials to check`);
+    const credentialQuery = (afterCursor?: string) =>
+      prisma.staffCredential.findMany({
+        where: {
+          expirationDate: { not: null },
+          reviewStatus: 'APPROVED',
+          status: { in: ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED'] },
+        },
+        include: {
+          staffMember: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              agencyId: true,
+              notificationPreferences: true,
+            },
+          },
+          documentType: {
+            select: {
+              name: true,
+            },
+          },
+          reminders: {
+            where: {
+              reminderType: { in: ['EXPIRING_SOON', 'EXPIRED'] },
+            },
+            orderBy: {
+              sentAt: 'desc',
+            },
+            take: 1,
+          },
+        },
+        orderBy: { id: 'asc' },
+        take: REMINDER_BATCH_SIZE,
+        ...(afterCursor ? { cursor: { id: afterCursor }, skip: 1 } : {}),
+      });
+
+    let credentials = await credentialQuery();
+
+    while (credentials.length > 0) {
+    checked += credentials.length;
+    cursor = credentials[credentials.length - 1].id;
+    console.log(`[REMINDERS] Processing batch of ${credentials.length} credentials (total so far: ${checked})`);
 
     for (const credential of credentials) {
       try {
@@ -271,6 +282,11 @@ export async function processCredentialReminders(): Promise<{
         details.push(`Error processing credential ${credential.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
+
+    // Fetch next batch; exit loop if this was the last page
+    if (credentials.length < REMINDER_BATCH_SIZE) break;
+    credentials = await credentialQuery(cursor);
+    } // end while
 
     const processingTime = Date.now() - startTime;
 

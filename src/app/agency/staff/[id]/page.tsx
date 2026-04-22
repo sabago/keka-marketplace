@@ -16,6 +16,7 @@ import {
   User,
   Mail,
   Briefcase,
+  Loader2,
 } from "lucide-react";
 import DocumentList from "@/components/documents/DocumentList";
 import DocumentUpload from "@/components/documents/DocumentUpload";
@@ -46,9 +47,11 @@ interface Document {
   expirationDate: string | null;
   status: "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "ARCHIVED";
   reviewStatus: "PENDING_UPLOAD" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "NEEDS_CORRECTION" | null;
+  reviewNotes: string | null;
   notes: string | null;
   createdAt: string;
   documentType: { id: string; name: string };
+  parsingJob?: { id: string; status: string } | null;
 }
 
 interface DocumentType {
@@ -78,7 +81,7 @@ export default function StaffCredentialsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
-  const [stats, setStats] = useState({ total: 0, active: 0, expiringSoon: 0, expired: 0, pendingReview: 0 });
+  const [stats, setStats] = useState({ total: 0, active: 0, expiringSoon: 0, expired: 0, pendingReview: 0, parsingQueue: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -130,6 +133,26 @@ export default function StaffCredentialsPage() {
       setError(err.message || "Failed to load data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Silent refresh — updates data without showing the loading spinner.
+  // Used by the polling loop so parsing completion doesn't flicker the page.
+  const silentRefresh = async () => {
+    try {
+      const res = await fetch(`/api/agency/staff/${userId}/credentials`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setStaffUser(data.staffUser);
+      setStaffRecord(data.staffRecord);
+      setDocuments(data.documents);
+      setFilteredDocuments(data.documents);
+      setStats(data.stats);
+      setDocumentTypes(data.documentTypes);
+      setCredentialHistory(data.credentialHistory ?? {});
+      setGaps(data.gaps ?? []);
+    } catch {
+      // ignore — next poll will retry
     }
   };
 
@@ -280,7 +303,7 @@ export default function StaffCredentialsPage() {
         ) : (
           <>
             {/* Stats */}
-            <div className={`grid grid-cols-2 ${gaps.length > 0 ? "md:grid-cols-6" : "md:grid-cols-5"} gap-4 mb-6`}>
+            <div className={`grid grid-cols-2 ${gaps.length > 0 || stats.parsingQueue > 0 ? "md:grid-cols-6" : "md:grid-cols-5"} gap-4 mb-6`}>
               <div className="bg-white rounded-lg shadow-md p-5">
                 <div className="flex items-center justify-between">
                   <div><p className="text-sm text-gray-600">Total</p><p className="text-2xl font-bold text-gray-900">{stats.total}</p></div>
@@ -325,6 +348,17 @@ export default function StaffCredentialsPage() {
                   </div>
                 </div>
               )}
+              {stats.parsingQueue > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg shadow-sm p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-blue-600">Parsing Queue</p>
+                      <p className="text-2xl font-bold text-blue-700">{stats.parsingQueue}</p>
+                    </div>
+                    <Loader2 className="h-9 w-9 text-blue-400 animate-spin" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Documents */}
@@ -364,6 +398,8 @@ export default function StaffCredentialsPage() {
                   setPreselectedTypeId(typeId);
                   setShowUploadModal(true);
                 }}
+                onParsingComplete={silentRefresh}
+                onRefresh={fetchData}
               />
             </div>
           </>

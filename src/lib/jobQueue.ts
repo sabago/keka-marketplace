@@ -162,6 +162,13 @@ async function processJob(jobId: string): Promise<boolean> {
       orderBy: { sortOrder: 'asc' },
     });
 
+    // Fetch document type category for category-specific prompt guidance
+    const docTypeRecord = await prisma.staffCredential.findUnique({
+      where: { id: job.documentId },
+      select: { documentType: { select: { category: true } } },
+    });
+    const docCategory = docTypeRecord?.documentType?.category ?? undefined;
+
     const result = credentialFiles.length > 0
       ? await parseCredentialFiles(
           credentialFiles.map((f) => ({
@@ -171,13 +178,16 @@ async function processJob(jobId: string): Promise<boolean> {
             fileName: f.fileName,
             mimeType: f.mimeType,
           })),
-          job.documentTypeName ?? 'Unknown'
+          job.documentTypeName ?? 'Unknown',
+          undefined,
+          docCategory
         )
       : await parseCredentialDocument(
           job.s3Key,
           job.fileName,
           job.mimeType,
-          job.documentTypeName ?? 'Unknown'
+          job.documentTypeName ?? 'Unknown',
+          docCategory
         );
 
     if (!result.success || !result.data) {
@@ -189,20 +199,55 @@ async function processJob(jobId: string): Promise<boolean> {
     // Parsing succeeded - update credential and complete job
     const parsedData = result.data;
 
-    // Fetch existing user-provided dates before overwriting anything.
-    // Strategy: user-provided values win; OCR fills gaps only.
-    // If both exist and disagree by >1 day, flag for admin review.
+    // Fetch existing user-provided dates + staff member name + document type config.
     const existing = await prisma.staffCredential.findUnique({
       where: { id: job.documentId },
-      select: { issueDate: true, expirationDate: true },
+      select: {
+        issueDate: true,
+        expirationDate: true,
+        staffMemberId: true,
+        documentType: { select: { expirationDays: true, category: true } },
+      },
     });
+
+    // ── Name match check ──────────────────────────────────────────────────────
+    // Verify the credential was issued to the correct staff member.
+    let nameMatchResult: 'matched' | 'mismatch' | 'not_found' = 'not_found';
+    let nameMismatchNote: string | null = null;
+
+    if (existing?.staffMemberId && parsedData.credentialHolderName) {
+      const staffMember = await prisma.staffMember.findUnique({
+        where: { id: existing.staffMemberId },
+        select: { firstName: true, lastName: true },
+      });
+
+      if (staffMember) {
+        const extractedName = parsedData.credentialHolderName.toLowerCase().trim();
+        const staffFirst = staffMember.firstName.toLowerCase();
+        const staffLast = staffMember.lastName.toLowerCase();
+
+        if (extractedName.includes(staffFirst) && extractedName.includes(staffLast)) {
+          nameMatchResult = 'matched';
+        } else {
+          nameMatchResult = 'mismatch';
+          nameMismatchNote = `Name on document ("${parsedData.credentialHolderName}") does not match staff member ("${staffMember.firstName} ${staffMember.lastName}"). Verify the correct document was uploaded.`;
+        }
+      }
+    }
 
     const ocrIssueDate = parsedData.issuedAt ? new Date(parsedData.issuedAt) : null;
     const ocrExpirationDate = parsedData.expiresAt ? new Date(parsedData.expiresAt) : null;
 
     // Use user-provided if present; fall back to OCR
     const finalIssueDate = existing?.issueDate ?? ocrIssueDate;
-    const finalExpirationDate = existing?.expirationDate ?? ocrExpirationDate;
+
+    // Expiration priority: user-provided → OCR-extracted → derived from issueDate + expirationDays
+    const expirationDays = existing?.documentType?.expirationDays ?? null;
+    const derivedExpiration =
+      finalIssueDate && expirationDays
+        ? new Date(finalIssueDate.getTime() + expirationDays * 86_400_000)
+        : null;
+    const finalExpirationDate = existing?.expirationDate ?? ocrExpirationDate ?? derivedExpiration;
 
     // Detect discrepancies (>1 day difference) for admin visibility
     const dateMismatchNotes: string[] = [];
@@ -228,9 +273,67 @@ async function processJob(jobId: string): Promise<boolean> {
     const hasMismatch = dateMismatchNotes.length > 0;
     const mismatchNote = dateMismatchNotes.join(' | ');
 
-    // Require review if AI flagged it OR if there's a date discrepancy
-    const requiresReview = parsedData.requiresReview || hasMismatch;
-    const reviewReason = [parsedData.reviewReason, mismatchNote].filter(Boolean).join(' | ') || null;
+    // ── Document type mismatch check ─────────────────────────────────────────
+    // Compare what GPT identified vs. the specific document type it was filed under.
+    // Keyed by document type name (lowercase) → keywords that should appear in credentialType.
+    // ── Document type mismatch check ─────────────────────────────────────────
+    // Match against issuer + credentialType combined — the issuer is the most
+    // reliable discriminator between document types in the same category
+    // (e.g. DCJIS = CORI, SAM.gov = SAM.gov exclusion, OIG = OIG exclusion).
+    const DOC_TYPE_SIGNALS: Record<string, { issuers: string[]; typeKeywords: string[] }> = {
+      'cori (criminal background check)': {
+        issuers:      ['dcjis', 'department of criminal justice', 'icori', 'cori'],
+        typeKeywords: ['cori', 'criminal offender record', 'criminal background'],
+      },
+      'sori (sex offender registry)': {
+        issuers:      ['dcjis', 'sex offender registry board', 'sorb'],
+        typeKeywords: ['sori', 'sex offender registry', 'sex offender'],
+      },
+      'oig exclusion check': {
+        issuers:      ['oig', 'oig leie', 'office of inspector general'],
+        typeKeywords: ['oig', 'leie', 'oig exclusion'],
+      },
+      'sam.gov exclusion check': {
+        issuers:      ['sam.gov', 'system for award management', 'gsa'],
+        typeKeywords: ['sam.gov', 'sam exclusion', 'system for award management'],
+      },
+      'federal background check': {
+        issuers:      ['fbi', 'federal bureau of investigation'],
+        typeKeywords: ['federal background', 'fbi background'],
+      },
+      'sex offender registry national': {
+        issuers:      ['nsopw', 'doj', 'department of justice'],
+        typeKeywords: ['national sex offender', 'nsopw'],
+      },
+    };
+
+    let categoryMismatchNote: string | null = null;
+    const filedTypeName = job.documentTypeName?.toLowerCase() ?? '';
+    const extractedType = parsedData.credentialType?.toLowerCase() ?? '';
+    const extractedIssuer = parsedData.issuer?.toLowerCase() ?? '';
+
+    const filedSignals = DOC_TYPE_SIGNALS[filedTypeName];
+    if (filedSignals && extractedIssuer) {
+      const issuerMatchesFiled = filedSignals.issuers.some((s) => extractedIssuer.includes(s));
+
+      if (!issuerMatchesFiled) {
+        // Issuer doesn't match — find what the issuer actually belongs to
+        const detectedEntry = Object.entries(DOC_TYPE_SIGNALS).find(
+          ([name, signals]) =>
+            name !== filedTypeName &&
+            signals.issuers.some((s) => extractedIssuer.includes(s))
+        );
+
+        if (detectedEntry) {
+          const [detectedName] = detectedEntry;
+          categoryMismatchNote = `Document type mismatch: filed under "${job.documentTypeName}" but the issuer "${parsedData.issuer}" indicates this is a "${detectedName}". Verify the correct document was uploaded.`;
+        }
+      }
+    }
+
+    // Require review if AI flagged it, date discrepancy, name mismatch, or category mismatch
+    const requiresReview = parsedData.requiresReview || hasMismatch || nameMatchResult === 'mismatch' || !!categoryMismatchNote;
+    const reviewReason = [parsedData.reviewReason, mismatchNote, nameMismatchNote, categoryMismatchNote].filter(Boolean).join(' | ') || null;
 
     // Update credential with parsed data
     await prisma.staffCredential.update({
@@ -252,12 +355,14 @@ async function processJob(jobId: string): Promise<boolean> {
           ocrIssuedAt: parsedData.issuedAt,
           ocrExpiresAt: parsedData.expiresAt,
           dateMismatch: hasMismatch ? dateMismatchNotes : undefined,
+          nameMatch: nameMatchResult,
+          categoryMatch: categoryMismatchNote ? 'mismatch' : (filedTypeName ? 'matched' : 'not_checked'),
         } as any,
         aiConfidence: parsedData.confidence,
         aiParsedAt: new Date(),
-        aiParsedBy: 'gpt-4-turbo',
+        aiParsedBy: 'gpt-4o',
 
-        // Review status — escalate if date discrepancy found
+        // Review status — escalate if date discrepancy or name mismatch found
         reviewStatus: requiresReview ? 'PENDING_REVIEW' : 'APPROVED',
         reviewNotes: reviewReason,
 
@@ -278,6 +383,7 @@ async function processJob(jobId: string): Promise<boolean> {
           requiresReview,
           reviewReason,
           dateMismatch: hasMismatch,
+          nameMatch: nameMatchResult,
           tokensUsed: result.tokensUsed,
           ocrProvider: result.ocrProvider,
           processingTimeMs: Date.now() - startTime,
