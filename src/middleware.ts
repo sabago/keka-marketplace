@@ -94,95 +94,90 @@ export async function middleware(request: NextRequest) {
   // AGENCY APPROVAL STATUS CHECKS
   // ============================================================================
 
-  // Check agency approval status for users with agency association (except platform/super admins)
-  if (token && token.agencyId && token.role !== UserRole.PLATFORM_ADMIN && token.role !== UserRole.SUPERADMIN) {
-    // Routes that require approved agency status
-    const protectedFeatureRoutes = [
-      '/dashboard',
+  if (token && token.agencyId) {
+    const isPlatformOrSuper = token.role === UserRole.PLATFORM_ADMIN || token.role === UserRole.SUPERADMIN;
+
+    // Routes blocked for ALL roles when agency is suspended/rejected/pending.
+    // Platform/super admins are still blocked from chatbot (AI queries tracked per agency)
+    // but NOT from /admin/* or /agency/* (they need those to manage the platform).
+    const chatbotRoutes = ['/api/chatbot'];
+
+    // Routes blocked only for non-platform-admin roles
+    const agencyFeatureRoutes = [
       '/agency',
-      '/directory',
-      '/referrals',
-      '/chatbot',
-      '/api/chatbot',
       '/api/agency',
       '/api/dashboard',
-      '/api/referrals',
-      '/api/recommendations',
-      '/api/favorites',
+      // Note: /account is intentionally excluded — it's user-level, not agency-gated
     ];
 
-    const requiresApproval = protectedFeatureRoutes.some(
+    const routesToCheck = isPlatformOrSuper
+      ? chatbotRoutes
+      : [...chatbotRoutes, ...agencyFeatureRoutes];
+
+    const requiresApproval = routesToCheck.some(
       route => pathname === route || pathname.startsWith(route + '/')
     );
 
     if (requiresApproval) {
-      try {
-        // Fetch agency approval status via internal API (Prisma cannot run in Edge Runtime)
-        const statusUrl = new URL('/api/internal/agency-status', request.url);
-        statusUrl.searchParams.set('id', token.agencyId as string);
-        const statusRes = await fetch(statusUrl.toString(), {
-          headers: {
-            'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
-          },
-        });
+      // Read approval status directly from the JWT — it's set at login and cached in the token.
+      // This avoids an HTTP loopback fetch + DB query on every request.
+      // Trade-off: status reflects at next login after an admin changes it (acceptable).
+      const approvalStatus = token.agencyApprovalStatus as string | null;
 
-        if (statusRes.ok) {
-          const { agency } = await statusRes.json();
+      const isBlocked =
+        approvalStatus === 'SUSPENDED' ||
+        approvalStatus === 'REJECTED' ||
+        (!isPlatformOrSuper && approvalStatus === 'PENDING');
 
-          if (agency) {
-            const { approvalStatus } = agency;
-
-            // Handle PENDING status
-            if (approvalStatus === 'PENDING') {
-              if (pathname.startsWith('/api')) {
-                return NextResponse.json(
-                  {
-                    error: 'Agency approval pending',
-                    message: 'Your agency is currently under review. You will receive an email once approved.',
-                  },
-                  { status: 403, headers: { 'X-Agency-Status': 'PENDING' } }
-                );
-              }
-              return NextResponse.redirect(new URL('/pending-approval', request.url));
-            }
-
-            // Handle REJECTED status
-            if (approvalStatus === 'REJECTED') {
-              if (pathname.startsWith('/api')) {
-                return NextResponse.json(
-                  {
-                    error: 'Agency application not approved',
-                    message: 'Your agency application was not approved.',
-                    reason: agency.rejectionReason || undefined,
-                  },
-                  { status: 403, headers: { 'X-Agency-Status': 'REJECTED' } }
-                );
-              }
-              return NextResponse.redirect(new URL('/account-suspended', request.url));
-            }
-
-            // Handle SUSPENDED status
-            if (approvalStatus === 'SUSPENDED') {
-              if (pathname.startsWith('/api')) {
-                return NextResponse.json(
-                  {
-                    error: 'Account suspended',
-                    message: 'Your agency account has been suspended.',
-                    reason: agency.rejectionReason || undefined,
-                  },
-                  { status: 403, headers: { 'X-Agency-Status': 'SUSPENDED' } }
-                );
-              }
-              return NextResponse.redirect(new URL('/account-suspended', request.url));
-            }
-
-            // APPROVED status - allow access (continue to next checks)
-          }
+      if (isBlocked) {
+        if (pathname.startsWith('/api')) {
+          const messages: Record<string, string> = {
+            PENDING: 'Your agency is currently under review.',
+            REJECTED: 'Your agency application was not approved.',
+            SUSPENDED: 'Your agency account has been suspended.',
+          };
+          return NextResponse.json(
+            { error: messages[approvalStatus ?? ''] ?? 'Access denied' },
+            { status: 403, headers: { 'X-Agency-Status': approvalStatus ?? '' } }
+          );
         }
-      } catch (error) {
-        console.error('Error checking agency approval status:', error);
-        // On error, allow the request to continue (fail open for availability)
+        // Page redirects (only for non-platform-admin roles)
+        if (!isPlatformOrSuper) {
+          if (approvalStatus === 'PENDING') {
+            return NextResponse.redirect(new URL('/pending-approval', request.url));
+          }
+          return NextResponse.redirect(new URL('/account-suspended', request.url));
+        }
       }
+    }
+  }
+
+  // ============================================================================
+  // BLOCK AGENCY-SCOPED FEATURES FOR PLATFORM/SUPER ADMINS WITHOUT AN AGENCY
+  // Credential parsing and AI assistant are tracked under agencyId — no agency = no access
+  // ============================================================================
+  if (
+    token &&
+    (token.role === UserRole.PLATFORM_ADMIN || token.role === UserRole.SUPERADMIN) &&
+    !token.agencyId
+  ) {
+    const agencyOnlyRoutes = [
+      '/api/chatbot/credentials',
+      '/api/agency/credentials',
+      '/api/employee/credentials/upload',
+      '/api/agent',
+    ];
+    const isAgencyOnlyRoute = agencyOnlyRoutes.some(
+      route => pathname === route || pathname.startsWith(route + '/')
+    );
+    if (isAgencyOnlyRoute) {
+      return NextResponse.json(
+        {
+          error: 'Agency required',
+          message: 'This feature requires an agency association. Platform administrators must be assigned to an agency to use credential parsing and AI assistant features.',
+        },
+        { status: 403 }
+      );
     }
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAgency } from '@/lib/authHelpers';
+import { requireAgency , HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { getSignedDownloadUrl } from '@/lib/s3';
 
@@ -12,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { user, agency } = await requireAgency();
+    const { user, agency } = await requireActiveAgency();
     const { id: documentId } = await params;
 
     // Fetch document with employee info
@@ -67,6 +67,10 @@ export async function GET(
     );
   } catch (error: any) {
     console.error('Error generating download URL:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });

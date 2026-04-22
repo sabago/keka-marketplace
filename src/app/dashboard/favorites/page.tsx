@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Star, ExternalLink, Trash2, Edit2, Save, X } from "lucide-react";
 import Link from "next/link";
 
@@ -14,10 +15,17 @@ interface Favorite {
 }
 
 export default function FavoritesPage() {
+  const { data: session } = useSession();
+  const isStaff = session?.user?.role === "AGENCY_USER";
   const [myFavorites, setMyFavorites] = useState<Favorite[]>([]);
   const [agencyFavorites, setAgencyFavorites] = useState<Favorite[]>([]);
   const [view, setView] = useState<"mine" | "agency">("agency");
-  const favorites = view === "mine" ? myFavorites : agencyFavorites;
+  const favorites = (isStaff || view === "mine") ? myFavorites : agencyFavorites;
+
+  // Once session loads, force staff to "mine" view
+  useEffect(() => {
+    if (isStaff) setView("mine");
+  }, [isStaff]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
@@ -110,15 +118,17 @@ export default function FavoritesPage() {
 
         {/* View Toggle */}
         <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setView("agency")}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
-          >
-            All Agency ({agencyFavorites.length})
-          </button>
+          {!isStaff && (
+            <button
+              onClick={() => setView("agency")}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+            >
+              All Agency ({agencyFavorites.length})
+            </button>
+          )}
           <button
             onClick={() => setView("mine")}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "mine" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${(isStaff || view === "mine") ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
           >
             Saved by Me ({myFavorites.length})
           </button>

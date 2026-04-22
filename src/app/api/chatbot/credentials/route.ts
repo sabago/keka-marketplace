@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { requireAgency } from '@/lib/authHelpers';
+import { requireAgency, HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { checkQueryLimit, incrementQueryCount, logChatbotQuery } from '@/lib/chatbotAuth';
 import { logAuditEvent, getRequestMetadata } from '@/lib/auditLog';
 import { CREDENTIAL_TOOLS } from '@/lib/agentTools/credentialTools';
@@ -77,10 +77,13 @@ export async function POST(request: NextRequest) {
     let user: any;
     let agency: any;
     try {
-      const ctx = await requireAgency();
+      const ctx = await requireActiveAgency();
       user = ctx.user;
       agency = ctx.agency;
-    } catch {
+    } catch (authErr) {
+      if (authErr instanceof HttpError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.statusCode });
+      }
       return NextResponse.json(
         { error: 'LOGIN_REQUIRED', message: 'Sign in to use the credentials assistant.' },
         { status: 401 }

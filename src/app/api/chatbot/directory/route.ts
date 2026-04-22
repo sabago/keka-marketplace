@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAgency } from '@/lib/authHelpers';
+import { requireAgency, HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { checkQueryLimit, incrementQueryCount, logChatbotQuery } from '@/lib/chatbotAuth';
 import { ragRetrieve, DIRECTORY_SYSTEM_PROMPT } from '@/lib/rag';
 import { logAuditEvent, getRequestMetadata } from '@/lib/auditLog';
@@ -33,16 +33,21 @@ export async function POST(request: NextRequest) {
 
       // Always try to resolve agency — platform/super admins may also have one
       try {
-        const agencyContext = await requireAgency();
+        const agencyContext = await requireActiveAgency();
         user = agencyContext.user;
         agency = agencyContext.agency;
-      } catch {
+      } catch (agencyErr) {
+        // Suspension/rejection blocks everyone, including platform/super admins
+        if (agencyErr instanceof HttpError) throw agencyErr;
         // Platform/super admins without an agency can still use the chatbot, uncounted
         if (user.role !== 'PLATFORM_ADMIN' && user.role !== 'SUPERADMIN') {
           throw new Error('Agency association required');
         }
       }
-    } catch {
+    } catch (authErr) {
+      if (authErr instanceof HttpError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.statusCode });
+      }
       return NextResponse.json(
         {
           error: 'LOGIN_REQUIRED',

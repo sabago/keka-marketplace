@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight, Loader2, AlertCircle, Plus, CheckCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, AlertCircle, Plus, CheckCircle, X, Mail, UserX, Send } from 'lucide-react';
 import AgencyList from '@/components/admin/AgencyList';
 import { ApprovalStatus, AgencySize } from '@prisma/client';
 
@@ -38,7 +38,14 @@ interface UserRow {
   email: string;
   role: string;
   emailVerified: string | null;
-  agency: { id: string; agencyName: string } | null;
+  isActive: boolean;
+  agency: { id: string; agencyName: string; approvalStatus: string } | null;
+}
+
+interface UserDetail extends UserRow {
+  isPrimaryContact: boolean;
+  createdAt: string;
+  invitationStatus: 'active' | 'pending' | 'expired';
 }
 
 const statusTabs: { value: StatusFilter; label: string }[] = [
@@ -72,6 +79,60 @@ export default function AdminAgenciesPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [usersTotal, setUsersTotal] = useState(0);
+
+  // User detail slide-over
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [userDetail, setUserDetail] = useState<UserDetail | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [userActionLoading, setUserActionLoading] = useState(false);
+  const [userActionMsg, setUserActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Fetch full detail when a user is selected
+  useEffect(() => {
+    if (!selectedUser) { setUserDetail(null); return; }
+    setUserDetailLoading(true);
+    setUserDetail(null);
+    setUserActionMsg(null);
+    fetch(`/api/admin/users/${selectedUser.id}`)
+      .then(r => r.json())
+      .then(d => { if (d.user) setUserDetail(d.user); })
+      .finally(() => setUserDetailLoading(false));
+  }, [selectedUser?.id]);
+
+  const handleUserAction = async (userId: string, action: 'deactivate' | 'reactivate' | 'resend_invite') => {
+    setUserActionLoading(true);
+    setUserActionMsg(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUserActionMsg({ type: 'error', text: data.error || 'Action failed' });
+      } else {
+        setUserActionMsg({ type: 'success', text: data.message });
+        // Refresh user list
+        const refreshed = await fetch('/api/admin/users?limit=200');
+        if (refreshed.ok) {
+          const d = await refreshed.json();
+          setUsers(d.users || []);
+          setUsersTotal(d.total || 0);
+        }
+        // Refresh detail panel
+        const detail = await fetch(`/api/admin/users/${userId}`);
+        if (detail.ok) {
+          const dd = await detail.json();
+          if (dd.user) setUserDetail(dd.user);
+        }
+      }
+    } catch {
+      setUserActionMsg({ type: 'error', text: 'Request failed' });
+    } finally {
+      setUserActionLoading(false);
+    }
+  };
 
   // Fetch agencies
   useEffect(() => {
@@ -163,6 +224,7 @@ export default function AdminAgenciesPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -368,42 +430,62 @@ export default function AdminAgenciesPage() {
                           <td colSpan={5} className="px-6 py-12 text-center text-gray-500">No users found</td>
                         </tr>
                       ) : (
-                        users.map((user) => (
-                          <tr
-                            key={user.id}
-                            onClick={() => user.agency && router.push(`/admin/agencies/${user.agency.id}`)}
-                            className={`hover:bg-gray-50 transition-colors ${user.agency ? 'cursor-pointer' : ''}`}
-                          >
-                            <td className="px-6 py-4 font-medium text-gray-900">{user.name || '—'}</td>
-                            <td className="px-6 py-4 text-gray-600">{user.email}</td>
-                            <td className="px-6 py-4">
-                              {(() => {
-                                const roleBadge: Record<string, { color: string; label: string }> = {
-                                  AGENCY_ADMIN:   { color: 'bg-blue-100 text-blue-700',     label: 'Admin' },
-                                  PLATFORM_ADMIN: { color: 'bg-red-100 text-red-700',       label: 'Platform Admin' },
-                                  SUPERADMIN:     { color: 'bg-purple-100 text-purple-700', label: 'Superadmin' },
-                                };
-                                const badge = roleBadge[user.role] ?? { color: 'bg-gray-100 text-gray-700', label: 'Employee' };
-                                return (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
-                                    {badge.label}
+                        users.map((user) => {
+                          const agencyStatus = user.agency?.approvalStatus;
+                          const statusBadge = (() => {
+                            if (!user.isActive) return { color: 'text-red-600', label: 'Deactivated' };
+                            if (!user.emailVerified) return { color: 'text-amber-600', label: 'Pending Setup' };
+                            if (agencyStatus === 'SUSPENDED') return { color: 'text-red-600', label: 'Suspended' };
+                            if (agencyStatus === 'REJECTED') return { color: 'text-red-600', label: 'Rejected' };
+                            if (agencyStatus === 'PENDING') return { color: 'text-amber-600', label: 'Pending Approval' };
+                            return null; // Active
+                          })();
+                          return (
+                            <tr
+                              key={user.id}
+                              className="hover:bg-gray-50 transition-colors cursor-pointer"
+                              onClick={() => { setSelectedUser(user); setUserActionMsg(null); }}
+                            >
+                              <td className="px-6 py-4 font-medium text-gray-900">{user.name || '—'}</td>
+                              <td className="px-6 py-4 text-gray-600">{user.email}</td>
+                              <td className="px-6 py-4">
+                                {(() => {
+                                  const roleBadge: Record<string, { color: string; label: string }> = {
+                                    AGENCY_ADMIN:   { color: 'bg-blue-100 text-blue-700',     label: 'Admin' },
+                                    PLATFORM_ADMIN: { color: 'bg-red-100 text-red-700',       label: 'Platform Admin' },
+                                    SUPERADMIN:     { color: 'bg-purple-100 text-purple-700', label: 'Superadmin' },
+                                  };
+                                  const badge = roleBadge[user.role] ?? { color: 'bg-gray-100 text-gray-700', label: 'Employee' };
+                                  return (
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
+                                      {badge.label}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-6 py-4 text-gray-600">
+                                {user.agency ? (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); router.push(`/admin/agencies/${user.agency!.id}`); }}
+                                    className="text-[#0B4F96] hover:underline text-left"
+                                  >
+                                    {user.agency.agencyName}
+                                  </button>
+                                ) : '—'}
+                              </td>
+                              <td className="px-6 py-4">
+                                {statusBadge ? (
+                                  <span className={`text-xs font-medium ${statusBadge.color}`}>{statusBadge.label}</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Active
                                   </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4 text-gray-600">{user.agency?.agencyName || '—'}</td>
-                            <td className="px-6 py-4">
-                              {user.emailVerified ? (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                  Active
-                                </span>
-                              ) : (
-                                <span className="text-xs font-medium text-amber-600">Pending Setup</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -414,5 +496,150 @@ export default function AdminAgenciesPage() {
         )}
       </div>
     </div>
+
+    {/* User Profile Slide-over */}
+
+    {selectedUser && (() => {
+      const d = userDetail;
+      const roleBadgeMap: Record<string, { color: string; label: string }> = {
+        AGENCY_ADMIN:   { color: 'bg-blue-100 text-blue-700',     label: 'Admin' },
+        PLATFORM_ADMIN: { color: 'bg-red-100 text-red-700',       label: 'Platform Admin' },
+        SUPERADMIN:     { color: 'bg-purple-100 text-purple-700', label: 'Superadmin' },
+      };
+      const badge = roleBadgeMap[selectedUser.role] ?? { color: 'bg-gray-100 text-gray-700', label: 'Employee' };
+
+      // Use detail data if loaded, fall back to list row data
+      const isActive = d ? d.isActive : selectedUser.isActive;
+      const agencyStatus = selectedUser.agency?.approvalStatus;
+      const statusDisplay = (() => {
+        if (!isActive) return { color: 'text-red-600 bg-red-50', label: 'Deactivated' };
+        if (!selectedUser.emailVerified) return { color: 'text-amber-600 bg-amber-50', label: 'Pending Setup' };
+        if (agencyStatus === 'SUSPENDED') return { color: 'text-red-600 bg-red-50', label: 'Agency Suspended' };
+        if (agencyStatus === 'REJECTED') return { color: 'text-red-600 bg-red-50', label: 'Agency Rejected' };
+        if (agencyStatus === 'PENDING') return { color: 'text-amber-600 bg-amber-50', label: 'Agency Pending' };
+        return { color: 'text-green-700 bg-green-50', label: 'Active' };
+      })();
+
+      const showResend = d && d.invitationStatus !== 'active';
+
+      return (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/30"
+          onClick={() => { setSelectedUser(null); setUserActionMsg(null); }}
+        >
+          <div
+            className="relative w-full max-w-sm bg-white h-full shadow-2xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">{selectedUser.name || 'Unnamed User'}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{selectedUser.email}</p>
+              </div>
+              <button onClick={() => { setSelectedUser(null); setUserActionMsg(null); }} className="text-gray-400 hover:text-gray-600 mt-0.5">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {userDetailLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 text-[#0B4F96] animate-spin" />
+                </div>
+              )}
+
+              {!userDetailLoading && (
+                <>
+                  {/* Info */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Role</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>{badge.label}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Agency</span>
+                      {selectedUser.agency ? (
+                        <button
+                          onClick={() => { setSelectedUser(null); router.push(`/admin/agencies/${selectedUser.agency!.id}`); }}
+                          className="text-[#0B4F96] hover:underline text-right text-sm"
+                        >
+                          {selectedUser.agency.agencyName}
+                        </button>
+                      ) : <span className="text-gray-400 text-sm">—</span>}
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Status</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                    </div>
+                    {d?.createdAt && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Joined</span>
+                        <span className="text-gray-700 text-xs">{new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                    {d?.invitationStatus && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Invite</span>
+                        <span className={`text-xs font-medium ${d.invitationStatus === 'active' ? 'text-green-600' : d.invitationStatus === 'pending' ? 'text-blue-600' : 'text-gray-500'}`}>
+                          {d.invitationStatus === 'active' ? 'Account active' : d.invitationStatus === 'pending' ? 'Invite pending' : 'Invite expired'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Feedback */}
+                  {userActionMsg && (
+                    <div className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${userActionMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      {userActionMsg.type === 'success' ? <CheckCircle className="h-4 w-4 flex-shrink-0" /> : <AlertCircle className="h-4 w-4 flex-shrink-0" />}
+                      {userActionMsg.text}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="border-t border-gray-100 pt-4 space-y-2">
+                    {showResend && (
+                      <button
+                        disabled={userActionLoading}
+                        onClick={() => handleUserAction(selectedUser.id, 'resend_invite')}
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-[#0B4F96] text-[#0B4F96] rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {userActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Resend Invitation
+                      </button>
+                    )}
+                    {d && !d.isActive && (
+                      <button
+                        disabled={userActionLoading}
+                        onClick={() => handleUserAction(selectedUser.id, 'reactivate')}
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-green-500 text-green-700 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {userActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                        Reactivate User
+                      </button>
+                    )}
+                    {d && d.isActive && d.role !== 'PLATFORM_ADMIN' && (
+                      <button
+                        disabled={userActionLoading}
+                        onClick={() => {
+                          if (confirm(`Deactivate ${selectedUser.name || selectedUser.email}? They will not be able to log in until reactivated.`)) {
+                            handleUserAction(selectedUser.id, 'deactivate');
+                          }
+                        }}
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {userActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
+                        Deactivate User
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+    </>
   );
 }

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin , HttpError } from '@/lib/authHelpers';
 import { checkRateLimit, agencyRateLimit, getIP, createRateLimitResponse } from '@/lib/rateLimit';
 
 function formatDate(d: Date | null): string {
@@ -119,6 +119,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     if (error.message?.includes('access required') || error.message?.includes('Authentication')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }

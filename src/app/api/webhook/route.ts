@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { constructWebhookEvent } from '@/lib/stripe';
-import { sendOrderConfirmationEmail } from '@/lib/email';
+import { sendOrderConfirmationEmail, sendPaymentFailedEmail } from '@/lib/email';
 import {
   updateSubscriptionFromStripe,
   downgradeToFree,
@@ -423,7 +423,45 @@ export async function POST(request: Request) {
 
           console.log(`❌ Payment failed for agency ${agencyId}, marked as PAST_DUE`);
 
-          // TODO: Send email notification to agency about failed payment
+          // Send payment failure email to agency admin
+          try {
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
+              apiVersion: '2025-02-24.acacia',
+            });
+
+            // Fetch agency admin and agency details
+            const agency = await prisma.agency.findUnique({
+              where: { id: agencyId },
+              select: {
+                agencyName: true,
+                subscriptionPlan: true,
+                stripeCustomerId: true,
+                users: {
+                  where: { role: 'AGENCY_ADMIN' },
+                  select: { email: true, name: true },
+                  take: 1,
+                },
+              },
+            });
+
+            if (agency?.users[0] && agency.stripeCustomerId) {
+              // Generate a billing portal session so they can update their card
+              const portalSession = await stripe.billingPortal.sessions.create({
+                customer: agency.stripeCustomerId,
+                return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/agency/subscription`,
+              });
+
+              await sendPaymentFailedEmail(
+                agency.users[0],
+                agency.agencyName,
+                agency.subscriptionPlan,
+                portalSession.url
+              );
+            }
+          } catch (emailError) {
+            // Don't fail the webhook if email fails — just log it
+            console.error('Failed to send payment failure email:', emailError);
+          }
         } catch (error) {
           console.error('Error processing invoice.payment_failed event:', error);
           return NextResponse.json({

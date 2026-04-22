@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency } from "@/lib/authHelpers";
+import { requireAgency, requireActiveAgencyForUser, HttpError } from "@/lib/authHelpers";
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
@@ -37,7 +37,7 @@ function searchDirForSlug(dir: string, slug: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, agency } = await requireAgency();
+    const { user, agency } = await requireActiveAgencyForUser();
     const body = await request.json();
     const { referralSourceSlug, submissionDate, submissionMethod, patientType, notes } = body;
 
@@ -65,6 +65,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, referral });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error logging referral:", error);
     return NextResponse.json({ error: "Failed to log referral" }, { status: 500 });
   }

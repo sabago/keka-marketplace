@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin , HttpError } from '@/lib/authHelpers';
 import { checkRateLimit, agencyRateLimit, getIP, createRateLimitResponse } from '@/lib/rateLimit';
 import { BulkImportCredentialsSchema } from '@/lib/credentialValidation';
 import { calculateCredentialStatus, isCredentialCompliant } from '@/lib/credentialHelpers';
@@ -46,8 +46,12 @@ export async function POST(request: NextRequest) {
     let failed = 0;
     const errors: { row: number; employeeRef: string; reason: string }[] = [];
 
-    // Fetch agency warning days once
-    const warningDays = agency.credentialWarningDays ?? 30;
+    // Fetch agency warning days
+    const agencySettings = await prisma.agency.findUnique({
+      where: { id: agency.id },
+      select: { credentialWarningDays: true },
+    });
+    const warningDays = agencySettings?.credentialWarningDays ?? 30;
 
     for (let i = 0; i < credentials.length; i++) {
       const row = credentials[i];

@@ -3,6 +3,14 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { UserRole, PlanType } from '@prisma/client';
 
+/** Thrown by auth helpers when a request should be rejected with a specific HTTP status. */
+export class HttpError extends Error {
+  constructor(message: string, public readonly statusCode: number) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
 /**
  * Get the current authenticated user from the session
  * @returns User session or null if not authenticated
@@ -22,6 +30,16 @@ export async function requireAuth() {
 
   if (!user) {
     throw new Error('Authentication required. Please sign in to continue.');
+  }
+
+  // Re-validate isActive from DB — catches deactivated users whose session is still live.
+  // Lightweight: one indexed PK lookup, only for authenticated requests.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id as string },
+    select: { isActive: true },
+  });
+  if (dbUser && !dbUser.isActive) {
+    throw new HttpError('Your account has been deactivated. Please contact your agency admin.', 403);
   }
 
   return { user };
@@ -49,9 +67,9 @@ export async function requireAgency() {
     throw new Error('Agency association required. Please contact support to link your account to an agency.');
   }
 
-  // Verify agency exists and fetch the fields needed by the majority of routes.
-  // Add to this select only when a route genuinely needs the extra column — don't
-  // add "just in case" columns; each one wastes bandwidth on every single API call.
+  // Verify agency exists and fetch only the fields needed by the majority of routes.
+  // Routes that need billing, profile, or settings fields should query those separately
+  // with a targeted select — don't add columns here "just in case".
   const agency = await prisma.agency.findUnique({
     where: { id: agencyId },
     select: {
@@ -61,32 +79,6 @@ export async function requireAgency() {
       approvalStatus: true,
       subscriptionPlan: true,
       subscriptionStatus: true,
-      stripeCustomerId: true,
-      stripeSubscriptionId: true,
-      queriesThisMonth: true,
-      queriesAllTime: true,
-      credentialUploadsTotal: true,
-      billingPeriodStart: true,
-      billingPeriodEnd: true,
-      lastQueryReset: true,
-      agencySize: true,
-      credentialWarningDays: true,
-      autoReminderEnabled: true,
-      reminderFrequency: true,
-      servicesOffered: true,
-      serviceArea: true,
-      primaryContactName: true,
-      primaryContactRole: true,
-      primaryContactEmail: true,
-      primaryContactPhone: true,
-      intakeMethod: true,
-      intakeMethods: true,
-      followUpFrequency: true,
-      followUpMethods: true,
-      avgReferralsPerMonth: true,
-      specializations: true,
-      consentToAnalytics: true,
-      taxId: true,
     },
   });
 
@@ -98,6 +90,53 @@ export async function requireAgency() {
     user: { ...user, agencyId },
     agency,
   };
+}
+
+/**
+ * Require agency association AND that the agency is not suspended or rejected.
+ * Blocks ALL roles including agency admins.
+ * Use this for chatbot queries and credential uploads — features that should be
+ * fully off for suspended agencies regardless of the user's role.
+ */
+export async function requireActiveAgency() {
+  const { user, agency } = await requireAgency();
+
+  // Enforce suspension/rejection using the live DB value —
+  // catches active sessions whose JWT still has a stale APPROVED status.
+  if (agency.approvalStatus === 'SUSPENDED') {
+    throw new HttpError('Your agency account has been suspended. Please contact support.', 403);
+  }
+  if (agency.approvalStatus === 'REJECTED') {
+    throw new HttpError('Your agency application was not approved. Please contact support.', 403);
+  }
+
+  return { user, agency };
+}
+
+/**
+ * Like requireActiveAgency but allows agency admins (and platform/super admins)
+ * through even when the agency is suspended. AGENCY_USER role is still blocked.
+ * Use this for write actions (saving favorites, logging referrals) that admins
+ * should retain access to during a suspension, but staff should not.
+ */
+export async function requireActiveAgencyForUser() {
+  const { user, agency } = await requireAgency();
+
+  const isAdmin =
+    user.role === UserRole.AGENCY_ADMIN ||
+    user.role === UserRole.PLATFORM_ADMIN ||
+    user.role === UserRole.SUPERADMIN;
+
+  if (!isAdmin) {
+    if (agency.approvalStatus === 'SUSPENDED') {
+      throw new HttpError('Your agency account has been suspended. Please contact support.', 403);
+    }
+    if (agency.approvalStatus === 'REJECTED') {
+      throw new HttpError('Your agency application was not approved. Please contact support.', 403);
+    }
+  }
+
+  return { user, agency };
 }
 
 /**
@@ -136,7 +175,7 @@ export async function requireSuperadmin() {
  * @throws Error if user is not an agency or platform admin
  */
 export async function requireAgencyAdmin() {
-  const { user, agency } = await requireAgency();
+  const { user, agency } = await requireActiveAgency();
 
   if (user.role !== UserRole.AGENCY_ADMIN && user.role !== UserRole.PLATFORM_ADMIN && user.role !== UserRole.SUPERADMIN) {
     throw new Error('Agency administrator access required. You do not have permission to perform this action.');

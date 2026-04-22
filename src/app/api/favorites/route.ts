@@ -1,52 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency } from "@/lib/authHelpers";
-import fs from "fs";
-import path from "path";
-import matter from "gray-matter";
-
-// Look up article title/category from markdown files by slug
-function getArticleMetaFromFiles(slug: string): { title?: string; category?: string } {
-  const contentDirs = [
-    path.join(process.cwd(), "src/content/knowledge-base"),
-    path.join(process.cwd(), "src/content/massachusetts"),
-  ];
-
-  for (const dir of contentDirs) {
-    const result = searchDirForSlug(dir, slug);
-    if (result) return result;
-  }
-  return {};
-}
-
-function searchDirForSlug(dir: string, slug: string): { title?: string; category?: string } | null {
-  if (!fs.existsSync(dir)) return null;
-  const entries = fs.readdirSync(dir);
-  for (const entry of entries) {
-    const filePath = path.join(dir, entry);
-    const stat = fs.statSync(filePath);
-    if (stat.isDirectory()) {
-      const result = searchDirForSlug(filePath, slug);
-      if (result) return result;
-    } else if (entry.endsWith(".md")) {
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const { data } = matter(raw);
-        if (data.slug === slug) {
-          return { title: data.title, category: data.category };
-        }
-      } catch {
-        // skip
-      }
-    }
-  }
-  return null;
-}
-
-// Check if slug exists in markdown files
-function articleExistsInFiles(slug: string): boolean {
-  return getArticleMetaFromFiles(slug).title !== undefined;
-}
+import { requireAgency, requireActiveAgencyForUser, HttpError } from "@/lib/authHelpers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,11 +21,20 @@ export async function GET(request: NextRequest) {
           }),
     ]);
 
-    const withMeta = (list: typeof agencyFavs) =>
-      list.map((fav) => {
-        const meta = getArticleMetaFromFiles(fav.articleSlug);
-        return { ...fav, articleTitle: meta.title, articleCategory: meta.category };
-      });
+    // Batch-resolve article titles from DB — avoids synchronous filesystem walks
+    const uniqueSlugs = [...new Set(
+      [...myFavs, ...agencyFavs].map((f) => f.articleSlug).filter(Boolean)
+    )];
+    const articles = uniqueSlugs.length
+      ? await prisma.knowledgeBaseArticle.findMany({
+          where: { slug: { in: uniqueSlugs } },
+          select: { slug: true, title: true },
+        })
+      : [];
+    const titleMap = new Map(articles.map((a) => [a.slug, a.title]));
+
+    const withMeta = <T extends { articleSlug: string }>(list: T[]) =>
+      list.map((fav) => ({ ...fav, articleTitle: titleMap.get(fav.articleSlug) ?? undefined }));
 
     return NextResponse.json({
       favorites: isAgencyUser ? withMeta(myFavs) : withMeta(agencyFavs),
@@ -79,6 +42,9 @@ export async function GET(request: NextRequest) {
       agencyFavorites: withMeta(agencyFavs),
     });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error fetching favorites:", error);
     return NextResponse.json({ error: "Failed to fetch favorites" }, { status: 500 });
   }
@@ -86,17 +52,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, agency } = await requireAgency();
+    const { user, agency } = await requireActiveAgencyForUser();
     const body = await request.json();
     const { articleSlug, notes } = body;
 
     if (!articleSlug) {
       return NextResponse.json({ error: "Article slug is required" }, { status: 400 });
-    }
-
-    // Verify article exists in markdown files
-    if (!articleExistsInFiles(articleSlug)) {
-      return NextResponse.json({ error: "Article not found" }, { status: 404 });
     }
 
     const favorite = await prisma.favoriteReferral.upsert({
@@ -117,6 +78,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, favorite });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error adding favorite:", error);
     return NextResponse.json({ error: "Failed to add favorite" }, { status: 500 });
   }
@@ -124,7 +88,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { agency } = await requireAgency();
+    const { agency } = await requireActiveAgencyForUser();
     const body = await request.json();
     const { articleSlug } = body;
 
@@ -141,6 +105,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error removing favorite:", error);
     return NextResponse.json({ error: "Failed to remove favorite" }, { status: 500 });
   }

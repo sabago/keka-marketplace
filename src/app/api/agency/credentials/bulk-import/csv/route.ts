@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Papa from 'papaparse';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin , HttpError } from '@/lib/authHelpers';
 import { checkRateLimit, agencyRateLimit, getIP, createRateLimitResponse } from '@/lib/rateLimit';
 import { BulkImportCredentialsSchema } from '@/lib/credentialValidation';
 import { prisma } from '@/lib/db';
@@ -97,7 +97,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { credentials: validCredentials } = bodyParsed.data;
-    const warningDays = agency.credentialWarningDays ?? 30;
+    const agencySettings = await prisma.agency.findUnique({
+      where: { id: agency.id },
+      select: { credentialWarningDays: true },
+    });
+    const warningDays = agencySettings?.credentialWarningDays ?? 30;
 
     let created = 0;
     let updated = 0;

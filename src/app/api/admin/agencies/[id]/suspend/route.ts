@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireSuperadmin } from '@/lib/authHelpers';
 import { ApprovalStatus } from '@prisma/client';
 import { z } from 'zod';
+import { sendAgencySuspensionEmail } from '@/lib/email';
 
 const suspendSchema = z.object({
   reason: z.string().min(10, 'Suspension reason must be at least 10 characters'),
@@ -36,9 +37,14 @@ export async function POST(
 
     const { reason, notes } = validation.data;
 
-    // Get the agency
+    // Get the agency and all its users
     const agency = await prisma.agency.findUnique({
       where: { id: id },
+      include: {
+        users: {
+          select: { id: true, email: true, name: true, role: true },
+        },
+      },
     });
 
     if (!agency) {
@@ -77,8 +83,13 @@ export async function POST(
       });
     });
 
-    // TODO: Send suspension notification email in Phase 8
-    // This would inform the agency of the suspension
+    // Send suspension emails to all agency users
+    // Agency admins get an admin-specific message; staff get a simpler note
+    const emailPromises = agency.users.map((u) => {
+      const isAdmin = u.role === 'AGENCY_ADMIN';
+      return sendAgencySuspensionEmail(u, agency.agencyName, reason, isAdmin);
+    });
+    await Promise.allSettled(emailPromises); // non-blocking — don't fail the suspension if email fails
 
     return NextResponse.json({
       success: true,

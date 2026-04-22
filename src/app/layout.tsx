@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import DirectoryChatbot from "@/components/DirectoryChatbot";
 
 const geistSans = Geist({
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "Keka Marketplace",
-	description: "Your one-stop shop for high-quality PDF resources",
+	title: "Mastering HomeCare",
+	description: "A HIPAA-aware platform for Massachusetts home-care and AFC agencies. Track credentials, source referrals, stay compliant.",
 };
 
 export default function RootLayout({
@@ -33,6 +34,7 @@ export default function RootLayout({
 				<Providers>
 					<Header />
 					<main className="flex-grow">{children}</main>
+					<Footer />
 					<DirectoryChatbot />
 				</Providers>
 			</body>

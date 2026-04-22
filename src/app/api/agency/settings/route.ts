@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin , HttpError } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { AgencySize, IntakeMethod } from '@prisma/client';
 
@@ -9,33 +9,56 @@ import { AgencySize, IntakeMethod } from '@prisma/client';
  */
 export async function GET(req: NextRequest) {
   try {
-    const { agency } = await requireAgencyAdmin();
+    const { agency: { id: agencyId, agencyName, licenseNumber } } = await requireAgencyAdmin();
+
+    const agencyData = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      select: {
+        agencySize: true,
+        servicesOffered: true,
+        serviceArea: true,
+        primaryContactName: true,
+        primaryContactRole: true,
+        primaryContactEmail: true,
+        primaryContactPhone: true,
+        intakeMethod: true,
+        intakeMethods: true,
+        followUpFrequency: true,
+        followUpMethods: true,
+        avgReferralsPerMonth: true,
+        specializations: true,
+      },
+    });
 
     return NextResponse.json(
       {
         agency: {
-          id: agency.id,
-          agencyName: agency.agencyName,
-          licenseNumber: agency.licenseNumber,
-          agencySize: agency.agencySize,
-          servicesOffered: agency.servicesOffered,
-          serviceArea: agency.serviceArea,
-          primaryContactName: agency.primaryContactName,
-          primaryContactRole: agency.primaryContactRole,
-          primaryContactEmail: agency.primaryContactEmail,
-          primaryContactPhone: agency.primaryContactPhone,
-          intakeMethod: agency.intakeMethod,
-          intakeMethods: agency.intakeMethods,
-          followUpFrequency: agency.followUpFrequency,
-          followUpMethods: agency.followUpMethods,
-          avgReferralsPerMonth: agency.avgReferralsPerMonth,
-          specializations: agency.specializations,
+          id: agencyId,
+          agencyName,
+          licenseNumber,
+          agencySize: agencyData?.agencySize,
+          servicesOffered: agencyData?.servicesOffered,
+          serviceArea: agencyData?.serviceArea,
+          primaryContactName: agencyData?.primaryContactName,
+          primaryContactRole: agencyData?.primaryContactRole,
+          primaryContactEmail: agencyData?.primaryContactEmail,
+          primaryContactPhone: agencyData?.primaryContactPhone,
+          intakeMethod: agencyData?.intakeMethod,
+          intakeMethods: agencyData?.intakeMethods,
+          followUpFrequency: agencyData?.followUpFrequency,
+          followUpMethods: agencyData?.followUpMethods,
+          avgReferralsPerMonth: agencyData?.avgReferralsPerMonth,
+          specializations: agencyData?.specializations,
         },
       },
       { status: 200 }
     );
   } catch (error: any) {
     console.error('Error fetching agency settings:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -172,6 +195,10 @@ export async function PUT(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error updating agency settings:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });

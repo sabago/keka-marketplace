@@ -123,14 +123,39 @@ export default function ArticleDetailPage() {
   const [sections, setSections] = useState<ArticleSection[]>([]);
   const [expandRequest, setExpandRequest] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
 
   const isLoggedIn = !!session?.user;
+  const agencyApprovalStatus = (session?.user as any)?.agencyApprovalStatus as string | null;
+  const userRole = (session?.user as any)?.role as string | null;
+  const isAdmin = userRole === 'AGENCY_ADMIN' || userRole === 'PLATFORM_ADMIN' || userRole === 'SUPERADMIN';
+  const isSuspended = agencyApprovalStatus === 'SUSPENDED' || agencyApprovalStatus === 'REJECTED';
+  // Use live DB value for isActive (null = not yet fetched, treat as active to avoid flash)
+  const isDeactivated = liveIsActive === false;
+  // Deactivated users can't save or log; suspended-agency staff can't either; suspended-agency admins can
+  const canSaveAndLog = !isDeactivated && (!isSuspended || isAdmin);
 
   const backCategoryInfo = getCategoryBySlug(fromCategory);
   const backUrl = fromCategory ? `/knowledge-base?category=${fromCategory}` : '/knowledge-base';
   const backLabel = backCategoryInfo ? backCategoryInfo.name : 'Referral Directory';
 
+  // Fetch live isActive status from DB on mount — bypasses the JWT cache so reactivated
+  // users see buttons enabled immediately without logging out.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetch('/api/account/status')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setLiveIsActive(data.isActive); })
+      .catch(() => {});
+  }, [isLoggedIn]);
+
   useEffect(() => { if (slug) fetchArticle(); }, [slug]);
+
+  // Check favorite status once both article and session are ready
+  useEffect(() => {
+    if (article && isLoggedIn && canSaveAndLog) checkFavorited(article.slug);
+  }, [article?.slug, isLoggedIn, canSaveAndLog]);
 
   const fetchArticle = async () => {
     try {
@@ -142,7 +167,6 @@ export default function ArticleDetailPage() {
       setArticle(data.article);
       setSections(parseArticleSections(data.article.content || ''));
       if (data.article?.category) fetchRelated(data.article.category, data.article.slug);
-      if (isLoggedIn) checkFavorited(data.article.slug);
     } catch { setError('Failed to load article'); }
     finally { setLoading(false); }
   };
@@ -166,8 +190,9 @@ export default function ArticleDetailPage() {
   };
 
   const toggleFavorite = async () => {
-    if (!isLoggedIn || !article) return;
+    if (!isLoggedIn || !article || !canSaveAndLog) return;
     setFavoriteLoading(true);
+    setFavoriteError(null);
     try {
       const method = isFavorited ? 'DELETE' : 'POST';
       const res = await fetch('/api/favorites', {
@@ -175,7 +200,12 @@ export default function ArticleDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ articleSlug: article.slug }),
       });
-      if (res.ok) setIsFavorited(!isFavorited);
+      if (res.ok) {
+        setIsFavorited(!isFavorited);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setFavoriteError(data.error || 'Failed to save');
+      }
     } catch { /* non-critical */ }
     finally { setFavoriteLoading(false); }
   };
@@ -319,18 +349,22 @@ export default function ArticleDetailPage() {
                         <div className="flex flex-col items-start gap-0.5">
                           <button
                             onClick={toggleFavorite}
-                            disabled={favoriteLoading}
-                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${isFavorited ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                            disabled={favoriteLoading || !canSaveAndLog}
+                            title={!canSaveAndLog ? 'Your agency account is suspended' : undefined}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${!canSaveAndLog ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400' : isFavorited ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
                           >
-                            <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-                            {isFavorited ? 'Saved' : 'Save source'}
+                            <Heart className={`w-4 h-4 ${isFavorited && canSaveAndLog ? 'fill-red-500 text-red-500' : ''}`} />
+                            {isFavorited && canSaveAndLog ? 'Saved' : 'Save source'}
                           </button>
                           <span className="text-xs text-gray-400 pl-1">Bookmark for quick access</span>
+                          {favoriteError && <span className="text-xs text-red-500 pl-1">{favoriteError}</span>}
                         </div>
                         <div className="flex flex-col items-start gap-0.5">
                           <button
-                            onClick={() => setShowReferralModal(true)}
-                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${referralJustLogged ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-[#0B3D8C] text-white hover:bg-[#0a3578]'}`}
+                            onClick={() => canSaveAndLog && setShowReferralModal(true)}
+                            disabled={!canSaveAndLog}
+                            title={!canSaveAndLog ? 'Your agency account is suspended' : undefined}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${!canSaveAndLog ? 'opacity-40 cursor-not-allowed bg-gray-300 text-gray-500' : referralJustLogged ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-[#0B3D8C] text-white hover:bg-[#0a3578]'}`}
                           >
                             <ClipboardList className="w-4 h-4" />
                             {referralJustLogged ? 'Logged!' : 'Log a referral'}

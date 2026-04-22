@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CredentialPageRole, DocumentStatus } from '@prisma/client';
-import { requireAgency } from '@/lib/authHelpers';
+import { requireAgency , HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { uploadToS3 } from '@/lib/s3';
 import { enqueueParsingJob } from '@/lib/jobQueue';
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Auth + agency scope ───────────────────────────────────────────────────
-    const { user, agency } = await requireAgency();
+    const { user, agency } = await requireActiveAgency();
 
     const isAdmin =
       user.role === 'AGENCY_ADMIN' ||
@@ -291,6 +291,10 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error uploading document:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message?.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });

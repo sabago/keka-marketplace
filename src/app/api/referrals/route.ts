@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency } from "@/lib/authHelpers";
+import { requireAgency, HttpError } from "@/lib/authHelpers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,6 +48,9 @@ export async function GET(request: NextRequest) {
       agencyReferrals: withTitles(agencyReferrals),
     });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error fetching referrals:", error);
     return NextResponse.json({ error: "Failed to fetch referrals" }, { status: 500 });
   }

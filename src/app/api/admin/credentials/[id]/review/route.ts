@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin , HttpError } from '@/lib/authHelpers';
 import { getSignedDownloadUrl } from '@/lib/s3';
 import { calculateCredentialStatus, updateCredentialCompliance } from '@/lib/credentialHelpers';
 import {

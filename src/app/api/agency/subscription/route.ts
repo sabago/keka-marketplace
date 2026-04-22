@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAgency } from '@/lib/authHelpers';
+import { requireAgency , HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { getSubscriptionStatus, getStaffLimit, hasUnlimitedStaff, getCredentialLimit, hasUnlimitedCredentials } from '@/lib/subscriptionHelpers';
 import { prisma } from '@/lib/db';
 
@@ -9,38 +9,47 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(req: NextRequest) {
   try {
-    const { user, agency } = await requireAgency();
+    const { user, agency: { id: agencyId, agencyName, subscriptionPlan, subscriptionStatus: subStatus } } = await requireActiveAgency();
 
-    // Get subscription status with query limits
-    const subscriptionStatus = await getSubscriptionStatus(agency.id);
+    const [agencyData, subscriptionStatus, staffCount] = await Promise.all([
+      prisma.agency.findUnique({
+        where: { id: agencyId },
+        select: {
+          agencySize: true,
+          queriesThisMonth: true,
+          queriesAllTime: true,
+          credentialUploadsTotal: true,
+          billingPeriodStart: true,
+          billingPeriodEnd: true,
+          stripeCustomerId: true,
+          stripeSubscriptionId: true,
+        },
+      }),
+      getSubscriptionStatus(agencyId),
+      prisma.user.count({ where: { agencyId } }),
+    ]);
 
-    // Get staff count
-    const staffCount = await prisma.user.count({
-      where: { agencyId: agency.id },
-    });
+    const staffLimit = agencyData?.agencySize ? getStaffLimit(agencyData.agencySize) : 0;
+    const isUnlimitedStaff = agencyData?.agencySize ? hasUnlimitedStaff(agencyData.agencySize) : false;
 
-    // Get staff limit
-    const staffLimit = getStaffLimit(agency.agencySize);
-    const isUnlimitedStaff = hasUnlimitedStaff(agency.agencySize);
-
-    const credentialLimit = getCredentialLimit(agency.subscriptionPlan);
-    const isUnlimitedCredentials = hasUnlimitedCredentials(agency.subscriptionPlan);
+    const credentialLimit = getCredentialLimit(subscriptionPlan);
+    const isUnlimitedCredentials = hasUnlimitedCredentials(subscriptionPlan);
 
     return NextResponse.json(
       {
         agency: {
-          id: agency.id,
-          agencyName: agency.agencyName,
-          agencySize: agency.agencySize,
-          subscriptionPlan: agency.subscriptionPlan,
-          subscriptionStatus: agency.subscriptionStatus,
-          queriesThisMonth: agency.queriesThisMonth,
-          queriesAllTime: agency.queriesAllTime,
-          credentialUploadsTotal: agency.credentialUploadsTotal,
-          billingPeriodStart: agency.billingPeriodStart,
-          billingPeriodEnd: agency.billingPeriodEnd,
-          stripeCustomerId: agency.stripeCustomerId,
-          stripeSubscriptionId: agency.stripeSubscriptionId,
+          id: agencyId,
+          agencyName,
+          agencySize: agencyData?.agencySize,
+          subscriptionPlan,
+          subscriptionStatus: subStatus,
+          queriesThisMonth: agencyData?.queriesThisMonth,
+          queriesAllTime: agencyData?.queriesAllTime,
+          credentialUploadsTotal: agencyData?.credentialUploadsTotal,
+          billingPeriodStart: agencyData?.billingPeriodStart,
+          billingPeriodEnd: agencyData?.billingPeriodEnd,
+          stripeCustomerId: agencyData?.stripeCustomerId,
+          stripeSubscriptionId: agencyData?.stripeSubscriptionId,
         },
         queryLimit: subscriptionStatus.queryLimit,
         queriesRemaining: subscriptionStatus.queriesRemaining,
@@ -55,6 +64,10 @@ export async function GET(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error fetching subscription data:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });

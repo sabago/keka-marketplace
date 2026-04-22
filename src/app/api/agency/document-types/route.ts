@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { requireAgencyAdmin, requireAgency } from '@/lib/authHelpers';
+import { requireAgencyAdmin, requireAgency , HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { agencyRateLimit, checkRateLimit } from '@/lib/rateLimit';
 import { logAuditEvent } from '@/lib/auditLog';
@@ -40,7 +40,7 @@ const CreateAgencyDocTypeSchema = z.object({
  */
 export async function GET() {
   try {
-    const { agency } = await requireAgency();
+    const { agency } = await requireActiveAgency();
 
     const rl = await checkRateLimit(agencyRateLimit, agency.id);
     if (!rl.success) {
@@ -70,6 +70,9 @@ export async function GET() {
       { status: 200 }
     );
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     if (error.message?.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
@@ -151,6 +154,9 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     if (error.message?.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }

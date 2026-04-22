@@ -12,6 +12,7 @@ import { useSession, signOut } from "next-auth/react";
 export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isClient, setIsClient] = useState(false);
+	const [liveAgencyStatus, setLiveAgencyStatus] = useState<string | null>(null);
 	const pathname = usePathname();
 	const { settings } = useSettings();
 	const { isLoggedIn, user } = useAuth();
@@ -21,6 +22,23 @@ export default function Header() {
 	useEffect(() => {
 		setIsClient(true);
 	}, []);
+
+	// For platform/super admins with a linked agency, fetch live agency status so a
+	// mid-session suspension is reflected immediately without waiting for JWT expiry.
+	const sessionAgencyId = (session?.user as any)?.agencyId as string | null | undefined;
+	const sessionRole = session?.user?.role;
+	const isSuperOrPlatformAdmin = sessionRole === "PLATFORM_ADMIN" || sessionRole === "SUPERADMIN";
+	useEffect(() => {
+		if (!isSuperOrPlatformAdmin || !sessionAgencyId) return;
+		fetch("/api/agency/status")
+			.then((r) => r.ok ? r.json() : null)
+			.then((data) => {
+				if (data?.approvalStatus) {
+					setLiveAgencyStatus(data.approvalStatus);
+				}
+			})
+			.catch(() => {}); // fail silently — don't break nav on network error
+	}, [isSuperOrPlatformAdmin, sessionAgencyId]);
 
 	// Handle logout
 	const handleLogout = async () => {
@@ -139,28 +157,22 @@ export default function Header() {
 	// Check if we're on an agency-related page (show agency secondary nav)
 	const isAgencyPage = pathname?.startsWith("/agency");
 
-	// Check if user has agency access
-	const hasAgencyAccess =
-		session?.user?.role === "AGENCY_ADMIN" ||
-		session?.user?.role === "AGENCY_USER";
+	const role = session?.user?.role;
+	const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
+	// JWT-baked status (set at login, may be stale for mid-session changes)
+	const jwtAgencyStatus = (session?.user as any)?.agencyApprovalStatus as string | null | undefined;
 
-	// Whether platform/super admin has a linked agency (self-assignment)
-	const isPlatformOrSuperAdmin =
-		session?.user?.role === "PLATFORM_ADMIN" ||
-		session?.user?.role === "SUPERADMIN";
-	const adminHasAgency = isPlatformOrSuperAdmin && !!(session?.user as any)?.agencyId;
+	const isPlatformOrSuperAdmin = role === "PLATFORM_ADMIN" || role === "SUPERADMIN";
+	const isAgencyAdmin = role === "AGENCY_ADMIN";
 
-	// Check if user is platform admin or agency admin
-	const isAdmin =
-		session?.user?.role === "PLATFORM_ADMIN" ||
-		session?.user?.role === "SUPERADMIN" ||
-		session?.user?.role === "AGENCY_ADMIN";
-
-	// Determine agency management URL based on role
-	const agencyManagementUrl =
-		isPlatformOrSuperAdmin
-			? "/admin/agencies"
-			: "/agency";
+	// Platform/super admins can also have a linked agency
+	const adminHasAgency = isPlatformOrSuperAdmin && !!agencyId;
+	// For platform/super admins, use the live-fetched status; for agency admins, JWT is sufficient
+	// (middleware already redirects them away from /agency/* on suspension, so JWT staleness is low-risk)
+	const effectiveAgencyStatus = isPlatformOrSuperAdmin ? (liveAgencyStatus ?? jwtAgencyStatus) : jwtAgencyStatus;
+	const agencyIsSuspended =
+		effectiveAgencyStatus === "SUSPENDED" || effectiveAgencyStatus === "REJECTED";
+	const showMyAgency = (isAgencyAdmin || adminHasAgency) && !agencyIsSuspended;
 
 	// Check if we're on agency management pages
 	const isAgencyManagementPage =
@@ -176,9 +188,16 @@ export default function Header() {
 					<div className="flex items-center space-x-8">
 						<Link
 							href="/"
-							className="text-xl font-bold text-[#0B4F96] hover:text-[#48ccbc]"
+							className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+							aria-label="Mastering HomeCare"
 						>
-							{settings.siteName}
+							<span className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0B4F96] to-[#48ccbc] text-white flex items-center justify-center font-bold text-base flex-shrink-0">
+								M
+							</span>
+							<span className="flex items-baseline gap-1 text-[19px] leading-none letter-spacing-[-0.01em]">
+								<span className="font-semibold text-[#0B4F96]">Mastering</span>
+								<span className="font-bold text-[#48ccbc]">HomeCare</span>
+							</span>
 						</Link>
 
 						{/* Desktop Primary Navigation */}
@@ -221,7 +240,8 @@ export default function Header() {
 									Pricing
 								</Link>
 							)}
-							{session?.user?.role === "AGENCY_ADMIN" && (
+							{/* Plan & Billing — agency admins only (not staff, not platform admins) */}
+							{isAgencyAdmin && showMyAgency && (
 								<Link
 									href="/agency/subscription"
 									className={`hover:text-[#48ccbc] flex items-center gap-1 ${
@@ -243,19 +263,21 @@ export default function Header() {
 							>
 								Dashboard
 							</Link>
-							{isAdmin && (
+							{/* Agencies — platform/super admins only */}
+							{isPlatformOrSuperAdmin && (
 								<Link
-									href={agencyManagementUrl}
+									href="/admin/agencies"
 									className={`hover:text-[#48ccbc] ${
-										isAgencyManagementPage
+										isAgencyManagementPage && !pathname?.startsWith("/agency")
 											? "text-[#48ccbc] font-medium"
 											: "text-gray-600"
 									}`}
 								>
-									{isPlatformOrSuperAdmin ? "Agencies" : "My Agency"}
+									Agencies
 								</Link>
 							)}
-							{adminHasAgency && (
+							{/* My Agency — agency admins and platform/super admins with a linked (non-suspended) agency */}
+							{showMyAgency && (
 								<Link
 									href="/agency"
 									className={`hover:text-[#48ccbc] ${
@@ -265,7 +287,8 @@ export default function Header() {
 									My Agency
 								</Link>
 							)}
-							{session?.user?.role === "PLATFORM_ADMIN" && (
+							{/* Superadmins — platform admins only */}
+							{role === "PLATFORM_ADMIN" && (
 								<Link
 									href="/admin/superadmins"
 									className={`hover:text-[#48ccbc] ${
@@ -277,11 +300,24 @@ export default function Header() {
 									Superadmins
 								</Link>
 							)}
+							{/* Audit Log — platform/super admins see platform-wide log; agency admins see their agency's log */}
 							{isPlatformOrSuperAdmin && (
 								<Link
 									href="/admin/audit-log"
 									className={`hover:text-[#48ccbc] ${
 										pathname?.startsWith("/admin/audit-log")
+											? "text-[#48ccbc] font-medium"
+											: "text-gray-600"
+									}`}
+								>
+									Audit Log
+								</Link>
+							)}
+							{isAgencyAdmin && (
+								<Link
+									href="/agency/audit-log"
+									className={`hover:text-[#48ccbc] ${
+										pathname?.startsWith("/agency/audit-log")
 											? "text-[#48ccbc] font-medium"
 											: "text-gray-600"
 									}`}
@@ -390,20 +426,22 @@ export default function Header() {
 							>
 								Dashboard
 							</Link>
-							{isAdmin && (
+							{/* Agencies — platform/super admins only */}
+							{isPlatformOrSuperAdmin && (
 								<Link
-									href={agencyManagementUrl}
+									href="/admin/agencies"
 									className={`hover:text-blue-600 ${
-										isAgencyManagementPage
+										isAgencyManagementPage && !pathname?.startsWith("/agency")
 											? "text-[#0B4F96] font-medium"
 											: "text-gray-600"
 									}`}
 									onClick={() => setIsMenuOpen(false)}
 								>
-									{isPlatformOrSuperAdmin ? "Agencies" : "My Agency"}
+									Agencies
 								</Link>
 							)}
-							{adminHasAgency && (
+							{/* My Agency — not staff, not suspended */}
+							{showMyAgency && (
 								<Link
 									href="/agency"
 									className={`hover:text-blue-600 ${
@@ -414,6 +452,21 @@ export default function Header() {
 									My Agency
 								</Link>
 							)}
+							{/* Superadmins — platform admins only */}
+							{role === "PLATFORM_ADMIN" && (
+								<Link
+									href="/admin/superadmins"
+									className={`hover:text-blue-600 ${
+										pathname?.startsWith("/admin/superadmins")
+											? "text-[#0B4F96] font-medium"
+											: "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Superadmins
+								</Link>
+							)}
+							{/* Audit Log */}
 							{isPlatformOrSuperAdmin && (
 								<Link
 									href="/admin/audit-log"
@@ -427,8 +480,21 @@ export default function Header() {
 									Audit Log
 								</Link>
 							)}
+							{isAgencyAdmin && (
+								<Link
+									href="/agency/audit-log"
+									className={`hover:text-blue-600 ${
+										pathname?.startsWith("/agency/audit-log")
+											? "text-[#0B4F96] font-medium"
+											: "text-gray-600"
+									}`}
+									onClick={() => setIsMenuOpen(false)}
+								>
+									Audit Log
+								</Link>
+							)}
 							{/* Agency Sub-Navigation Items (mobile) */}
-							{(hasAgencyAccess || adminHasAgency) && isAgencyPage && (
+							{showMyAgency && isAgencyPage && (
 								<>
 									<div className="pl-4 border-l-2 border-gray-200 mt-2">
 										<div className="text-xs text-gray-500 mb-2 uppercase">

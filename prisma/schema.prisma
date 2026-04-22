@@ -306,6 +306,7 @@ model User {
   emailVerified     DateTime?
   image             String?
   isPrimaryContact  Boolean   @default(false)
+  isActive          Boolean   @default(true)
 
   agency                Agency?                @relation(fields: [agencyId], references: [id])
   agencyId              String?

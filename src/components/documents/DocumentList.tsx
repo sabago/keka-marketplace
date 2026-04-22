@@ -148,6 +148,7 @@ export default function DocumentList({
 	onRefresh,
 }: DocumentListProps) {
 	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
 	const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
 	const [pollingJobs, setPollingJobs] = useState<Record<string, string>>({});
@@ -238,18 +239,12 @@ export default function DocumentList({
 		}
 	};
 
-	const handleDelete = async (documentId: string) => {
-		if (!onDelete) return;
-
-		const confirmed = confirm(
-			"Are you sure you want to delete this document? This action cannot be undone."
-		);
-
-		if (!confirmed) return;
-
-		setDeletingId(documentId);
+	const handleDeleteConfirm = async () => {
+		if (!onDelete || !deleteConfirmId) return;
+		setDeletingId(deleteConfirmId);
+		setDeleteConfirmId(null);
 		try {
-			await onDelete(documentId);
+			await onDelete(deleteConfirmId);
 		} finally {
 			setDeletingId(null);
 		}
@@ -270,6 +265,37 @@ export default function DocumentList({
 				URL.revokeObjectURL(preview.url);
 				setPreview(null);
 			}} />}
+
+			{/* Delete confirmation modal */}
+			{deleteConfirmId && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+					<div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+						<div className="flex items-center gap-3 mb-3">
+							<div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+								<Trash2 className="h-5 w-5 text-red-600" />
+							</div>
+							<h3 className="text-base font-semibold text-gray-900">Delete document?</h3>
+						</div>
+						<p className="text-sm text-gray-500 mb-5">
+							This document will be permanently deleted and cannot be recovered.
+						</p>
+						<div className="flex gap-3 justify-end">
+							<button
+								onClick={() => setDeleteConfirmId(null)}
+								className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={handleDeleteConfirm}
+								className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Gap banner — missing coverage alert */}
 			{gaps && gaps.length > 0 && (
@@ -468,7 +494,7 @@ export default function DocumentList({
 											</button>
 											{canDelete && onDelete && (
 												<button
-													onClick={() => handleDelete(doc.id)}
+													onClick={() => setDeleteConfirmId(doc.id)}
 													disabled={deletingId === doc.id}
 													className="text-red-600 hover:text-red-800 p-1 disabled:opacity-50"
 													title="Delete"
@@ -647,7 +673,7 @@ export default function DocumentList({
 								</button>
 								{canDelete && onDelete && (
 									<button
-										onClick={() => handleDelete(doc.id)}
+										onClick={() => setDeleteConfirmId(doc.id)}
 										disabled={deletingId === doc.id}
 										className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50 text-sm"
 									>

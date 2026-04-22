@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
       where: { id: agencyId },
       select: {
         subscriptionPlan: true,
+        subscriptionStatus: true,
         queriesThisMonth: true,
         queriesAllTime: true,
         credentialUploadsTotal: true,
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       plan,
+      subscriptionStatus: agency.subscriptionStatus,
       queriesUsed,
       queriesLimit,
       isUnlimited: unlimited,

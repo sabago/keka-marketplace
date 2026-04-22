@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency } from "@/lib/authHelpers";
+import { requireAgency, HttpError } from "@/lib/authHelpers";
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
@@ -20,7 +20,12 @@ function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {
 
 export async function GET(request: NextRequest) {
   try {
-    const { agency } = await requireAgency();
+    const { agency: { id: agencyId } } = await requireAgency();
+
+    const agencyProfile = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      select: { serviceArea: true, agencySize: true, servicesOffered: true },
+    });
 
     const contentDirs = [
       path.join(process.cwd(), "src/content/knowledge-base"),
@@ -59,12 +64,12 @@ export async function GET(request: NextRequest) {
       let score = 50;
       let reason = "";
 
-      if (agency.serviceArea && agency.serviceArea.includes(article.state)) {
+      if (agencyProfile?.serviceArea && agencyProfile?.serviceArea.includes(article.state)) {
         score += 20;
         reason = `Located in your service area (${article.state})`;
       }
 
-      if (agency.agencySize === "SMALL" && article.tags.some(t => t.toLowerCase() === "free")) {
+      if (agencyProfile?.agencySize === "SMALL" && article.tags.some(t => t.toLowerCase() === "free")) {
         score += 15;
         reason = reason
           ? `${reason}. No-cost option ideal for small agencies`
@@ -73,8 +78,8 @@ export async function GET(request: NextRequest) {
 
       if (
         article.category &&
-        agency.servicesOffered &&
-        agency.servicesOffered.some((service: string) =>
+        agencyProfile?.servicesOffered &&
+        agencyProfile?.servicesOffered.some((service: string) =>
           article.category?.toLowerCase().includes(service.toLowerCase())
         )
       ) {
@@ -104,6 +109,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ recommendations });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error("Error fetching recommendations:", error);
     return NextResponse.json({ error: "Failed to fetch recommendations" }, { status: 500 });
   }

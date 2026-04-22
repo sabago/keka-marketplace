@@ -22,7 +22,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password are required');
         }
 
-        // Find user by email — select only what authorize needs; agency row is not used here
+        // Find user by email — select only what authorize needs
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
           select: {
@@ -33,6 +33,10 @@ export const authOptions: NextAuthOptions = {
             role: true,
             agencyId: true,
             image: true,
+            isActive: true,
+            agency: {
+              select: { approvalStatus: true },
+            },
           },
         });
 
@@ -47,6 +51,22 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid email or password');
         }
 
+        // Block deactivated users
+        if (!user.isActive) {
+          throw new Error('Your account has been deactivated. Please contact your agency admin.');
+        }
+
+        // Block login for suspended/rejected agencies (non-platform-admins only)
+        if (user.agency && user.role !== 'PLATFORM_ADMIN' && user.role !== 'SUPERADMIN') {
+          const status = user.agency.approvalStatus;
+          if (status === 'SUSPENDED') {
+            throw new Error('Your agency account has been suspended. Please contact support.');
+          }
+          if (status === 'REJECTED') {
+            throw new Error('Your agency application was not approved. Please contact support.');
+          }
+        }
+
         // Return user object with agency data
         return {
           id: user.id,
@@ -54,6 +74,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           agencyId: user.agencyId,
+          agencyApprovalStatus: user.agency?.approvalStatus ?? null,
           image: user.image,
         };
       },
@@ -81,6 +102,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role as UserRole;
         token.agencyId = user.agencyId || null;
+        token.agencyApprovalStatus = (user as any).agencyApprovalStatus ?? null;
         token.email = user.email;
         token.name = user.name;
       }
@@ -89,19 +111,61 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === 'google' && user) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { role: true, agencyId: true },
+          select: {
+            role: true,
+            agencyId: true,
+            agency: { select: { approvalStatus: true } },
+          },
         });
 
         if (dbUser) {
           token.role = dbUser.role;
           token.agencyId = dbUser.agencyId;
+          token.agencyApprovalStatus = dbUser.agency?.approvalStatus ?? null;
         }
+      }
+
+      // Periodically re-validate agency approval status from DB to enforce
+      // suspension/rejection mid-session without a DB hit on every request.
+      // Trade-off: up to 5-minute window between suspension and enforcement for active sessions.
+      // Lower STATUS_CHECK_INTERVAL_MS if compliance requirements demand faster enforcement.
+      const STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+      const now = Date.now();
+      const lastChecked = (token.agencyStatusCheckedAt as number) ?? 0;
+      const isAgencyUser =
+        token.agencyId &&
+        token.role !== UserRole.PLATFORM_ADMIN &&
+        token.role !== UserRole.SUPERADMIN;
+
+      if (isAgencyUser && now - lastChecked > STATUS_CHECK_INTERVAL_MS) {
+        const agencyRow = await prisma.agency.findUnique({
+          where: { id: token.agencyId as string },
+          select: { approvalStatus: true },
+        });
+        if (agencyRow) {
+          token.agencyApprovalStatus = agencyRow.approvalStatus;
+        }
+        token.agencyStatusCheckedAt = now;
+      }
+
+      // Periodically re-validate isActive from DB so deactivated users are reflected
+      // in the session without requiring a logout. Same 5-minute window.
+      if (token.id && now - ((token.userStatusCheckedAt as number) ?? 0) > STATUS_CHECK_INTERVAL_MS) {
+        const userRow = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { isActive: true },
+        });
+        if (userRow) {
+          token.isActive = userRow.isActive;
+        }
+        token.userStatusCheckedAt = now;
       }
 
       // Handle session updates (e.g., from client-side session update)
       if (trigger === 'update' && session) {
         if (session.role) token.role = session.role;
         if (session.agencyId !== undefined) token.agencyId = session.agencyId;
+        if (session.agencyApprovalStatus !== undefined) token.agencyApprovalStatus = session.agencyApprovalStatus;
       }
 
       return token;
@@ -113,6 +177,8 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
         session.user.agencyId = token.agencyId as string | null;
+        (session.user as any).agencyApprovalStatus = token.agencyApprovalStatus as string | null;
+        (session.user as any).isActive = token.isActive ?? true;
         session.user.email = token.email as string;
         session.user.name = token.name as string | null;
       }

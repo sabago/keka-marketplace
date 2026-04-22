@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAgencyAdmin, requireAgency } from '@/lib/authHelpers';
+import { requireAgencyAdmin, requireAgency , HttpError , requireActiveAgency} from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 import { DocumentStatus } from '@prisma/client';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -33,7 +33,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { user, agency } = await requireAgency();
+    const { user, agency } = await requireActiveAgency();
     const { id: documentId } = await params;
 
     const document = await prisma.staffCredential.findFirst({
@@ -75,6 +75,10 @@ export async function GET(
     return NextResponse.json({ document }, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching document:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -167,6 +171,10 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error updating document:', error);
 
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
@@ -207,6 +215,14 @@ export async function DELETE(
       );
     }
 
+    // Archived documents are part of the compliance history — they cannot be deleted
+    if (existing.status === 'ARCHIVED') {
+      return NextResponse.json(
+        { error: 'Archived documents cannot be deleted' },
+        { status: 403 }
+      );
+    }
+
     // Delete from S3
     try {
       const s3Client = new S3Client({
@@ -241,6 +257,10 @@ export async function DELETE(
     );
   } catch (error: any) {
     console.error('Error deleting document:', error);
+
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
 
     if (error.message.includes('required')) {
       return NextResponse.json({ error: error.message }, { status: 401 });

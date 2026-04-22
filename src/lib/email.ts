@@ -480,6 +480,160 @@ The Platform Team`;
 }
 
 /**
+ * Send suspension notification to a user (agency admin or staff member)
+ */
+export async function sendAgencySuspensionEmail(
+  user: { email: string; name: string | null },
+  agencyName: string,
+  reason: string,
+  isAdmin: boolean
+): Promise<boolean> {
+  const roleNote = isAdmin
+    ? 'As the agency administrator, your account and all associated staff accounts have been suspended.'
+    : 'Your agency administrator has been notified. Staff access is suspended until the agency is reinstated.';
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Account Suspended</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .header { background-color: #f8f9fa; padding: 30px 20px; text-align: center; border-bottom: 3px solid #dc3545; }
+        .content { padding: 30px 20px; }
+        .reason-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .contact-box { background-color: #f0f7ff; border-left: 4px solid #0B4F96; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { font-size: 12px; color: #6c757d; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1 style="color: #dc3545;">Account Suspended</h1>
+      </div>
+      <div class="content">
+        <p>Hi ${user.name || 'there'},</p>
+        <p>We're writing to let you know that <strong>${agencyName}</strong>'s account has been suspended on our platform.</p>
+        <p>${roleNote}</p>
+        <div class="reason-box">
+          <p><strong>Reason:</strong></p>
+          <p>${reason}</p>
+        </div>
+        <div class="contact-box">
+          <p><strong>Questions or concerns?</strong></p>
+          <p>If you believe this suspension was made in error or would like to resolve the issue, please contact us at <a href="mailto:info@masteringhomecare.com">info@masteringhomecare.com</a>.</p>
+        </div>
+        <p>Best regards,<br>The Platform Team</p>
+      </div>
+      <div class="footer">
+        <p>&copy; ${new Date().getFullYear()} Healthcare Agency Platform. All rights reserved.</p>
+        <p>This email was sent to ${user.email}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `Account Suspended
+
+Hi ${user.name || 'there'},
+
+${agencyName}'s account has been suspended on our platform.
+
+${roleNote}
+
+Reason: ${reason}
+
+If you believe this was an error, contact us at info@masteringhomecare.com.
+
+Best regards,
+The Platform Team`;
+
+  return sendEmail(user.email, `${agencyName} - Account Suspended`, htmlContent, textContent);
+}
+
+/**
+ * Send payment failure notification to agency admin
+ * Called on invoice.payment_failed webhook event
+ */
+export async function sendPaymentFailedEmail(
+  user: { email: string; name: string | null },
+  agencyName: string,
+  planName: string,
+  billingPortalUrl: string
+): Promise<boolean> {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Payment Failed</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .header { background-color: #f8f9fa; padding: 30px 20px; text-align: center; border-bottom: 3px solid #f59e0b; }
+        .content { padding: 30px 20px; }
+        .alert-box { background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .cta-button { display: inline-block; background-color: #0B4F96; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin: 20px 0; }
+        .info-box { background-color: #f0f7ff; border-left: 4px solid #0B4F96; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { font-size: 12px; color: #6c757d; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1 style="color: #92400e;">⚠️ Payment Failed</h1>
+      </div>
+      <div class="content">
+        <p>Hi ${user.name || 'there'},</p>
+        <p>We were unable to process the payment for your <strong>${planName}</strong> subscription for <strong>${agencyName}</strong>.</p>
+
+        <div class="alert-box">
+          <p><strong>What happens next:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li>Your account remains active while we retry the payment</li>
+            <li>Stripe will automatically retry your card over the next several days</li>
+            <li>If all retries fail, your plan will be downgraded to Free</li>
+          </ul>
+        </div>
+
+        <p><strong>To avoid any interruption, please update your payment method now:</strong></p>
+        <a href="${billingPortalUrl}" class="cta-button">Update Payment Method</a>
+
+        <div class="info-box">
+          <p><strong>Need help?</strong> Contact us at <a href="mailto:info@masteringhomecare.com">info@masteringhomecare.com</a> and we'll sort it out.</p>
+        </div>
+
+        <p>Best regards,<br>The Platform Team</p>
+      </div>
+      <div class="footer">
+        <p>&copy; ${new Date().getFullYear()} Healthcare Agency Platform. All rights reserved.</p>
+        <p>This email was sent to ${user.email}</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `Payment Failed - ${agencyName}
+
+Hi ${user.name || 'there'},
+
+We were unable to process the payment for your ${planName} subscription for ${agencyName}.
+
+What happens next:
+- Your account remains active while we retry the payment
+- Stripe will automatically retry your card over the next several days
+- If all retries fail, your plan will be downgraded to Free
+
+To avoid interruption, update your payment method here:
+${billingPortalUrl}
+
+Need help? Contact us at info@masteringhomecare.com
+
+Best regards,
+The Platform Team`;
+
+  return sendEmail(user.email, `Action Required: Payment failed for ${agencyName}`, htmlContent, textContent);
+}
+
+/**
  * Send notification to platform admins about new agency signup
  * @param agency Agency details
  * @param user Primary contact user

@@ -74,9 +74,10 @@ export async function GET(req: NextRequest) {
           email: true,
           role: true,
           emailVerified: true,
+          isActive: true,
           agencyId: true,
           agency: {
-            select: { id: true, agencyName: true },
+            select: { id: true, agencyName: true, approvalStatus: true },
           },
         },
       }),

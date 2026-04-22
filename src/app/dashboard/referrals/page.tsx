@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   Plus,
   FileText,
@@ -41,10 +42,18 @@ interface Referral {
 }
 
 export default function ReferralsPage() {
+  const { data: session } = useSession();
+  const isStaff = session?.user?.role === "AGENCY_USER";
+
   const [myReferrals, setMyReferrals] = useState<Referral[]>([]);
   const [agencyReferrals, setAgencyReferrals] = useState<Referral[]>([]);
   const [view, setView] = useState<"mine" | "agency">("agency");
-  const referrals = view === "mine" ? myReferrals : agencyReferrals;
+  const referrals = (isStaff || view === "mine") ? myReferrals : agencyReferrals;
+
+  // Once session loads, force staff to "mine" view
+  useEffect(() => {
+    if (isStaff) setView("mine");
+  }, [isStaff]);
   const [filteredReferrals, setFilteredReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -242,15 +251,17 @@ export default function ReferralsPage() {
 
         {/* View Toggle */}
         <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setView("agency")}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
-          >
-            All Agency ({agencyReferrals.length})
-          </button>
+          {!isStaff && (
+            <button
+              onClick={() => setView("agency")}
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "agency" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+            >
+              All Agency ({agencyReferrals.length})
+            </button>
+          )}
           <button
             onClick={() => setView("mine")}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${view === "mine" ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${(isStaff || view === "mine") ? "bg-[#0B4F96] text-white" : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"}`}
           >
             Logged by Me ({myReferrals.length})
           </button>

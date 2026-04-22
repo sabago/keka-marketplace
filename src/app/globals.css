@@ -5,6 +5,42 @@
 :root {
 	--background: #ffffff;
 	--foreground: #171717;
+
+	/* ── Mastering HomeCare brand tokens ────────────────────────────── */
+	--mhc-primary:        #0B4F96;
+	--mhc-primary-hover:  #0a4280;
+	--mhc-teal:           #48ccbc;
+	--mhc-teal-hover:     #3ab8a8;
+	--mhc-gradient:       linear-gradient(135deg, #0B4F96 0%, #48ccbc 100%);
+
+	/* ── Category palette ───────────────────────────────────────────── */
+	--cat-hospitals:     #2563EB;  --cat-hospitals-bg:  #DBEAFE;
+	--cat-asap:          #9333EA;  --cat-asap-bg:       #F3E8FF;
+	--cat-coa:           #059669;  --cat-coa-bg:        #D1FAE5;
+	--cat-insurance:     #EA580C;  --cat-insurance-bg:  #FFEDD5;
+	--cat-mco:           #4F46E5;  --cat-mco-bg:        #E0E7FF;
+	--cat-veteran:       #DC2626;  --cat-veteran-bg:    #FEE2E2;
+	--cat-community:     #0D9488;  --cat-community-bg:  #CCFBF1;
+
+	/* ── Semantic states ────────────────────────────────────────────── */
+	--state-success: #059669;  --state-success-bg: #ECFDF5;
+	--state-warning: #D97706;  --state-warning-bg: #FFFBEB;
+	--state-danger:  #DC2626;  --state-danger-bg:  #FEF2F2;
+	--state-info:    #2563EB;  --state-info-bg:    #EFF6FF;
+
+	/* PHI disclaimer */
+	--phi-bg:     #FFFBEB;
+	--phi-text:   #B45309;
+	--phi-border: #FCD34D;
+
+	/* ── Shadows ────────────────────────────────────────────────────── */
+	--shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+	--shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+	--shadow-xl:  0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+	--shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+	/* Focus ring */
+	--ring-focus: 0 0 0 2px rgba(11, 79, 150, 0.45);
 }
 /* 
 @media (prefers-color-scheme: dark) {

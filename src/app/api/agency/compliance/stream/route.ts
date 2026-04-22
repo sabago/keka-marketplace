@@ -8,7 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { requireAgencyAdmin } from '@/lib/authHelpers';
+import { requireAgencyAdmin, HttpError } from '@/lib/authHelpers';
 import { prisma } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
   try {
     const { agency } = await requireAgencyAdmin();
     agencyId = agency.id;
-  } catch {
+  } catch (err) {
+    if (err instanceof HttpError) {
+      return new Response(err.message, { status: err.statusCode });
+    }
     return new Response('Unauthorized', { status: 401 });
   }
 
