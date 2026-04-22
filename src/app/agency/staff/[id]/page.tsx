@@ -276,29 +276,18 @@ export default function StaffCredentialsPage() {
         {!staffRecord ? (
           <div className="bg-white rounded-lg shadow-md p-10 text-center">
             <User className="h-14 w-14 text-gray-300 mx-auto mb-4" />
-            {staffUser.role === "AGENCY_ADMIN" || staffUser.role === "PLATFORM_ADMIN" || staffUser.role === "SUPERADMIN" ? (
-              <>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Admin Account</h2>
-                <p className="text-gray-500 max-w-md mx-auto">
-                  {displayName} is an administrator. Credential tracking is for staff members (non-admin users) only.
-                </p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Credential Tracking Not Set Up</h2>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Enable credential tracking for {displayName} to upload and manage their compliance documents.
-                </p>
-                <button
-                  onClick={handleCreateRecord}
-                  disabled={creatingRecord}
-                  className="inline-flex items-center gap-2 bg-[#0B4F96] text-white px-6 py-3 rounded-lg hover:bg-[#0a4280] disabled:opacity-50 font-medium"
-                >
-                  <UserPlus className="h-5 w-5" />
-                  {creatingRecord ? "Setting up..." : "Enable Credential Tracking"}
-                </button>
-              </>
-            )}
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Credential Tracking Not Set Up</h2>
+            <p className="text-gray-500 mb-6 max-w-md mx-auto">
+              Enable credential tracking for {displayName} to upload and manage their compliance documents.
+            </p>
+            <button
+              onClick={handleCreateRecord}
+              disabled={creatingRecord}
+              className="inline-flex items-center gap-2 bg-[#0B4F96] text-white px-6 py-3 rounded-lg hover:bg-[#0a4280] disabled:opacity-50 font-medium"
+            >
+              <UserPlus className="h-5 w-5" />
+              {creatingRecord ? "Setting up..." : "Enable Credential Tracking"}
+            </button>
           </div>
         ) : (
           <>
