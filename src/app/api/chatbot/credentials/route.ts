@@ -24,7 +24,11 @@ import {
 } from '@/lib/agentTools/credentialToolHandlers';
 import { chatbotRateLimit, checkRateLimit, getIP, createRateLimitResponse } from '@/lib/rateLimit';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return _openai;
+}
 
 const SYSTEM_PROMPT = `You are a compliance assistant for a Massachusetts home-care agency. \
 You have tools to look up staff credentials, compliance status, and send reminders. \
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
     let tokensUsed = 0;
 
     for (let round = 0; round < 3; round++) {
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: 'gpt-4-turbo',
         max_tokens: 800,
         messages,
