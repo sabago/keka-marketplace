@@ -10,7 +10,6 @@ DATABASE_URL = "${{Postgres.DATABASE_URL}}"
 NEXT_PUBLIC_SITE_URL = "https://${{RAILWAY_PUBLIC_DOMAIN}}"
 
 [deploy]
-startCommand = "./docker-entrypoint.sh"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
