@@ -63,7 +63,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Redirect signed-in users away from the marketing pricing page
+  // Redirect signed-in users away from auth pages and the marketing pricing page
+  if (token && (pathname === '/auth/signin' || pathname === '/auth/signup')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
   if (pathname === '/pricing' && token) {
     const role = token.role as string;
     if (role === 'AGENCY_ADMIN') {
