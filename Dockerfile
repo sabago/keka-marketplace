@@ -49,7 +49,7 @@ ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
 # Install PostgreSQL client for database connectivity check
-RUN apk add --no-cache postgresql-client curl
+RUN apk add --no-cache postgresql-client curl poppler-utils
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -88,4 +88,4 @@ ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
 # Use custom entrypoint that runs migrations + import + starts server
-ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./docker-entrypoint.sh"]
