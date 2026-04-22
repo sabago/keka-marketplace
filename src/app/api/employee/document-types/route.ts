@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get document types (global + agency-specific)
+    // Get document types (global + agency-specific) with full enriched fields
     const documentTypes = await prisma.documentType.findMany({
       where: {
         isActive: true,
@@ -38,24 +38,24 @@ export async function GET(req: NextRequest) {
         expirationDays: true,
         isRequired: true,
         isGlobal: true,
+        category: true,
+        requiresFrontBack: true,
+        allowsMultiPage: true,
+        minFiles: true,
+        maxFiles: true,
+        recheckCadenceDays: true,
+        customFields: true,
       },
       orderBy: [
-        { isRequired: 'desc' }, // Required first
-        { name: 'asc' },        // Then alphabetically
+        { isRequired: 'desc' },
+        { name: 'asc' },
       ],
     });
-
-    // Group by required/optional for better UX
-    const required = documentTypes.filter((dt) => dt.isRequired);
-    const optional = documentTypes.filter((dt) => !dt.isRequired);
 
     return NextResponse.json({
       success: true,
       documentTypes,
-      grouped: {
-        required,
-        optional,
-      },
+      staffRecordId: employee.id,
       total: documentTypes.length,
     });
   } catch (error) {

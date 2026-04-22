@@ -572,10 +572,10 @@ export async function hasAllRequiredCredentials(
 }
 
 /**
- * Find or auto-create a StaffMember credential record for an AGENCY_USER.
- * Admin roles (AGENCY_ADMIN, PLATFORM_ADMIN, SUPERADMIN) are never tracked as staff
- * and will always receive null — they manage staff, they are not staff.
- * Returns null if the user has no agency association or is an admin role.
+ * Find or auto-create a StaffMember credential record for any user with an agency association.
+ * All roles (AGENCY_USER, AGENCY_ADMIN, PLATFORM_ADMIN, SUPERADMIN) are eligible as long
+ * as they have an agencyId — admins who work at an agency need their own credentials tracked too.
+ * Returns null only when the user has no agency association.
  */
 export async function getOrCreateStaffRecord(userId: string) {
   const dbUser = await prisma.user.findUnique({
@@ -583,8 +583,8 @@ export async function getOrCreateStaffRecord(userId: string) {
     select: { name: true, email: true, agencyId: true, role: true },
   });
 
-  // Only AGENCY_USER staff members have credential tracking records
-  if (!dbUser?.agencyId || dbUser.role !== 'AGENCY_USER') return null;
+  // Any user must have an agency association to have credential tracking
+  if (!dbUser?.agencyId) return null;
 
   let record = await prisma.staffMember.findUnique({
     where: { userId },

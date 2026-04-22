@@ -35,6 +35,8 @@ interface DocumentUploadProps {
   defaultDocumentTypeId?: string;
   onSuccess: () => void;
   onClose: () => void;
+  /** When true, renders as an inline card instead of a fixed modal overlay */
+  inline?: boolean;
 }
 
 // ── Category labels + ordering ────────────────────────────────────────────────
@@ -154,6 +156,7 @@ export default function DocumentUpload({
   onSuccess,
   onClose,
   defaultDocumentTypeId,
+  inline = false,
 }: DocumentUploadProps) {
   const [files, setFiles] = useState<FileSlot[]>([]);
   const [documentTypeId, setDocumentTypeId] = useState(defaultDocumentTypeId ?? "");
@@ -348,18 +351,19 @@ export default function DocumentUpload({
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+  const inner = (
+    <>
+      {/* Header — only shown in modal mode */}
+      {!inline && (
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Upload Document</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={loading}>
             <X className="h-6 w-6" />
           </button>
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <form onSubmit={handleSubmit} className={inline ? "space-y-6" : "p-6 space-y-6"}>
           {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
@@ -678,14 +682,31 @@ export default function DocumentUpload({
             >
               {loading ? "Uploading..." : "Upload Document"}
             </button>
-            <button
-              type="button" onClick={onClose} disabled={loading}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
+            {!inline && (
+              <button
+                type="button" onClick={onClose} disabled={loading}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </form>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        {inner}
       </div>
     </div>
   );
