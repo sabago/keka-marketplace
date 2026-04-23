@@ -207,9 +207,6 @@ export async function POST(
           },
         });
 
-        // Update compliance
-        await updateCredentialCompliance(credentialId);
-
         // Log admin action
         await tx.adminAction.create({
           data: {
@@ -220,6 +217,9 @@ export async function POST(
           },
         });
       });
+
+      // Update compliance outside the transaction (avoids 5s timeout)
+      await updateCredentialCompliance(credentialId);
 
       // Send approval notification email (async, don't block response)
       const employeeWithDetails = await prisma.staffMember.findUnique({
@@ -333,9 +333,6 @@ export async function POST(
           },
         });
 
-        // Update compliance
-        await updateCredentialCompliance(credentialId);
-
         // Log admin action with details
         const correctionsList = Object.entries(corrections)
           .map(([key, value]) => `${key}: ${value}`)
@@ -350,6 +347,9 @@ export async function POST(
           },
         });
       });
+
+      // Update compliance outside the transaction (avoids 5s timeout)
+      await updateCredentialCompliance(credentialId);
 
       // Send approval notification email (async, don't block response)
       const employeeWithDetails = await prisma.staffMember.findUnique({
