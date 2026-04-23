@@ -17,6 +17,15 @@ interface Favorite {
 export default function FavoritesPage() {
   const { data: session } = useSession();
   const isStaff = session?.user?.role === "AGENCY_USER";
+  const isAdmin =
+    session?.user?.role === "AGENCY_ADMIN" ||
+    session?.user?.role === "PLATFORM_ADMIN" ||
+    session?.user?.role === "SUPERADMIN";
+
+  const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
+  const actionsDisabled = isSuspended && !isAdmin;
+
   const [myFavorites, setMyFavorites] = useState<Favorite[]>([]);
   const [agencyFavorites, setAgencyFavorites] = useState<Favorite[]>([]);
   const [view, setView] = useState<"mine" | "agency">("agency");
@@ -36,7 +45,11 @@ export default function FavoritesPage() {
 
   const fetchFavorites = async () => {
     try {
-      const response = await fetch("/api/favorites");
+      const [statusData, response] = await Promise.all([
+        fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
+        fetch("/api/favorites"),
+      ]);
+      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
       if (response.ok) {
         const data = await response.json();
         setMyFavorites(data.myFavorites || []);
@@ -159,13 +172,23 @@ export default function FavoritesPage() {
               Start adding referral sources to your favorites for quick access.
               Browse the knowledge base and click the star icon on any guide.
             </p>
-            <Link
-              href="/knowledge-base"
-              className="inline-flex items-center px-6 py-3 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors"
-            >
-              Browse Knowledge Base
-              <ExternalLink className="h-5 w-5 ml-2" />
-            </Link>
+            {actionsDisabled ? (
+              <span
+                className="inline-flex items-center px-6 py-3 bg-gray-200 text-gray-400 rounded-lg cursor-not-allowed"
+                title="Your agency account is suspended"
+              >
+                Browse Knowledge Base
+                <ExternalLink className="h-5 w-5 ml-2" />
+              </span>
+            ) : (
+              <Link
+                href="/knowledge-base"
+                className="inline-flex items-center px-6 py-3 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors"
+              >
+                Browse Knowledge Base
+                <ExternalLink className="h-5 w-5 ml-2" />
+              </Link>
+            )}
           </div>
         ) : (
           <>

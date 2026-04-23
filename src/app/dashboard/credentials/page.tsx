@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   FileText,
   AlertCircle,
@@ -43,6 +44,16 @@ type SortOption = 'name-asc' | 'name-desc' | 'expiration-asc' | 'expiration-desc
 
 export default function CredentialsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin =
+    session?.user?.role === 'AGENCY_ADMIN' ||
+    session?.user?.role === 'PLATFORM_ADMIN' ||
+    session?.user?.role === 'SUPERADMIN';
+
+  const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const isSuspended = liveApprovalStatus === 'SUSPENDED' || liveApprovalStatus === 'REJECTED';
+  const actionsDisabled = isSuspended && !isAdmin;
+
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +71,11 @@ export default function CredentialsPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/employee/credentials/dashboard');
+      const [statusData, response] = await Promise.all([
+        fetch('/api/agency/status').then((r) => r.ok ? r.json() : null),
+        fetch('/api/employee/credentials/dashboard'),
+      ]);
+      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -256,8 +271,10 @@ export default function CredentialsPage() {
                   <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-gray-900">Quick Actions</h2>
                     <button
-                      onClick={handleUploadRenewal}
-                      className="flex items-center gap-2 px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#083d75] transition-colors"
+                      onClick={() => !actionsDisabled && handleUploadRenewal()}
+                      disabled={actionsDisabled}
+                      title={actionsDisabled ? "Your agency account is suspended" : undefined}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${actionsDisabled ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-[#0B4F96] text-white hover:bg-[#083d75]"}`}
                     >
                       <Upload className="h-4 w-4" />
                       Upload Credential

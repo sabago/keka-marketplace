@@ -431,6 +431,10 @@ function AgencyDashboard({
 		session?.user?.role === "PLATFORM_ADMIN" ||
 		session?.user?.role === "SUPERADMIN";
 
+	const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+	const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
+	const actionsDisabled = isSuspended && !isAdmin;
+
 	const [recentReferrals, setRecentReferrals] = useState<any[]>([]);
 	const [referralCount, setReferralCount] = useState<number | null>(null);
 	const [favoriteCount, setFavoriteCount] = useState<number | null>(null);
@@ -438,21 +442,21 @@ function AgencyDashboard({
 	const [usagePlan, setUsagePlan] = useState<string | null>(null);
 
 	useEffect(() => {
-		// Only fetch usage for agency admins/staff — platform/super admins have no personal plan
 		const fetchUsage =
 			isAdmin && !hideUsageWidget
 				? fetch("/api/dashboard/usage").then((r) => r.json())
 				: Promise.resolve(null);
 
 		Promise.all([
+			fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
 			fetch("/api/referrals").then((r) =>
 				r.ok ? r.json() : { referrals: [], myReferrals: [] },
 			),
 			fetch("/api/favorites").then((r) => (r.ok ? r.json() : { favorites: [] })),
 			fetchUsage,
 		])
-			.then(([refData, favData, usageData]) => {
-				// Platform/super admins see only their own referrals; agency admins/staff see all agency referrals
+			.then(([statusData, refData, favData, usageData]) => {
+				if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
 				const referrals = hideUsageWidget
 					? (refData.myReferrals ?? [])
 					: (refData.referrals ?? []);
@@ -515,12 +519,21 @@ function AgencyDashboard({
 						<p className="text-sm mt-1">
 							Start by logging a referral from the directory
 						</p>
-						<Link
-							href="/dashboard/referrals"
-							className="inline-block mt-4 px-4 py-2 bg-[#0B4F96] text-white rounded-lg text-sm hover:bg-[#094080]"
-						>
-							Log a Referral
-						</Link>
+						{actionsDisabled ? (
+							<span
+								className="inline-block mt-4 px-4 py-2 bg-gray-200 text-gray-400 rounded-lg text-sm cursor-not-allowed"
+								title="Your agency account is suspended"
+							>
+								Log a Referral
+							</span>
+						) : (
+							<Link
+								href="/dashboard/referrals"
+								className="inline-block mt-4 px-4 py-2 bg-[#0B4F96] text-white rounded-lg text-sm hover:bg-[#094080]"
+							>
+								Log a Referral
+							</Link>
+						)}
 					</div>
 				) : (
 					<div className="space-y-3">
@@ -548,28 +561,46 @@ function AgencyDashboard({
 				)}
 			</div>
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-				<Link
-					href="/dashboard/referrals"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
-				>
-					<FileText className="h-8 w-8 text-[#0B4F96] mb-3" />
-					<h3 className="text-lg font-semibold text-gray-800 mb-2">
-						Track Referrals
-					</h3>
-					{referralCount !== null && referralCount > 0 ? (
-						<p className="text-2xl font-bold text-[#0B4F96] mb-4">
-							{referralCount}{" "}
-							<span className="text-sm font-normal text-gray-500">logged</span>
-						</p>
-					) : (
+				{actionsDisabled ? (
+					<div
+						className="bg-white rounded-lg shadow-md p-6 opacity-50 cursor-not-allowed"
+						title="Your agency account is suspended"
+					>
+						<FileText className="h-8 w-8 text-[#0B4F96] mb-3" />
+						<h3 className="text-lg font-semibold text-gray-800 mb-2">
+							Track Referrals
+						</h3>
 						<p className="text-sm text-gray-600 mb-4">
 							Log and monitor your referral submissions
 						</p>
-					)}
-					<span className="text-[#0B4F96] group-hover:text-[#48ccbc] font-medium text-sm flex items-center">
-						Go to Referrals <ArrowRight className="h-4 w-4 ml-1" />
-					</span>
-				</Link>
+						<span className="text-gray-400 font-medium text-sm flex items-center">
+							Go to Referrals <ArrowRight className="h-4 w-4 ml-1" />
+						</span>
+					</div>
+				) : (
+					<Link
+						href="/dashboard/referrals"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
+					>
+						<FileText className="h-8 w-8 text-[#0B4F96] mb-3" />
+						<h3 className="text-lg font-semibold text-gray-800 mb-2">
+							Track Referrals
+						</h3>
+						{referralCount !== null && referralCount > 0 ? (
+							<p className="text-2xl font-bold text-[#0B4F96] mb-4">
+								{referralCount}{" "}
+								<span className="text-sm font-normal text-gray-500">logged</span>
+							</p>
+						) : (
+							<p className="text-sm text-gray-600 mb-4">
+								Log and monitor your referral submissions
+							</p>
+						)}
+						<span className="text-[#0B4F96] group-hover:text-[#48ccbc] font-medium text-sm flex items-center">
+							Go to Referrals <ArrowRight className="h-4 w-4 ml-1" />
+						</span>
+					</Link>
+				)}
 				<Link
 					href="/dashboard/favorites"
 					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
@@ -622,6 +653,22 @@ function AgencyDashboard({
 							See plans <ArrowRight className="h-4 w-4" />
 						</span>
 					</Link>
+				) : actionsDisabled ? (
+					<div
+						className="bg-white rounded-lg shadow-md p-6 opacity-50 cursor-not-allowed"
+						title="Your agency account is suspended"
+					>
+						<CheckCircle className="h-8 w-8 text-green-600 mb-3" />
+						<h3 className="text-lg font-semibold text-gray-800 mb-2">
+							My Credentials
+						</h3>
+						<p className="text-sm text-gray-600 mb-4">
+							View and upload your compliance credentials
+						</p>
+						<span className="text-gray-400 font-medium text-sm flex items-center">
+							View Credentials <ArrowRight className="h-4 w-4 ml-1" />
+						</span>
+					</div>
 				) : (
 					<Link
 						href="/dashboard/credentials"

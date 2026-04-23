@@ -2,11 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 
 export default function UploadCredentialPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin =
+    session?.user?.role === 'AGENCY_ADMIN' ||
+    session?.user?.role === 'PLATFORM_ADMIN' ||
+    session?.user?.role === 'SUPERADMIN';
+
+  const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const isSuspended = liveApprovalStatus === 'SUSPENDED' || liveApprovalStatus === 'REJECTED';
+  const blocked = isSuspended && !isAdmin;
+
   const [staffRecordId, setStaffRecordId] = useState<string | null>(null);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,14 +25,17 @@ export default function UploadCredentialPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    fetch('/api/employee/document-types')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error);
-        setStaffRecordId(data.staffRecordId);
-        setDocumentTypes(data.documentTypes ?? []);
+    Promise.all([
+      fetch('/api/agency/status').then((r) => r.ok ? r.json() : null),
+      fetch('/api/employee/document-types').then((r) => r.json()),
+    ])
+      .then(([statusData, typesData]) => {
+        if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
+        if (typesData.error) throw new Error(typesData.error);
+        setStaffRecordId(typesData.staffRecordId);
+        setDocumentTypes(typesData.documentTypes ?? []);
       })
-      .catch((e) => setError(e.message || 'Failed to load document types'))
+      .catch((e) => setError(e.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -29,6 +43,24 @@ export default function UploadCredentialPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="h-10 w-10 text-[#0B4F96] animate-spin" />
+      </div>
+    );
+  }
+
+  if (blocked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg border border-amber-200 p-8 max-w-md text-center">
+          <AlertCircle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Agency account suspended</h2>
+          <p className="text-gray-600 mb-6">Credential uploads are disabled while your agency account is suspended. Please contact support.</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#083d75]"
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }

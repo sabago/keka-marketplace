@@ -44,6 +44,14 @@ interface Referral {
 export default function ReferralsPage() {
   const { data: session } = useSession();
   const isStaff = session?.user?.role === "AGENCY_USER";
+  const isAdmin =
+    session?.user?.role === "AGENCY_ADMIN" ||
+    session?.user?.role === "PLATFORM_ADMIN" ||
+    session?.user?.role === "SUPERADMIN";
+
+  const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
+  const actionsDisabled = isSuspended && !isAdmin;
 
   const [myReferrals, setMyReferrals] = useState<Referral[]>([]);
   const [agencyReferrals, setAgencyReferrals] = useState<Referral[]>([]);
@@ -74,9 +82,13 @@ export default function ReferralsPage() {
 
   const fetchReferrals = async () => {
     try {
-      const response = await fetch("/api/referrals");
-      if (response.ok) {
-        const data = await response.json();
+      const [statusData, refResponse] = await Promise.all([
+        fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
+        fetch("/api/referrals"),
+      ]);
+      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
+      if (refResponse.ok) {
+        const data = await refResponse.json();
         setMyReferrals(data.myReferrals || []);
         setAgencyReferrals(data.agencyReferrals || data.referrals || []);
       }
@@ -241,8 +253,10 @@ export default function ReferralsPage() {
             </p>
           </div>
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center px-6 py-3 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors shadow-md"
+            onClick={() => !actionsDisabled && setIsModalOpen(true)}
+            disabled={actionsDisabled}
+            title={actionsDisabled ? "Your agency account is suspended" : undefined}
+            className={`flex items-center px-6 py-3 rounded-lg shadow-md transition-colors ${actionsDisabled ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-[#0B4F96] text-white hover:bg-[#48ccbc]"}`}
           >
             <Plus className="h-5 w-5 mr-2" />
             Log New Referral
@@ -331,8 +345,10 @@ export default function ReferralsPage() {
                   : "No referrals match the selected filters"}
               </p>
               <button
-                onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center px-6 py-3 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors"
+                onClick={() => !actionsDisabled && setIsModalOpen(true)}
+                disabled={actionsDisabled}
+                title={actionsDisabled ? "Your agency account is suspended" : undefined}
+                className={`inline-flex items-center px-6 py-3 rounded-lg transition-colors ${actionsDisabled ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-[#0B4F96] text-white hover:bg-[#48ccbc]"}`}
               >
                 <Plus className="h-5 w-5 mr-2" />
                 Log Your First Referral
