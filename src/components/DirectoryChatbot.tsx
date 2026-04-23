@@ -121,6 +121,7 @@ export default function DirectoryChatbot() {
 	const [queriesRemaining, setQueriesRemaining] = useState<number | null>(null);
 	const [queryLimit, setQueryLimit] = useState<number | null>(null);
 	const [limitReached, setLimitReached] = useState(false);
+	const [liveHasAgency, setLiveHasAgency] = useState<boolean | null>(null);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const prevUserIdRef = useRef<string | null>(null);
@@ -128,6 +129,8 @@ export default function DirectoryChatbot() {
 	const isLoggedIn = !!session?.user;
 	const userId = (session?.user as any)?.id as string | undefined;
 	const userRole = (session?.user as any)?.role as string | undefined;
+	const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
+	const isPlatformOrSuper = userRole === "PLATFORM_ADMIN" || userRole === "SUPERADMIN";
 	const userInitial = (
 		(session?.user?.name?.[0] ?? (session?.user?.email?.[0] ?? "U"))
 	).toUpperCase();
@@ -139,6 +142,30 @@ export default function DirectoryChatbot() {
 		userRole === "AGENCY_USER" ||
 		userRole === "PLATFORM_ADMIN" ||
 		userRole === "SUPERADMIN";
+
+	// For platform/super admins, do a live agency check (JWT agencyId is unreliable)
+	const effectiveHasAgency = liveHasAgency !== null ? liveHasAgency : !!agencyId;
+	const hasNoAgency = isPlatformOrSuper && !effectiveHasAgency;
+
+	// Live agency check for platform/super admins (JWT agencyId is stale)
+	useEffect(() => {
+		if (!isPlatformOrSuper || status === "loading") return;
+		const check = () => {
+			fetch("/api/agency/status")
+				.then((r) => r.ok ? r.json() : null)
+				.then((data) => {
+					if (data?.approvalStatus) {
+						setLiveHasAgency(true);
+					} else {
+						setLiveHasAgency(false);
+					}
+				})
+				.catch(() => {});
+		};
+		check();
+		const interval = setInterval(check, 30_000);
+		return () => clearInterval(interval);
+	}, [isPlatformOrSuper, status]);
 
 	// Load history from localStorage when user session resolves
 	useEffect(() => {
@@ -392,6 +419,20 @@ export default function DirectoryChatbot() {
 									Register your agency →
 								</Link>
 							</p>
+						</div>
+					) : hasNoAgency ? (
+						<div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
+							<div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+								<ShieldAlert className="w-6 h-6 text-gray-400" />
+							</div>
+							<div>
+								<p className="font-semibold text-gray-900 mb-1">
+									Agency association required
+								</p>
+								<p className="text-sm text-gray-500">
+									You need to be associated with an active agency to use the AI assistant. Ask a platform admin to assign you to an agency.
+								</p>
+							</div>
 						</div>
 					) : (
 						<>

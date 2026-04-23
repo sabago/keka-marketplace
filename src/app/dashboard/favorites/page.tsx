@@ -21,12 +21,17 @@ export default function FavoritesPage() {
     session?.user?.role === "AGENCY_ADMIN" ||
     session?.user?.role === "PLATFORM_ADMIN" ||
     session?.user?.role === "SUPERADMIN";
+  const isPlatformOrSuper = session?.user?.role === "PLATFORM_ADMIN" || session?.user?.role === "SUPERADMIN";
+  const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
 
   const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
   const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
+  const [liveHasAgency, setLiveHasAgency] = useState<boolean | null>(null);
   const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
   const isDeactivated = liveIsActive === false;
-  const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
+  const effectiveHasAgency = liveHasAgency ?? !!agencyId;
+  const hasNoAgency = isPlatformOrSuper && !effectiveHasAgency;
+  const actionsDisabled = isSuspended || hasNoAgency || (isDeactivated && !isAdmin);
 
   const [myFavorites, setMyFavorites] = useState<Favorite[]>([]);
   const [agencyFavorites, setAgencyFavorites] = useState<Favorite[]>([]);
@@ -56,8 +61,12 @@ export default function FavoritesPage() {
         fetch("/api/account/status").then((r) => r.ok ? r.json() : null),
         fetch("/api/favorites").then((r) => r.ok ? r.json() : null),
       ]);
-      if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus)
+      if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus) {
         setLiveApprovalStatus(statusResult.value.approvalStatus);
+        setLiveHasAgency(true);
+      } else if (isPlatformOrSuper) {
+        setLiveHasAgency(false);
+      }
       if (accountResult.status === "fulfilled" && accountResult.value?.isActive === false)
         setLiveIsActive(false);
       if (favResult.status === "fulfilled" && favResult.value) {

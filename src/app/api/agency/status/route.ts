@@ -14,8 +14,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const agencyId = (session.user as any).agencyId as string | null;
+  const user = session.user as any;
+  const isPlatformOrSuper = user.role === 'PLATFORM_ADMIN' || user.role === 'SUPERADMIN';
+
+  // For platform/super admins always do a live DB lookup — their agencyId can be
+  // changed mid-session by another admin, so the JWT value is unreliable in both
+  // directions (assigned when JWT says none, removed when JWT still has old id).
+  let agencyId: string | null = user.agencyId ?? null;
+  if (isPlatformOrSuper) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id as string },
+      select: { agencyId: true },
+    });
+    agencyId = dbUser?.agencyId ?? null;
+  }
+
+  console.log('[agency/status] user:', user.id, 'role:', user.role, 'jwtAgencyId:', user.agencyId, 'resolvedAgencyId:', agencyId);
+
   if (!agencyId) {
+    console.log('[agency/status] no agency found → returning null');
     return NextResponse.json({ approvalStatus: null });
   }
 
@@ -24,5 +41,6 @@ export async function GET() {
     select: { approvalStatus: true },
   });
 
-  return NextResponse.json({ approvalStatus: agency?.approvalStatus ?? null });
+  console.log('[agency/status] agency approvalStatus:', agency?.approvalStatus);
+  return NextResponse.json({ approvalStatus: agency?.approvalStatus ?? null, agencyId });
 }

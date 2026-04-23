@@ -13,6 +13,7 @@ export default function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isClient, setIsClient] = useState(false);
 	const [liveAgencyStatus, setLiveAgencyStatus] = useState<string | null>(null);
+	const [liveAgencyId, setLiveAgencyId] = useState<string | null | undefined>(undefined);
 	const pathname = usePathname();
 	const { settings } = useSettings();
 	const { isLoggedIn, user } = useAuth();
@@ -23,22 +24,22 @@ export default function Header() {
 		setIsClient(true);
 	}, []);
 
-	// For platform/super admins with a linked agency, fetch live agency status so a
-	// mid-session suspension is reflected immediately without waiting for JWT expiry.
+	// For platform/super admins, always fetch live agency status + agencyId so that
+	// mid-session assignments/removals are reflected without JWT expiry.
 	const sessionAgencyId = (session?.user as any)?.agencyId as string | null | undefined;
 	const sessionRole = session?.user?.role;
 	const isSuperOrPlatformAdmin = sessionRole === "PLATFORM_ADMIN" || sessionRole === "SUPERADMIN";
 	useEffect(() => {
-		if (!isSuperOrPlatformAdmin || !sessionAgencyId) return;
+		if (!isSuperOrPlatformAdmin) return;
 		fetch("/api/agency/status")
 			.then((r) => r.ok ? r.json() : null)
 			.then((data) => {
-				if (data?.approvalStatus) {
-					setLiveAgencyStatus(data.approvalStatus);
-				}
+				setLiveAgencyId(data?.agencyId ?? null);
+				if (data?.approvalStatus) setLiveAgencyStatus(data.approvalStatus);
+				else setLiveAgencyStatus(null);
 			})
 			.catch(() => {}); // fail silently — don't break nav on network error
-	}, [isSuperOrPlatformAdmin, sessionAgencyId]);
+	}, [isSuperOrPlatformAdmin]);
 
 	// Handle logout
 	const handleLogout = async () => {
@@ -165,8 +166,12 @@ export default function Header() {
 	const isPlatformOrSuperAdmin = role === "PLATFORM_ADMIN" || role === "SUPERADMIN";
 	const isAgencyAdmin = role === "AGENCY_ADMIN";
 
-	// Platform/super admins can also have a linked agency
-	const adminHasAgency = isPlatformOrSuperAdmin && !!agencyId;
+	// Platform/super admins can also have a linked agency.
+	// Use live-fetched agencyId (always DB-accurate) to catch mid-session assignments/removals.
+	const effectiveAdminAgencyId = isPlatformOrSuperAdmin
+		? (liveAgencyId !== undefined ? liveAgencyId : agencyId)
+		: agencyId;
+	const adminHasAgency = isPlatformOrSuperAdmin && !!effectiveAdminAgencyId;
 	// For platform/super admins, use the live-fetched status; for agency admins, JWT is sufficient
 	// (middleware already redirects them away from /agency/* on suspension, so JWT staleness is low-risk)
 	const effectiveAgencyStatus = isPlatformOrSuperAdmin ? (liveAgencyStatus ?? jwtAgencyStatus) : jwtAgencyStatus;

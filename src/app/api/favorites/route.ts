@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency, requireActiveAgencyForUser, HttpError } from "@/lib/authHelpers";
+import { requireAgency, requireActiveAgency, HttpError } from "@/lib/authHelpers";
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, agency } = await requireActiveAgencyForUser();
+    const { user, agency } = await requireActiveAgency();
     const body = await request.json();
     const { articleSlug, notes } = body;
 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { agency } = await requireActiveAgencyForUser();
+    const { agency } = await requireActiveAgency();
     const body = await request.json();
     const { articleSlug } = body;
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAgency, requireActiveAgencyForUser, HttpError } from "@/lib/authHelpers";
+import { requireAgency, requireActiveAgency, HttpError } from "@/lib/authHelpers";
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
@@ -37,7 +37,7 @@ function searchDirForSlug(dir: string, slug: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, agency } = await requireActiveAgencyForUser();
+    const { user, agency } = await requireActiveAgency();
     const body = await request.json();
     const { referralSourceSlug, submissionDate, submissionMethod, patientType, notes } = body;
 

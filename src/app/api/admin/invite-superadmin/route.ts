@@ -204,6 +204,9 @@ export async function GET(req: NextRequest) {
         role: true,
         createdAt: true,
         emailVerified: true,
+        isActive: true,
+        agencyId: true,
+        agency: { select: { id: true, agencyName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

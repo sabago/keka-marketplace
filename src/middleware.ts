@@ -192,7 +192,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // /admin/superadmins - PLATFORM_ADMIN only
-  if (pathname.startsWith('/admin/superadmins') || pathname.startsWith('/api/admin/invite-superadmin')) {
+  if (pathname.startsWith('/admin/superadmins') || pathname.startsWith('/api/admin/invite-superadmin') || pathname.startsWith('/api/admin/superadmins')) {
     if (token?.role !== UserRole.PLATFORM_ADMIN) {
       if (pathname.startsWith('/api')) {
         return NextResponse.json(

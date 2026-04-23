@@ -13,12 +13,17 @@ export default function UploadCredentialPage() {
     session?.user?.role === 'AGENCY_ADMIN' ||
     session?.user?.role === 'PLATFORM_ADMIN' ||
     session?.user?.role === 'SUPERADMIN';
+  const isPlatformOrSuper = session?.user?.role === 'PLATFORM_ADMIN' || session?.user?.role === 'SUPERADMIN';
+  const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
 
   const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
   const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
+  const [liveHasAgency, setLiveHasAgency] = useState<boolean | null>(null);
   const isSuspended = liveApprovalStatus === 'SUSPENDED' || liveApprovalStatus === 'REJECTED';
   const isDeactivated = liveIsActive === false;
-  const blocked = (isSuspended || isDeactivated) && !isAdmin;
+  const effectiveHasAgency = liveHasAgency ?? !!agencyId;
+  const hasNoAgency = isPlatformOrSuper && !effectiveHasAgency;
+  const blocked = isSuspended || hasNoAgency || (isDeactivated && !isAdmin);
 
   const [staffRecordId, setStaffRecordId] = useState<string | null>(null);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
@@ -37,8 +42,12 @@ export default function UploadCredentialPage() {
       fetch('/api/employee/document-types').then((r) => r.json()),
     ])
       .then(([statusResult, accountResult, typesResult]) => {
-        if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus)
+        if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus) {
           setLiveApprovalStatus(statusResult.value.approvalStatus);
+          setLiveHasAgency(true);
+        } else if (isPlatformOrSuper) {
+          setLiveHasAgency(false);
+        }
         if (accountResult.status === "fulfilled" && accountResult.value?.isActive === false)
           setLiveIsActive(false);
         if (typesResult.status === "rejected") { setError(typesResult.reason?.message || 'Failed to load'); return; }

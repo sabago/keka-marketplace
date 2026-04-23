@@ -432,13 +432,20 @@ function AgencyDashboard({
 		session?.user?.role === "SUPERADMIN";
 
 	const tokenApprovalStatus = (session?.user as any)?.agencyApprovalStatus as string | null;
+	const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
+	const isPlatformOrSuper = session?.user?.role === "PLATFORM_ADMIN" || session?.user?.role === "SUPERADMIN";
 	const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
 	const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
+	const [liveHasAgency, setLiveHasAgency] = useState<boolean | null>(null);
 	// Use live status if fetched, otherwise fall back to JWT value
 	const effectiveApprovalStatus = liveApprovalStatus ?? tokenApprovalStatus;
 	const isSuspended = effectiveApprovalStatus === "SUSPENDED" || effectiveApprovalStatus === "REJECTED";
 	const isDeactivated = liveIsActive === false;
-	const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
+	// Platform/super admins with no agency can't do personal agency actions.
+	// Use live fetch result to catch mid-session agency assignments (JWT is stale until re-login).
+	const effectiveHasAgency = liveHasAgency ?? !!agencyId;
+	const hasNoAgency = isPlatformOrSuper && !effectiveHasAgency;
+	const actionsDisabled = isSuspended || hasNoAgency || (isDeactivated && !isAdmin);
 
 	const [recentReferrals, setRecentReferrals] = useState<any[]>([]);
 	const [referralCount, setReferralCount] = useState<number | null>(null);
@@ -472,13 +479,24 @@ function AgencyDashboard({
 				const refData = refResult.status === "fulfilled" ? refResult.value : { referrals: [], myReferrals: [] };
 				const favData = favResult.status === "fulfilled" ? favResult.value : { favorites: [] };
 				const usageData = usageResult.status === "fulfilled" ? usageResult.value : null;
+				console.log('[AgencyDashboard] statusData:', statusData, 'isPlatformOrSuper:', isPlatformOrSuper, 'jwtAgencyId:', agencyId);
 				if (statusData?.approvalStatus) {
 					setLiveApprovalStatus(statusData.approvalStatus);
-					// If live DB status differs from JWT, force a session refresh so middleware
-					// unblocks on the next navigation without requiring a sign-out/sign-in
-					if (statusData.approvalStatus !== tokenApprovalStatus) {
-						updateSession({ agencyApprovalStatus: statusData.approvalStatus });
-					}
+					setLiveHasAgency(true);
+					console.log('[AgencyDashboard] → liveHasAgency=true, approvalStatus:', statusData.approvalStatus);
+					// Force a session refresh if approval status or agencyId changed in DB
+					// (catches mid-session agency assignments for platform/super admins)
+					const sessionUpdatePayload: Record<string, unknown> = {};
+					if (statusData.approvalStatus !== tokenApprovalStatus)
+						sessionUpdatePayload.agencyApprovalStatus = statusData.approvalStatus;
+					if (statusData.agencyId && !agencyId)
+						sessionUpdatePayload.agencyId = statusData.agencyId;
+					if (Object.keys(sessionUpdatePayload).length > 0)
+						updateSession(sessionUpdatePayload);
+				} else if (isPlatformOrSuper) {
+					// Live fetch returned no agency data — explicitly mark as no agency
+					setLiveHasAgency(false);
+					console.log('[AgencyDashboard] → liveHasAgency=false (no agency in DB)');
 				}
 				if (accountData?.isActive === false) setLiveIsActive(false);
 				const referrals = hideUsageWidget
@@ -491,6 +509,35 @@ function AgencyDashboard({
 			})
 			.finally(() => setLoading(false));
 	}, [isAdmin, hideUsageWidget]);
+
+	// Re-check agency status periodically for platform/super admins so that
+	// mid-session agency assignments or removals take effect without a page reload.
+	useEffect(() => {
+		if (!isPlatformOrSuper) return;
+		const checkAgencyStatus = () => {
+			fetch("/api/agency/status").then((r) => {
+				const header = r.headers.get("X-Agency-Status");
+				if (header) return { approvalStatus: header };
+				return r.ok ? r.json() : null;
+			}).then((data) => {
+				if (data?.approvalStatus) {
+					setLiveApprovalStatus(data.approvalStatus);
+					setLiveHasAgency(true);
+					if (data.agencyId && !agencyId) updateSession({ agencyId: data.agencyId });
+				} else {
+					setLiveApprovalStatus(null);
+					setLiveHasAgency(false);
+				}
+			}).catch(() => {});
+		};
+		// Poll every 30s + re-check on tab focus
+		const interval = setInterval(checkAgencyStatus, 30_000);
+		document.addEventListener("visibilitychange", checkAgencyStatus);
+		return () => {
+			clearInterval(interval);
+			document.removeEventListener("visibilitychange", checkAgencyStatus);
+		};
+	}, [isPlatformOrSuper, agencyId]);
 
 	const formatTimestamp = (timestamp: string) => {
 		const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -516,12 +563,16 @@ function AgencyDashboard({
 						<Clock className="h-6 w-6 text-[#0B4F96] mr-2" />
 						Recent Referrals
 					</h3>
-					<Link
-						href="/dashboard/referrals"
-						className="text-sm text-[#0B4F96] hover:text-[#48ccbc] font-medium"
-					>
-						View All
-					</Link>
+					{actionsDisabled ? (
+						<span className="text-sm text-gray-400 cursor-not-allowed">View All</span>
+					) : (
+						<Link
+							href="/dashboard/referrals"
+							className="text-sm text-[#0B4F96] hover:text-[#48ccbc] font-medium"
+						>
+							View All
+						</Link>
+					)}
 				</div>
 				{loading ? (
 					<div className="space-y-4">
@@ -624,26 +675,49 @@ function AgencyDashboard({
 						</span>
 					</Link>
 				)}
-				<Link
-					href="/dashboard/favorites"
-					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
-				>
-					<Star className="h-8 w-8 text-[#48ccbc] mb-3" />
-					<h3 className="text-lg font-semibold text-gray-800 mb-2">Favorites</h3>
-					{favoriteCount !== null && favoriteCount > 0 ? (
-						<p className="text-2xl font-bold text-yellow-500 mb-4">
-							{favoriteCount}{" "}
-							<span className="text-sm font-normal text-gray-500">saved</span>
-						</p>
-					) : (
-						<p className="text-sm text-gray-600 mb-4">
-							Quick access to your bookmarked sources
-						</p>
-					)}
-					<span className="text-[#0B4F96] group-hover:text-[#48ccbc] font-medium text-sm flex items-center">
-						View Favorites <ArrowRight className="h-4 w-4 ml-1" />
-					</span>
-				</Link>
+				{actionsDisabled ? (
+					<div
+						className="bg-white rounded-lg shadow-md p-6 opacity-50 cursor-not-allowed"
+						title="Your agency account is suspended"
+					>
+						<Star className="h-8 w-8 text-[#48ccbc] mb-3" />
+						<h3 className="text-lg font-semibold text-gray-800 mb-2">Favorites</h3>
+						{favoriteCount !== null && favoriteCount > 0 ? (
+							<p className="text-2xl font-bold text-yellow-500 mb-4">
+								{favoriteCount}{" "}
+								<span className="text-sm font-normal text-gray-500">saved</span>
+							</p>
+						) : (
+							<p className="text-sm text-gray-600 mb-4">
+								Quick access to your bookmarked sources
+							</p>
+						)}
+						<span className="text-gray-400 font-medium text-sm flex items-center">
+							View Favorites <ArrowRight className="h-4 w-4 ml-1" />
+						</span>
+					</div>
+				) : (
+					<Link
+						href="/dashboard/favorites"
+						className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
+					>
+						<Star className="h-8 w-8 text-[#48ccbc] mb-3" />
+						<h3 className="text-lg font-semibold text-gray-800 mb-2">Favorites</h3>
+						{favoriteCount !== null && favoriteCount > 0 ? (
+							<p className="text-2xl font-bold text-yellow-500 mb-4">
+								{favoriteCount}{" "}
+								<span className="text-sm font-normal text-gray-500">saved</span>
+							</p>
+						) : (
+							<p className="text-sm text-gray-600 mb-4">
+								Quick access to your bookmarked sources
+							</p>
+						)}
+						<span className="text-[#0B4F96] group-hover:text-[#48ccbc] font-medium text-sm flex items-center">
+							View Favorites <ArrowRight className="h-4 w-4 ml-1" />
+						</span>
+					</Link>
+				)}
 				<Link
 					href="/knowledge-base"
 					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
@@ -717,12 +791,30 @@ function AgencyDashboard({
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-	const { data: session, status } = useSession();
+	const { data: session, status, update: updateSession } = useSession();
 	const role = (session?.user as any)?.role;
 	const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
 	const isPlatformOrSuperAdmin =
 		role === "PLATFORM_ADMIN" || role === "SUPERADMIN";
-	const adminHasAgency = isPlatformOrSuperAdmin && !!agencyId;
+	const [liveAgencyId, setLiveAgencyId] = useState<string | null | undefined>(undefined);
+
+	// For platform/super admins: fetch live agencyId on mount to catch stale JWT
+	useEffect(() => {
+		if (!isPlatformOrSuperAdmin) return;
+		fetch("/api/agency/status")
+			.then(r => r.ok ? r.json() : null)
+			.then(data => {
+				const id = data?.agencyId ?? null;
+				setLiveAgencyId(id);
+				if (id && !agencyId) updateSession({ agencyId: id });
+			})
+			.catch(() => setLiveAgencyId(null));
+	}, [isPlatformOrSuperAdmin]);
+
+	const effectiveAgencyId = isPlatformOrSuperAdmin
+		? (liveAgencyId !== undefined ? liveAgencyId : agencyId)
+		: agencyId;
+	const adminHasAgency = isPlatformOrSuperAdmin && !!effectiveAgencyId;
 
 	if (status === "loading") {
 		return (

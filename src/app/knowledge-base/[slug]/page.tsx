@@ -125,29 +125,50 @@ export default function ArticleDetailPage() {
   const [copied, setCopied] = useState(false);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
+  const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const [liveHasAgency, setLiveHasAgency] = useState<boolean | null>(null);
 
   const isLoggedIn = !!session?.user;
-  const agencyApprovalStatus = (session?.user as any)?.agencyApprovalStatus as string | null;
+  const tokenApprovalStatus = (session?.user as any)?.agencyApprovalStatus as string | null;
   const userRole = (session?.user as any)?.role as string | null;
   const isAdmin = userRole === 'AGENCY_ADMIN' || userRole === 'PLATFORM_ADMIN' || userRole === 'SUPERADMIN';
-  const isSuspended = agencyApprovalStatus === 'SUSPENDED' || agencyApprovalStatus === 'REJECTED';
+  const isPlatformOrSuper = userRole === 'PLATFORM_ADMIN' || userRole === 'SUPERADMIN';
+  const agencyId = (session?.user as any)?.agencyId as string | null | undefined;
+  const effectiveHasAgency = liveHasAgency ?? !!agencyId;
+  const hasNoAgency = isPlatformOrSuper && !effectiveHasAgency;
+  // Live status wins over JWT (catches reactivation mid-session)
+  const effectiveApprovalStatus = liveApprovalStatus ?? tokenApprovalStatus;
+  const isSuspended = effectiveApprovalStatus === 'SUSPENDED' || effectiveApprovalStatus === 'REJECTED';
   // Use live DB value for isActive (null = not yet fetched, treat as active to avoid flash)
   const isDeactivated = liveIsActive === false;
-  // Deactivated users can't save or log; suspended-agency staff can't either; suspended-agency admins can
-  const canSaveAndLog = !isDeactivated && (!isSuspended || isAdmin);
+  // Suspension and no-agency block everyone; deactivation only blocks non-admins
+  const canSaveAndLog = !isSuspended && !hasNoAgency && !(isDeactivated && !isAdmin);
 
   const backCategoryInfo = getCategoryBySlug(fromCategory);
   const backUrl = fromCategory ? `/knowledge-base?category=${fromCategory}` : '/knowledge-base';
   const backLabel = backCategoryInfo ? backCategoryInfo.name : 'Referral Directory';
 
-  // Fetch live isActive status from DB on mount — bypasses the JWT cache so reactivated
-  // users see buttons enabled immediately without logging out.
+  // Fetch live status from DB on mount — bypasses the JWT cache so reactivated
+  // users/agencies see buttons enabled immediately without logging out.
   useEffect(() => {
     if (!isLoggedIn) return;
-    fetch('/api/account/status')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setLiveIsActive(data.isActive); })
-      .catch(() => {});
+    Promise.allSettled([
+      fetch('/api/agency/status').then(r => {
+        const header = r.headers.get('X-Agency-Status');
+        if (header) return { approvalStatus: header };
+        return r.ok ? r.json() : null;
+      }),
+      fetch('/api/account/status').then(r => r.ok ? r.json() : null),
+    ]).then(([agencyResult, accountResult]) => {
+      if (agencyResult.status === 'fulfilled' && agencyResult.value?.approvalStatus) {
+        setLiveApprovalStatus(agencyResult.value.approvalStatus);
+        setLiveHasAgency(true);
+      } else if (isPlatformOrSuper) {
+        setLiveHasAgency(false);
+      }
+      if (accountResult.status === 'fulfilled' && accountResult.value?.isActive === false)
+        setLiveIsActive(false);
+    });
   }, [isLoggedIn]);
 
   useEffect(() => { if (slug) fetchArticle(); }, [slug]);
