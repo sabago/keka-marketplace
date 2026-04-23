@@ -23,8 +23,10 @@ export default function FavoritesPage() {
     session?.user?.role === "SUPERADMIN";
 
   const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
   const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
-  const actionsDisabled = isSuspended && !isAdmin;
+  const isDeactivated = liveIsActive === false;
+  const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
 
   const [myFavorites, setMyFavorites] = useState<Favorite[]>([]);
   const [agencyFavorites, setAgencyFavorites] = useState<Favorite[]>([]);
@@ -45,15 +47,22 @@ export default function FavoritesPage() {
 
   const fetchFavorites = async () => {
     try {
-      const [statusData, response] = await Promise.all([
-        fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
-        fetch("/api/favorites"),
+      const [statusResult, accountResult, favResult] = await Promise.allSettled([
+        fetch("/api/agency/status").then((r) => {
+          const header = r.headers.get("X-Agency-Status");
+          if (header) return { approvalStatus: header };
+          return r.ok ? r.json() : null;
+        }),
+        fetch("/api/account/status").then((r) => r.ok ? r.json() : null),
+        fetch("/api/favorites").then((r) => r.ok ? r.json() : null),
       ]);
-      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
-      if (response.ok) {
-        const data = await response.json();
-        setMyFavorites(data.myFavorites || []);
-        setAgencyFavorites(data.agencyFavorites || data.favorites || []);
+      if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus)
+        setLiveApprovalStatus(statusResult.value.approvalStatus);
+      if (accountResult.status === "fulfilled" && accountResult.value?.isActive === false)
+        setLiveIsActive(false);
+      if (favResult.status === "fulfilled" && favResult.value) {
+        setMyFavorites(favResult.value.myFavorites || []);
+        setAgencyFavorites(favResult.value.agencyFavorites || favResult.value.favorites || []);
       }
     } catch (error) {
       console.error("Error fetching favorites:", error);

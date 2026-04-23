@@ -331,6 +331,85 @@ async function processJob(jobId: string): Promise<boolean> {
       }
     }
 
+    // ── License / certification keyword mismatch check ───────────────────────
+    // For document types not covered by DOC_TYPE_SIGNALS (i.e. license and certification
+    // types), compare GPT's extracted credentialType against keywords expected for the
+    // filed document type name.  A filed "CNA Certificate" should not match a PT license.
+    // Only fires when the issuer-based check above did NOT already set categoryMismatchNote.
+    if (!categoryMismatchNote && extractedType && filedTypeName) {
+      // Map of substrings in filed type name → keywords that should appear in credentialType.
+      // Each entry: { must: at least one keyword must match; forbidden: none of these may match }
+      const LICENSE_TYPE_KEYWORDS: Array<{
+        filedContains: string[];
+        mustMatch: string[];
+        forbiddenMatch: string[];
+        label: string;
+      }> = [
+        {
+          filedContains: ['cna', 'certified nursing assistant'],
+          mustMatch: ['cna', 'certified nursing assistant', 'nurse aide', 'nursing assistant'],
+          forbiddenMatch: ['physical therapist', 'pt license', 'registered nurse', 'lpn', 'licensed practical', 'rn license', 'hha', 'home health aide', 'cpr', 'bci'],
+          label: 'CNA Certificate',
+        },
+        {
+          filedContains: ['rn', 'registered nurse'],
+          mustMatch: ['registered nurse', 'rn license', 'rn certification'],
+          forbiddenMatch: ['physical therapist', 'cna', 'lpn', 'licensed practical', 'hha', 'cpr'],
+          label: 'Registered Nurse (RN) License',
+        },
+        {
+          filedContains: ['lpn', 'licensed practical nurse'],
+          mustMatch: ['lpn', 'licensed practical nurse', 'practical nurse'],
+          forbiddenMatch: ['physical therapist', 'cna', 'registered nurse', 'rn license', 'hha', 'cpr'],
+          label: 'LPN License',
+        },
+        {
+          filedContains: ['hha', 'home health aide'],
+          mustMatch: ['hha', 'home health aide', 'home health'],
+          forbiddenMatch: ['physical therapist', 'cna', 'registered nurse', 'lpn', 'cpr'],
+          label: 'Home Health Aide (HHA) Certificate',
+        },
+        {
+          filedContains: ['physical therapist', 'pt license', 'physical therapy'],
+          mustMatch: ['physical therapist', 'pt license', 'physical therapy'],
+          forbiddenMatch: ['cna', 'registered nurse', 'lpn', 'hha', 'cpr', 'occupational therapist'],
+          label: 'Physical Therapist (PT) License',
+        },
+        {
+          filedContains: ['occupational therapist', 'ot license'],
+          mustMatch: ['occupational therapist', 'ot license', 'occupational therapy'],
+          forbiddenMatch: ['cna', 'registered nurse', 'lpn', 'hha', 'physical therapist', 'cpr'],
+          label: 'Occupational Therapist (OT) License',
+        },
+        {
+          filedContains: ['cpr', 'basic life support', 'bls'],
+          mustMatch: ['cpr', 'basic life support', 'bls', 'cardiopulmonary resuscitation'],
+          forbiddenMatch: ['physical therapist', 'cna', 'registered nurse', 'lpn', 'hha'],
+          label: 'CPR Certification',
+        },
+        {
+          filedContains: ['bci', 'background check', 'criminal history'],
+          mustMatch: ['background check', 'criminal history', 'bci', 'cori', 'criminal record'],
+          forbiddenMatch: ['physical therapist', 'cna', 'registered nurse', 'lpn', 'hha', 'cpr'],
+          label: 'Background Check',
+        },
+      ];
+
+      const matchedRule = LICENSE_TYPE_KEYWORDS.find((rule) =>
+        rule.filedContains.some((kw) => filedTypeName.includes(kw))
+      );
+
+      if (matchedRule) {
+        const extractedMatchesMust = matchedRule.mustMatch.some((kw) => extractedType.includes(kw));
+        const extractedMatchesForbidden = matchedRule.forbiddenMatch.some((kw) => extractedType.includes(kw));
+
+        if (!extractedMatchesMust || extractedMatchesForbidden) {
+          const credentialTypeDisplay = parsedData.credentialType || 'unknown credential type';
+          categoryMismatchNote = `Document type mismatch: filed under "${job.documentTypeName}" but AI identified this as "${credentialTypeDisplay}". Verify the correct document was uploaded.`;
+        }
+      }
+    }
+
     // Require review if AI flagged it, date discrepancy, name mismatch, or category mismatch
     const requiresReview = parsedData.requiresReview || hasMismatch || nameMatchResult === 'mismatch' || !!categoryMismatchNote;
     const reviewReason = [parsedData.reviewReason, mismatchNote, nameMismatchNote, categoryMismatchNote].filter(Boolean).join(' | ') || null;

@@ -424,16 +424,21 @@ function AgencyDashboard({
 }: {
 	hideUsageWidget?: boolean;
 }) {
-	const { data: session } = useSession();
+	const { data: session, update: updateSession } = useSession();
 	// Any role that can manage an agency subscription should see upgrade prompts
 	const isAdmin =
 		session?.user?.role === "AGENCY_ADMIN" ||
 		session?.user?.role === "PLATFORM_ADMIN" ||
 		session?.user?.role === "SUPERADMIN";
 
+	const tokenApprovalStatus = (session?.user as any)?.agencyApprovalStatus as string | null;
 	const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
-	const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
-	const actionsDisabled = isSuspended && !isAdmin;
+	const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
+	// Use live status if fetched, otherwise fall back to JWT value
+	const effectiveApprovalStatus = liveApprovalStatus ?? tokenApprovalStatus;
+	const isSuspended = effectiveApprovalStatus === "SUSPENDED" || effectiveApprovalStatus === "REJECTED";
+	const isDeactivated = liveIsActive === false;
+	const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
 
 	const [recentReferrals, setRecentReferrals] = useState<any[]>([]);
 	const [referralCount, setReferralCount] = useState<number | null>(null);
@@ -447,16 +452,35 @@ function AgencyDashboard({
 				? fetch("/api/dashboard/usage").then((r) => r.json())
 				: Promise.resolve(null);
 
-		Promise.all([
-			fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
+		Promise.allSettled([
+			fetch("/api/agency/status").then((r) => {
+				// Middleware returns 403 with X-Agency-Status header for suspended/rejected agencies
+				const header = r.headers.get("X-Agency-Status");
+				if (header) return { approvalStatus: header };
+				return r.ok ? r.json() : null;
+			}),
+			fetch("/api/account/status").then((r) => r.ok ? r.json() : null),
 			fetch("/api/referrals").then((r) =>
 				r.ok ? r.json() : { referrals: [], myReferrals: [] },
 			),
 			fetch("/api/favorites").then((r) => (r.ok ? r.json() : { favorites: [] })),
 			fetchUsage,
 		])
-			.then(([statusData, refData, favData, usageData]) => {
-				if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
+			.then(([statusResult, accountResult, refResult, favResult, usageResult]) => {
+				const statusData = statusResult.status === "fulfilled" ? statusResult.value : null;
+				const accountData = accountResult.status === "fulfilled" ? accountResult.value : null;
+				const refData = refResult.status === "fulfilled" ? refResult.value : { referrals: [], myReferrals: [] };
+				const favData = favResult.status === "fulfilled" ? favResult.value : { favorites: [] };
+				const usageData = usageResult.status === "fulfilled" ? usageResult.value : null;
+				if (statusData?.approvalStatus) {
+					setLiveApprovalStatus(statusData.approvalStatus);
+					// If live DB status differs from JWT, force a session refresh so middleware
+					// unblocks on the next navigation without requiring a sign-out/sign-in
+					if (statusData.approvalStatus !== tokenApprovalStatus) {
+						updateSession({ agencyApprovalStatus: statusData.approvalStatus });
+					}
+				}
+				if (accountData?.isActive === false) setLiveIsActive(false);
 				const referrals = hideUsageWidget
 					? (refData.myReferrals ?? [])
 					: (refData.referrals ?? []);
@@ -465,7 +489,6 @@ function AgencyDashboard({
 				setFavoriteCount((favData.favorites ?? []).length);
 				if (usageData?.plan) setUsagePlan(usageData.plan);
 			})
-			.catch(() => {})
 			.finally(() => setLoading(false));
 	}, [isAdmin, hideUsageWidget]);
 
@@ -482,7 +505,7 @@ function AgencyDashboard({
 
 	return (
 		<div className="space-y-8">
-			{!hideUsageWidget && (
+			{!hideUsageWidget && isAdmin && (
 				<div>
 					<QueryUsageWidget />
 				</div>

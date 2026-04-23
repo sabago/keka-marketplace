@@ -51,8 +51,10 @@ export default function CredentialsPage() {
     session?.user?.role === 'SUPERADMIN';
 
   const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
   const isSuspended = liveApprovalStatus === 'SUSPENDED' || liveApprovalStatus === 'REJECTED';
-  const actionsDisabled = isSuspended && !isAdmin;
+  const isDeactivated = liveIsActive === false;
+  const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,19 +73,24 @@ export default function CredentialsPage() {
     setError(null);
 
     try {
-      const [statusData, response] = await Promise.all([
-        fetch('/api/agency/status').then((r) => r.ok ? r.json() : null),
-        fetch('/api/employee/credentials/dashboard'),
+      const [statusResult, accountResult, credResult] = await Promise.allSettled([
+        fetch('/api/agency/status').then((r) => {
+          const header = r.headers.get("X-Agency-Status");
+          if (header) return { approvalStatus: header };
+          return r.ok ? r.json() : null;
+        }),
+        fetch('/api/account/status').then((r) => r.ok ? r.json() : null),
+        fetch('/api/employee/credentials/dashboard').then(async (r) => {
+          if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'Failed to fetch credentials'); }
+          return r.json();
+        }),
       ]);
-      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch credentials');
-      }
-
-      const dashboardData = await response.json();
-      setData(dashboardData);
+      if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus)
+        setLiveApprovalStatus(statusResult.value.approvalStatus);
+      if (accountResult.status === "fulfilled" && accountResult.value?.isActive === false)
+        setLiveIsActive(false);
+      if (credResult.status === "rejected") throw credResult.reason;
+      setData(credResult.value);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching dashboard:', err);

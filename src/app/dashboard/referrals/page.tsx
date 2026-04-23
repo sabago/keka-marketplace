@@ -50,8 +50,10 @@ export default function ReferralsPage() {
     session?.user?.role === "SUPERADMIN";
 
   const [liveApprovalStatus, setLiveApprovalStatus] = useState<string | null>(null);
+  const [liveIsActive, setLiveIsActive] = useState<boolean | null>(null);
   const isSuspended = liveApprovalStatus === "SUSPENDED" || liveApprovalStatus === "REJECTED";
-  const actionsDisabled = isSuspended && !isAdmin;
+  const isDeactivated = liveIsActive === false;
+  const actionsDisabled = (isSuspended || isDeactivated) && !isAdmin;
 
   const [myReferrals, setMyReferrals] = useState<Referral[]>([]);
   const [agencyReferrals, setAgencyReferrals] = useState<Referral[]>([]);
@@ -82,15 +84,22 @@ export default function ReferralsPage() {
 
   const fetchReferrals = async () => {
     try {
-      const [statusData, refResponse] = await Promise.all([
-        fetch("/api/agency/status").then((r) => r.ok ? r.json() : null),
-        fetch("/api/referrals"),
+      const [statusResult, accountResult, refResult] = await Promise.allSettled([
+        fetch("/api/agency/status").then((r) => {
+          const header = r.headers.get("X-Agency-Status");
+          if (header) return { approvalStatus: header };
+          return r.ok ? r.json() : null;
+        }),
+        fetch("/api/account/status").then((r) => r.ok ? r.json() : null),
+        fetch("/api/referrals").then((r) => r.ok ? r.json() : null),
       ]);
-      if (statusData?.approvalStatus) setLiveApprovalStatus(statusData.approvalStatus);
-      if (refResponse.ok) {
-        const data = await refResponse.json();
-        setMyReferrals(data.myReferrals || []);
-        setAgencyReferrals(data.agencyReferrals || data.referrals || []);
+      if (statusResult.status === "fulfilled" && statusResult.value?.approvalStatus)
+        setLiveApprovalStatus(statusResult.value.approvalStatus);
+      if (accountResult.status === "fulfilled" && accountResult.value?.isActive === false)
+        setLiveIsActive(false);
+      if (refResult.status === "fulfilled" && refResult.value) {
+        setMyReferrals(refResult.value.myReferrals || []);
+        setAgencyReferrals(refResult.value.agencyReferrals || refResult.value.referrals || []);
       }
     } catch (error) {
       console.error("Error fetching referrals:", error);

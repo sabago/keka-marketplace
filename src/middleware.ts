@@ -120,7 +120,11 @@ export async function middleware(request: NextRequest) {
       ? chatbotRoutes
       : [...chatbotRoutes, ...agencyFeatureRoutes];
 
-    const requiresApproval = routesToCheck.some(
+    // /api/agency/status is intentionally excluded from blocking — it's the
+    // status-check endpoint used to detect reactivation mid-session.
+    const exemptFromApprovalCheck = ['/api/agency/status'];
+
+    const requiresApproval = !exemptFromApprovalCheck.includes(pathname) && routesToCheck.some(
       route => pathname === route || pathname.startsWith(route + '/')
     );
 
