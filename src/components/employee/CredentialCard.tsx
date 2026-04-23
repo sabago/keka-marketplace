@@ -71,7 +71,7 @@ export default function CredentialCard({ credential, onUploadRenewal }: Credenti
         icon: <XCircle className="h-4 w-4" />,
         label: 'Rejected',
       };
-    } else if (credential.isCompliant) {
+    } else if (credential.reviewStatus === 'APPROVED' || credential.isCompliant) {
       return {
         color: 'bg-green-100 text-green-700 border-green-200',
         icon: <CheckCircle className="h-4 w-4" />,
@@ -183,6 +183,12 @@ export default function CredentialCard({ credential, onUploadRenewal }: Credenti
           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm">
             <p className="font-medium text-red-900 mb-1">Action Required:</p>
             <p className="text-red-700">{credential.reviewNotes}</p>
+          </div>
+        )}
+        {credential.reviewStatus === 'PENDING_REVIEW' && credential.reviewNotes && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm">
+            <p className="font-medium text-amber-900 mb-1">Under Review:</p>
+            <p className="text-amber-700">{credential.reviewNotes}</p>
           </div>
         )}
 
