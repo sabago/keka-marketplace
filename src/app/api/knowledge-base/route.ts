@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { prisma } from '@/lib/db';
+import { HIDDEN_CATEGORY_SLUGS } from '@/lib/categoryConfig';
 
 // Recursively find all markdown files in a directory
 function findMarkdownFiles(dir: string, fileList: string[] = []): string[] {
@@ -119,6 +120,11 @@ export async function GET(request: NextRequest) {
 
     // Apply filters
     let filteredArticles = articles;
+
+    // Always suppress articles belonging to hidden (unskilled) categories
+    filteredArticles = filteredArticles.filter(article =>
+      !article.category || !HIDDEN_CATEGORY_SLUGS.includes(article.category)
+    );
 
     if (state) {
       filteredArticles = filteredArticles.filter(article => article.state === state);

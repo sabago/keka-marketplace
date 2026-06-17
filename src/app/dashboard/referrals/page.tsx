@@ -418,7 +418,7 @@ export default function ReferralsPage() {
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <Link
-                              href={`/knowledge-base/${referral.referralSourceSlug}`}
+                              href={`/resources/knowledge-base/${referral.referralSourceSlug}`}
                               onClick={(e) => e.stopPropagation()}
                               className="text-[#0B4F96] hover:text-[#48ccbc] font-medium flex items-center"
                             >

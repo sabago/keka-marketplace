@@ -34,7 +34,7 @@ export default function KnowledgeBaseCard({
   const color = getCategoryColor(category ?? null);
 
   return (
-    <Link href={`/knowledge-base/${slug}`}>
+    <Link href={`/resources/knowledge-base/${slug}`}>
       <div
         className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all p-6 h-full cursor-pointer border-l-4 border-r border-t border-b border-gray-200 hover:shadow-xl"
         style={{

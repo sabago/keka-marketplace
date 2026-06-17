@@ -2,356 +2,490 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
-	ShieldCheck,
-	MessageCircle,
 	BookOpen,
-	TrendingUp,
-	CheckCircle,
+	Users,
+	ShoppingBag,
+	GraduationCap,
 	ArrowRight,
-	MapPin,
-	PlayCircle,
 } from "lucide-react";
+import BenefitsScroll from "@/components/BenefitsScroll";
+import AnimatedSection from "@/components/AnimatedSection";
 
 export default function HomePage() {
-	const rotations = [
-		"tracks every credential",
-		"answers every intake question",
-		"maps every referral pathway",
-		"stays audit-ready",
-	];
-	const [idx, setIdx] = useState(0);
-	const [animating, setAnimating] = useState(false);
+	const [email, setEmail] = useState("");
+	const [subscribed, setSubscribed] = useState(false);
+	const [wordIndex, setWordIndex] = useState(0);
+	const [fading, setFading] = useState(false);
+	const cyclingWords = ["Learn", "Master", "Prosper"];
 
 	useEffect(() => {
-		const iv = setInterval(() => {
-			setAnimating(true);
+		const interval = setInterval(() => {
+			setFading(true);
 			setTimeout(() => {
-				setIdx((prev) => (prev + 1) % rotations.length);
-				setAnimating(false);
+				setWordIndex((i) => (i + 1) % 3);
+				setFading(false);
 			}, 300);
-		}, 3200);
-		return () => clearInterval(iv);
+		}, 2000);
+		return () => clearInterval(interval);
 	}, []);
 
-	const features = [
-		{
-			icon: ShieldCheck,
-			title: "Credential shelf-life, tracked",
-			copy:
-				"Drop in a PDF of a CPR card, RN license, BCI, or HHA cert. We parse the expiry and alert the right staff at 30 and 7 days.",
-			link: "/agency/compliance",
-		},
-		{
-			icon: MessageCircle,
-			title: "Answers grounded in 1,200+ MA sources",
-			copy:
-				"Every response cites a Pinecone-indexed source. No hallucinated phone numbers. No \u201CI don\u2019t have data after 2023.\u201D",
-			link: "/knowledge-base",
-		},
+	function handleSubscribe(e: React.FormEvent) {
+		e.preventDefault();
+		if (email.trim()) {
+			setSubscribed(true);
+			setEmail("");
+		}
+	}
+
+	const featureCards = [
 		{
 			icon: BookOpen,
-			title: "The MA referral directory",
-			copy:
-				"Hospitals, ASAPs, ACOs, Councils on Aging, Veteran programs, MassHealth waivers — categorized, geocoded, kept current.",
-			link: "/knowledge-base",
+			title: "Learn",
+			description:
+				"Access our curated knowledge base of home care regulations, referral pathways, and best practices to build your agency with confidence.",
+			link: "/resources",
+			accent: "#0b4f96",
+			iconBg: "#0b4f96",
 		},
 		{
-			icon: TrendingUp,
-			title: "Know where your patients come from",
-			copy:
-				"Log each inbound referral, tag the source, and see your pipeline by ZIP, by category, by month. Export to CSV anytime.",
-			link: "/dashboard/referrals",
+			icon: Users,
+			title: "Staffing",
+			description:
+				"Find, onboard, and manage qualified caregivers. Track credentials, certifications, and compliance documentation in one place.",
+			link: "/staffing",
+			accent: "#3da777",
+			iconBg: "#3da777",
 		},
-	];
-
-	const benefits = [
-		"AI-parsed credential tracking for RN, HHA, CPR, BCI, and more",
-		"Grounded local referral chatbot with 100+ indexed sources",
-		"Automated 30-day and 7-day expiration reminders",
-		"Compliance dashboard with agency-wide scores",
-		"Tiered plans starting free with no credit card required",
-		"HIPAA-aware by default, audit log on every action",
-	];
-
-	const stats = [
-		{ value: "84%", label: "Compliance score" },
-		{ value: "23", label: "Staff tracked" },
-		{ value: "12", label: "Referrals this month" },
-		{ value: "107", label: "MA sources indexed" },
+		{
+			icon: ShoppingBag,
+			title: "Marketplace",
+			description:
+				"Browse and purchase digital resources, guides, templates, and tools designed specifically for home care agency operators.",
+			link: "/marketplace",
+			accent: "#e07b2a",
+			iconBg: "#e07b2a",
+		},
+		{
+			icon: GraduationCap,
+			title: "Training",
+			description:
+				"Equip your team with the knowledge they need. Access training materials and resources to keep your staff skilled and certified.",
+			link: "/resources",
+			accent: "#48ccbc",
+			iconBg: "#48ccbc",
+		},
 	];
 
 	return (
-		<div className="min-h-screen bg-gray-50">
-			{/* Hero Section */}
-			<section className="relative bg-gradient-to-br from-[#0B4F96] to-[#48ccbc] text-white overflow-hidden">
-				<div className="absolute inset-0 bg-black opacity-10 pointer-events-none" />
-
-				{/* Decorative orbs */}
-				<div
-					className="absolute rounded-full pointer-events-none"
-					style={{
-						width: 520,
-						height: 520,
-						top: -120,
-						left: -80,
-						background:
-							"radial-gradient(circle, rgba(124,240,224,0.45) 0%, transparent 60%)",
-						filter: "blur(40px)",
-					}}
-					aria-hidden="true"
+		<div className="min-h-screen">
+			{/* ── 1. Hero Section ── */}
+			<section className="relative overflow-hidden min-h-[520px] flex items-center">
+				{/* Background image */}
+				<Image
+					src="/images/mhc_hero_image.jpeg"
+					alt=""
+					fill
+					className="object-cover object-center"
+					priority
 				/>
-				<div
-					className="absolute rounded-full pointer-events-none"
-					style={{
-						width: 420,
-						height: 420,
-						bottom: -160,
-						right: "10%",
-						background:
-							"radial-gradient(circle, rgba(91,168,255,0.35) 0%, transparent 60%)",
-						filter: "blur(40px)",
-					}}
-					aria-hidden="true"
-				/>
+				{/* Navy overlay — mirrors credential tracker hero, unifies with illustration tones */}
+				<div className="absolute inset-0 bg-[#0b4f96]/80" />
 
-				<div className="container mx-auto px-6 py-20 md:py-28 relative z-10 max-w-[1200px]">
-					<div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
-						{/* Left column */}
-						<div>
-							{/* Badge */}
-							<span className="inline-flex items-center gap-2 bg-[#48ccbc] text-white text-sm font-semibold px-4 py-2 rounded-full mb-6">
-								<MapPin className="w-3.5 h-3.5" />
-								Built for ALL home-care &amp; AFC agencies
-							</span>
-
-							{/* Headline */}
-							<h1 className="text-4xl md:text-5xl lg:text-[56px] font-bold leading-[1.05] tracking-tight text-white mb-5">
-								The platform that{" "}
-								<span
-									className="block text-[#c7f3ed] transition-opacity duration-300"
-									style={{ opacity: animating ? 0 : 1 }}
-									aria-live="polite"
-								>
-									{rotations[idx]}
-								</span>
-							</h1>
-
-							{/* Sub-headline */}
-							<p className="text-lg leading-relaxed text-white/90 mb-7 max-w-[520px]">
-								Mastering HomeCare keeps your RN, HHA, CPR and BCI credentials ahead of
-								their expiry dates, indexes every referral pathway in home care, and
-								answers grounded questions about any source — from Local Hospitals&apos;
-								Discharge Planning to your local Council on Aging.
-							</p>
-
-							{/* CTAs */}
-							<div className="flex flex-wrap gap-3 mb-5">
-								<Link
-									href="/auth/signin"
-									className="inline-flex items-center gap-2 bg-white text-[#0B4F96] font-semibold px-6 py-3 rounded-lg hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-								>
-									<ArrowRight className="w-4 h-4" />
-									Get 20 free queries
-								</Link>
-								<Link
-									href="/marketplace"
-									className="inline-flex items-center gap-2 bg-white/10 border border-white/30 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/20 hover:border-white/50 transition-all"
-								>
-									<PlayCircle className="w-4 h-4" />
-									Browse resources
-								</Link>
-							</div>
-
-							<p className="text-xs text-white/70">
-								No credit card. HIPAA-aware by default. Cancel anytime from Agency
-								Settings.
-							</p>
-						</div>
-
-						{/* Right column — stat tile */}
-						<div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-7">
-							<div className="flex items-center gap-2.5 mb-1">
-								<span className="w-2 h-2 rounded-full bg-[#7CF0E0]" />
-								<span className="text-[11px] uppercase tracking-widest text-white/80">
-									Sunrise Home Care · live
-								</span>
-							</div>
-							<div className="text-[22px] font-semibold text-white mb-4">
-								A quiet Tuesday morning
-							</div>
-							<div className="grid grid-cols-2 gap-3.5">
-								{stats.map((s) => (
-									<div key={s.label} className="bg-white/10 rounded-lg p-4">
-										<div className="text-[28px] font-bold text-white leading-none">
-											{s.value}
-										</div>
-										<div className="text-[12px] text-white/78 mt-1">{s.label}</div>
-									</div>
-								))}
-							</div>
-						</div>
+				{/* Content */}
+				<div className="relative z-10 container mx-auto px-6 max-w-[1100px] py-24 md:py-32 text-center">
+					<h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6 text-white">
+						Welcome to Mastering Home Care
+					</h1>
+					<p className="text-2xl md:text-3xl font-bold text-white mb-10">
+						Your one stop to{" "}
+						<span
+							className="transition-opacity duration-300"
+							style={{ color: "#3da777", opacity: fading ? 0 : 1 }}
+						>
+							{wordIndex === 2 ? "PROSPER IN" : cyclingWords[wordIndex].toUpperCase()}
+						</span>{" "}
+						<span className="text-white">home care.</span>
+					</p>
+					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+						<Link
+							href="/memberships"
+							className="inline-block px-6 py-3 rounded-full font-semibold text-white transition-opacity hover:opacity-90"
+							style={{ backgroundColor: "#3da777" }}
+						>
+							Become a Member
+						</Link>
+						<Link
+							href="/about"
+							className="inline-block px-6 py-3 rounded-full font-semibold border-2 transition-colors hover:text-white"
+							style={{
+								backgroundColor: "#0b4f96",
+								borderColor: "#0b4f96",
+								color: "#ffffff",
+							}}
+							onMouseEnter={(e) => {
+								(e.currentTarget as HTMLAnchorElement).style.backgroundColor =
+									"#093d75";
+							}}
+							onMouseLeave={(e) => {
+								(e.currentTarget as HTMLAnchorElement).style.backgroundColor =
+									"#0b4f96";
+							}}
+						>
+							Learn About Us
+						</Link>
 					</div>
 				</div>
 
-				{/* Wave */}
-				<svg
-					className="absolute bottom-0 left-0 w-full"
-					viewBox="0 0 1440 60"
-					preserveAspectRatio="none"
-					xmlns="http://www.w3.org/2000/svg"
-					style={{ height: 60 }}
-				>
-					<path
-						d="M0,40 C240,60 480,0 720,20 C960,40 1200,60 1440,30 L1440,60 L0,60 Z"
-						fill="#F9FAFB"
-					/>
-				</svg>
+				{/* Wave — inside hero, cuts cream shape into navy bottom */}
+				<div className="absolute bottom-0 left-0 right-0 z-10">
+					<svg viewBox="0 0 1440 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block" preserveAspectRatio="none" style={{ height: '100px' }}>
+						<path d="M0 80 C360 0 1080 120 1440 40 L1440 100 L0 100 Z" fill="#fdf6e3" />
+					</svg>
+				</div>
 			</section>
 
-			{/* Features Section */}
+			{/* ── 2. Learn · Master · Prosper Section ── */}
 			<section
-				className="py-18 bg-gray-50"
-				style={{ paddingTop: 72, paddingBottom: 72 }}
+				className="pb-8 md:pb-10 overflow-hidden"
+				style={{ backgroundColor: '#fdf6e3' }}
 			>
-				<div className="container mx-auto px-6 max-w-[1200px]">
-					<div className="text-center mb-10">
-						<h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-							Four tools. One clean dashboard.
-						</h2>
-						<p className="text-lg text-gray-600 max-w-[640px] mx-auto">
-							No marketing copy pretending to be a platform. Four things we do well,
-							built with operators who actually run MA home-care agencies.
-						</p>
+				<div className="container mx-auto px-6 max-w-[1100px]">
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-0">
+
+						{/* LEARN */}
+						<div className="text-center md:text-left md:border-r md:border-gray-200 md:pr-10">
+							<p className="text-5xl lg:text-6xl font-black tracking-tight mb-3 leading-none" style={{ color: '#0b4f96' }}>LEARN</p>
+							<div className="w-8 h-0.5 mb-4 mx-auto md:mx-0" style={{ backgroundColor: '#48ccbc' }} />
+							<p className="text-base leading-relaxed text-gray-500">
+								Access our knowledge base of MA regulations, referral pathways, and agency best practices — built for operators, not lawyers.
+							</p>
+						</div>
+
+						{/* MASTER */}
+						<div className="text-center md:border-r md:border-gray-200 md:px-10">
+							<p className="text-5xl lg:text-6xl font-black tracking-tight mb-3 leading-none" style={{ color: '#48ccbc' }}>MASTER</p>
+							<div className="w-8 h-0.5 mb-4 mx-auto" style={{ backgroundColor: '#3da777' }} />
+							<p className="text-base leading-relaxed text-gray-500">
+								Track credentials, stay survey-ready, and run your agency operations without the spreadsheet chaos.
+							</p>
+						</div>
+
+						{/* PROSPER */}
+						<div className="text-center md:text-right md:pl-10">
+							<p className="text-5xl lg:text-6xl font-black tracking-tight mb-3 leading-none" style={{ color: '#3da777' }}>PROSPER</p>
+							<div className="w-8 h-0.5 mb-4 mx-auto md:ml-auto md:mr-0" style={{ backgroundColor: '#e07b2a' }} />
+							<p className="text-base leading-relaxed text-gray-500">
+								Buy policies, templates, and tools in the Marketplace. Grow your census and build an agency that lasts.
+							</p>
+						</div>
+
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-						{features.map((f) => (
-							<Link
-								key={f.title}
-								href={f.link}
-								className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all p-7 text-center group hover:-translate-y-1"
+					<div className="flex items-center justify-center gap-3 mt-10 pt-8 border-t border-gray-200">
+						<span className="h-px w-6" style={{ backgroundColor: '#48ccbc' }} />
+						<p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#48ccbc' }}>
+							Built by home care experts · 10+ years of industry experience
+						</p>
+						<span className="h-px w-6" style={{ backgroundColor: '#48ccbc' }} />
+					</div>
+				</div>
+			</section>
+
+			{/* ── Benefits scroll strip ── */}
+			<BenefitsScroll />
+
+			{/* ── 3. Feature Cards Section ── */}
+			<section className="pt-8 pb-8 md:pt-10 md:pb-10" style={{ backgroundColor: '#f7f5f0' }}>
+				<div className="container mx-auto px-6 max-w-[1100px]">
+					<p className="text-xs font-semibold uppercase tracking-widest text-center mb-3" style={{ color: '#3da777' }}>What We Offer</p>
+					<h2
+						className="text-3xl md:text-4xl font-bold text-center mb-2"
+						style={{ color: "#0b4f96" }}
+					>
+						Everything You Need to Succeed
+					</h2>
+					<p className="text-gray-500 text-center text-base max-w-xl mx-auto mb-12">
+						One platform. Every tool your home care agency needs to launch, operate, and grow.
+					</p>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+						{featureCards.map((card) => (
+							<div
+								key={card.title}
+								className="rounded-2xl bg-white p-7 flex flex-col items-start hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+								style={{ borderTop: `4px solid ${card.accent}`, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}
 							>
-								<div className="w-14 h-14 bg-gradient-to-br from-[#0B4F96] to-[#48ccbc] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-									<f.icon className="h-6 w-6 text-white" />
+								<div
+									className="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
+									style={{ backgroundColor: `${card.iconBg}18` }}
+								>
+									<card.icon className="w-6 h-6" style={{ color: card.iconBg }} />
 								</div>
-								<h3 className="text-[17px] font-semibold text-gray-900 mb-2 leading-snug">
-									{f.title}
+								<h3 className="text-lg font-bold mb-2" style={{ color: "#0b4f96" }}>
+									{card.title}
 								</h3>
-								<p className="text-sm text-gray-600 leading-relaxed">{f.copy}</p>
-								<div className="mt-4 text-[#0B4F96] text-sm font-medium flex items-center justify-center gap-1 group-hover:gap-2 transition-all">
-									Learn more <ArrowRight className="h-3.5 w-3.5" />
-								</div>
-							</Link>
+								<p className="text-gray-500 text-base leading-relaxed mb-5 flex-1">
+									{card.description}
+								</p>
+								<Link
+									href={card.link}
+									className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
+									style={{ color: card.accent }}
+								>
+									Explore <ArrowRight className="w-4 h-4" />
+								</Link>
+							</div>
 						))}
 					</div>
 				</div>
 			</section>
 
-			{/* Benefits Section */}
-			<section className="py-20 bg-white">
-				<div className="container mx-auto px-6 max-w-[1200px]">
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
-						{/* Left — copy */}
-						<div>
-							<h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-5">
-								Why Mastering HomeCare?
-							</h2>
-							<p className="text-lg text-gray-600 mb-7">
-								Built by home-care operators for home-care operators. Every feature
-								exists because someone needed to keep their agency compliant and their
-								referral funnel moving.
-							</p>
-							<div className="space-y-3.5">
-								{benefits.map((b) => (
-									<div key={b} className="flex items-start gap-3">
-										<CheckCircle className="h-5 w-5 text-[#48ccbc] flex-shrink-0 mt-0.5" />
-										<span className="text-gray-700">{b}</span>
-									</div>
-								))}
-							</div>
-							<div className="mt-8">
-								<Link
-									href="/marketplace"
-									className="inline-flex items-center gap-2 bg-[#0B4F96] text-white px-7 py-3.5 rounded-lg font-semibold hover:bg-[#0a4280] transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-								>
-									Explore Resources
-									<ArrowRight className="h-4 w-4" />
-								</Link>
-							</div>
+			{/* ── Credential Tracker Teaser ── */}
+			<section className="py-14 md:py-16 relative overflow-hidden" style={{ backgroundColor: '#0b4f96' }}>
+				{/* Subtle dot grid texture */}
+				<div className="absolute inset-0 pointer-events-none" style={{
+					backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)',
+					backgroundSize: '18px 18px',
+				}} />
+				<div className="relative z-10 container mx-auto px-6 max-w-[1100px] flex flex-col md:flex-row items-center justify-between gap-8">
+					<div className="max-w-xl">
+						<div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest" style={{ backgroundColor: 'rgba(72,204,188,0.15)', color: '#48ccbc' }}>
+							<span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#48ccbc' }} />
+							Coming Soon — Early Access
 						</div>
-
-						{/* Right — stat card */}
-						<div className="relative">
-							<div className="bg-gradient-to-br from-[#0B4F96] to-[#48ccbc] rounded-2xl p-8 text-white shadow-2xl">
-								<div className="space-y-5">
-									<div className="bg-white/10 backdrop-blur rounded-lg p-5">
-										<div className="flex items-center gap-4">
-											<div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center">
-												<ShieldCheck className="h-5 w-5" />
-											</div>
-											<div>
-												<div className="font-bold text-lg">100+</div>
-												<div className="text-sm text-white/80">MA Referral Sources</div>
-											</div>
-										</div>
-									</div>
-									<div className="bg-white/10 backdrop-blur rounded-lg p-5">
-										<div className="flex items-center gap-4">
-											<div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center">
-												<TrendingUp className="h-5 w-5" />
-											</div>
-											<div>
-												<div className="font-bold text-lg">Realtime</div>
-												<div className="text-sm text-white/80">Credential Tracking</div>
-											</div>
-										</div>
-									</div>
-									<div className="bg-white/10 backdrop-blur rounded-lg p-5">
-										<div className="flex items-center gap-4">
-											<div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center">
-												<CheckCircle className="h-5 w-5" />
-											</div>
-											<div>
-												<div className="font-bold text-lg">98%</div>
-												<div className="text-sm text-white/80">Satisfaction Rate</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
+						<h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4 leading-snug">
+							Your staff credentials shouldn&apos;t live in a spreadsheet.
+						</h2>
+						<p className="text-blue-200 text-base leading-relaxed">
+							Credential Tracker automatically reads CPR cards, nursing licenses, BCI checks, and more — extracting expiry dates the moment you upload. Your team gets email reminders at 30 and 7 days before anything lapses, and you get a live compliance dashboard showing exactly where your agency stands. No more chasing documents the night before a survey.
+						</p>
+					</div>
+					<div className="flex-shrink-0">
+						<Link
+							href="/tools/credential-tracker"
+							className="inline-flex items-center gap-2 px-7 py-4 rounded-xl font-bold text-sm transition-opacity hover:opacity-90"
+							style={{ backgroundColor: '#48ccbc', color: 'white' }}
+						>
+							See How It Works <ArrowRight className="w-4 h-4" />
+						</Link>
 					</div>
 				</div>
 			</section>
 
-			{/* CTA Section */}
-			<section className="py-20 bg-gradient-to-r from-[#0B4F96] to-[#48ccbc] text-white">
-				<div className="container mx-auto px-6 max-w-[1200px]">
-					<div className="max-w-3xl mx-auto text-center">
-						<h2 className="text-3xl md:text-4xl font-bold mb-5">
-							Ready to get compliant and stay there?
+			{/* ── 4. Memberships Section ── */}
+			<section className="pt-10 pb-16 md:pt-12 md:pb-24" style={{ backgroundColor: '#f4f6f8' }}>
+				<div className="container mx-auto px-6 max-w-[1100px]">
+					<AnimatedSection animation="fade-up" className="text-center mb-12">
+						<p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: '#48ccbc' }}>Memberships</p>
+						<h2 className="text-3xl md:text-4xl font-bold mb-3" style={{ color: '#0b4f96' }}>
+							Find the Perfect Plan for Your Agency
 						</h2>
-						<p className="text-lg text-white/90 mb-8">
-							Join home-care agencies across Massachusetts using Mastering HomeCare to
-							track credentials, source referrals, and answer any intake question
-							instantly.
+						<p className="text-gray-500 text-base max-w-xl mx-auto">
+							Whether you&apos;re just starting out or scaling an established agency, we have a tier for your stage.
 						</p>
-						<div className="flex flex-col sm:flex-row gap-4 justify-center">
-							<Link
-								href="/auth/signin"
-								className="bg-white text-[#0B4F96] px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl"
-							>
-								Create Free Account
-							</Link>
-							<Link
-								href="/knowledge-base"
-								className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-white hover:text-[#0B4F96] transition-all"
-							>
-								Browse the Directory
-							</Link>
-						</div>
+					</AnimatedSection>
+
+					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
+
+						{/* Free */}
+						<AnimatedSection animation="fade-up" delay={0} className="flex">
+							<div className="rounded-2xl bg-white p-7 flex flex-col w-full hover:-translate-y-1 transition-all duration-300" style={{ boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}>
+								<div className="mb-5">
+									<p className="text-base font-bold mb-1" style={{ color: '#0b4f96' }}>Free</p>
+									<p className="text-gray-400 text-xs leading-snug">Start exploring at no cost</p>
+								</div>
+								<div className="mb-5">
+									<span className="text-3xl font-black" style={{ color: '#0b4f96' }}>$0</span>
+									<span className="text-gray-400 text-xs ml-1">/ month</span>
+								</div>
+								<Link href="/auth/signup" className="block text-center py-2.5 rounded-xl font-semibold text-sm border-2 transition-all hover:bg-gray-50 mb-5" style={{ borderColor: '#0b4f96', color: '#0b4f96' }}>
+									Sign Up →
+								</Link>
+								<div className="border-t border-gray-100 pt-5 flex-1">
+									<ul className="space-y-2.5 text-sm text-gray-600">
+										{[
+											'Resource Map access',
+											'Marketplace browsing',
+											'Community updates',
+											'Up to 3 staff members',
+										].map(f => (
+											<li key={f} className="flex items-start gap-2">
+												<span className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: '#48ccbc20', color: '#48ccbc' }}>
+													<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+												</span>
+												{f}
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+						</AnimatedSection>
+
+						{/* Silver */}
+						<AnimatedSection animation="fade-up" delay={80} className="flex">
+							<div className="rounded-2xl bg-white p-7 flex flex-col w-full hover:-translate-y-1 transition-all duration-300" style={{ boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}>
+								<div className="mb-5">
+									<p className="text-base font-bold mb-1" style={{ color: '#0b4f96' }}>Silver</p>
+									<p className="text-gray-400 text-xs leading-snug">Essential tools for home care startups</p>
+								</div>
+								<div className="mb-5">
+									<span className="text-3xl font-black" style={{ color: '#0b4f96' }}>$29</span>
+									<span className="text-gray-400 text-xs ml-1">/ month</span>
+								</div>
+								<Link href="/auth/signup" className="block text-center py-2.5 rounded-xl font-semibold text-sm border-2 transition-all hover:bg-gray-50 mb-5" style={{ borderColor: '#0b4f96', color: '#0b4f96' }}>
+									Sign Up →
+								</Link>
+								<div className="border-t border-gray-100 pt-5 flex-1">
+									<ul className="space-y-2.5 text-sm text-gray-600">
+										{[
+											'Everything in Free',
+											'Business planning templates',
+											'Licensing & registration guide',
+											'Up to 10 staff members',
+											'Basic credential tracking',
+										].map(f => (
+											<li key={f} className="flex items-start gap-2">
+												<span className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: '#48ccbc20', color: '#48ccbc' }}>
+													<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+												</span>
+												{f}
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+						</AnimatedSection>
+
+						{/* Gold — featured */}
+						<AnimatedSection animation="fade-up" delay={160} className="flex">
+							<div className="rounded-2xl p-7 flex flex-col w-full relative hover:-translate-y-1 transition-all duration-300" style={{ backgroundColor: '#e8faf7', border: '2px solid #48ccbc', boxShadow: '0 8px 40px rgba(72,204,188,0.22)' }}>
+								<div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: '#48ccbc', color: 'white' }}>MOST POPULAR</div>
+								<div className="mb-5">
+									<p className="text-base font-bold mb-1" style={{ color: '#0b4f96' }}>Gold</p>
+									<p className="text-gray-500 text-xs leading-snug">Comprehensive resources for growing agencies</p>
+								</div>
+								<div className="mb-5">
+									<span className="text-3xl font-black" style={{ color: '#0b4f96' }}>$79</span>
+									<span className="text-gray-500 text-xs ml-1">/ month</span>
+								</div>
+								<Link href="/auth/signup" className="block text-center py-2.5 rounded-xl font-bold text-sm transition-all hover:opacity-90 mb-5" style={{ backgroundColor: '#48ccbc', color: 'white' }}>
+									Sign Up →
+								</Link>
+								<div className="border-t pt-5 flex-1" style={{ borderColor: '#48ccbc40' }}>
+									<ul className="space-y-2.5 text-xs text-gray-700">
+										{[
+											'Everything in Silver',
+											'Policy & procedure samples',
+											'Marketing toolkit & templates',
+											'Up to 30 staff members',
+											'AI credential parsing & alerts',
+										].map(f => (
+											<li key={f} className="flex items-start gap-2">
+												<span className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: '#48ccbc30', color: '#48ccbc' }}>
+													<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+												</span>
+												{f}
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+						</AnimatedSection>
+
+						{/* Premium */}
+						<AnimatedSection animation="fade-up" delay={240} className="flex">
+							<div className="rounded-2xl bg-white p-7 flex flex-col w-full hover:-translate-y-1 transition-all duration-300" style={{ boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}>
+								<div className="mb-5">
+									<p className="text-base font-bold mb-1" style={{ color: '#0b4f96' }}>Premium</p>
+									<p className="text-gray-400 text-xs leading-snug">All-in-one toolkit with expert guidance</p>
+								</div>
+								<div className="mb-5">
+									<span className="text-3xl font-black" style={{ color: '#0b4f96' }}>$149</span>
+									<span className="text-gray-400 text-xs ml-1">/ month</span>
+								</div>
+								<Link href="/auth/signup" className="block text-center py-2.5 rounded-xl font-semibold text-sm border-2 transition-all hover:bg-gray-50 mb-5" style={{ borderColor: '#0b4f96', color: '#0b4f96' }}>
+									Sign Up →
+								</Link>
+								<div className="border-t border-gray-100 pt-5 flex-1">
+									<ul className="space-y-2.5 text-sm text-gray-600">
+										{[
+											'Everything in Gold',
+											'Unlimited staff members',
+											'1:1 startup consultation (30 min)',
+											'Dedicated onboarding support',
+											'Priority support & early access',
+										].map(f => (
+											<li key={f} className="flex items-start gap-2">
+												<span className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: '#e07b2a18', color: '#e07b2a' }}>
+													<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+												</span>
+												{f}
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+						</AnimatedSection>
+
 					</div>
+
+					{/* Trust strip */}
+					<AnimatedSection animation="fade-in" delay={400}>
+						<div className="flex flex-wrap items-center justify-center gap-6 mt-10">
+							{['Free plan always available', 'Cancel anytime', 'HIPAA-aware platform', '30-day money-back guarantee'].map(t => (
+								<span key={t} className="flex items-center gap-1.5 text-sm text-gray-500">
+									<span className="font-bold" style={{ color: '#48ccbc' }}>✓</span> {t}
+								</span>
+							))}
+						</div>
+					</AnimatedSection>
+				</div>
+			</section>
+
+			{/* ── 5. Newsletter Section ── */}
+			<section className="py-16 md:py-20 relative overflow-hidden" style={{ backgroundColor: '#f7f5f0' }}>
+				{/* Dot grid background */}
+				<div className="absolute inset-0 pointer-events-none" style={{
+					backgroundImage: 'radial-gradient(circle, #d1cfc8 1px, transparent 1px)',
+					backgroundSize: '20px 20px',
+					opacity: 0.5,
+				}} />
+				<div className="relative z-10 container mx-auto px-6 max-w-[640px] text-center">
+					<p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: '#3da777' }}>Stay in the loop</p>
+					<h2 className="text-2xl md:text-3xl font-bold mb-4 leading-snug" style={{ color: "#0b4f96" }}>
+						Get the latest news in home care — straight to your inbox.
+					</h2>
+					<p className="text-gray-500 mb-8 leading-relaxed text-sm">
+						Business insights, regulatory updates, and agency growth tips for home health, hospice, and AFC providers.
+					</p>
+
+					{subscribed ? (
+						<div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 rounded-xl px-6 py-4 text-sm font-medium">
+							✓ You&apos;re subscribed! Check your inbox soon.
+						</div>
+					) : (
+						<form
+							onSubmit={handleSubscribe}
+							className="flex flex-col sm:flex-row gap-3 justify-center"
+						>
+							<input
+								type="email"
+								required
+								placeholder="Enter your email address"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								className="flex-1 border border-gray-200 rounded-xl px-5 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3da777]/40 focus:border-[#3da777] min-w-0 shadow-sm"
+							/>
+							<button
+								type="submit"
+								className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90 whitespace-nowrap shadow-sm"
+								style={{ backgroundColor: "#3da777" }}
+							>
+								Subscribe Today
+							</button>
+						</form>
+					)}
 				</div>
 			</section>
 		</div>

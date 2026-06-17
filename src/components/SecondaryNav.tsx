@@ -37,7 +37,7 @@ export default function SecondaryNav() {
 
   // Check if we're on a directory-related page
   const isDirectoryPage =
-    pathname?.startsWith('/knowledge-base') ||
+    pathname?.startsWith('/resources/knowledge-base') ||
     pathname === '/directory' ||
     pathname?.startsWith('/directory/');
 
@@ -98,14 +98,14 @@ export default function SecondaryNav() {
             {isDirectoryPage && (
               <>
                 <Link
-                  href="/knowledge-base"
+                  href="/resources/knowledge-base"
                   className={`text-sm hover:text-[#48ccbc] transition-colors ${
-                    pathname?.startsWith('/knowledge-base')
+                    pathname?.startsWith('/resources/knowledge-base')
                       ? 'text-[#0B4F96] font-medium border-b-2 border-[#0B4F96] pb-1'
                       : 'text-gray-600'
                   }`}
                 >
-                  Directory
+                  Referral Directory
                 </Link>
                 {/* Show Directory Admin link for platform admins only */}
                 {isPlatformAdmin && (

@@ -13,6 +13,7 @@ export default function SignInForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,7 +35,6 @@ export default function SignInForm() {
       }
 
       if (result?.ok) {
-        // Successful login - redirect to callback URL
         router.push(callbackUrl);
         router.refresh();
       }
@@ -45,8 +45,8 @@ export default function SignInForm() {
   };
 
   return (
-    <div className="w-full max-w-md">
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="w-full">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {/* Error Message */}
         {error && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
@@ -68,7 +68,7 @@ export default function SignInForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4F96] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0b4f96] focus:border-transparent"
               placeholder="you@agency.com"
               disabled={loading}
             />
@@ -88,7 +88,7 @@ export default function SignInForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4F96] focus:border-transparent"
+              className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0b4f96] focus:border-transparent"
               placeholder="Enter your password"
               disabled={loading}
             />
@@ -103,11 +103,21 @@ export default function SignInForm() {
           </div>
         </div>
 
-        {/* Forgot Password Link */}
-        <div className="flex items-center justify-end">
+        {/* Remember Me + Forgot Password */}
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              id="rememberMe"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-[#3da777] focus:ring-[#3da777] accent-[#3da777]"
+            />
+            <span className="text-sm text-gray-600">Remember me</span>
+          </label>
           <a
             href="/auth/forgot-password"
-            className="text-sm text-[#0B4F96] hover:text-[#48ccbc] font-semibold"
+            className="text-sm text-[#0b4f96] hover:text-[#48ccbc] font-semibold"
           >
             Forgot password?
           </a>
@@ -117,7 +127,7 @@ export default function SignInForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-[#0B4F96] text-white rounded-lg font-bold hover:bg-[#0a4280] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full py-3 bg-[#3da777] text-white rounded-full font-semibold hover:bg-[#35946a] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
@@ -128,7 +138,6 @@ export default function SignInForm() {
             'Sign In'
           )}
         </button>
-
       </form>
     </div>
   );

@@ -529,7 +529,7 @@ export default function DirectoryChatbot() {
 														{msg.sources.map((s) => (
 															<Link
 																key={s.slug}
-																href={`/knowledge-base/${s.slug}`}
+																href={`/resources/knowledge-base/${s.slug}`}
 																className="flex items-center gap-1 text-xs text-[#0B4F96] hover:underline"
 															>
 																<ExternalLink className="w-3 h-3 flex-shrink-0" />

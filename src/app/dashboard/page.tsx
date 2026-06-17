@@ -402,7 +402,7 @@ function AdminDashboard() {
 					</span>
 				</Link>
 				<Link
-					href="/knowledge-base"
+					href="/resources/knowledge-base"
 					className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow group"
 				>
 					<Search className="h-7 w-7 text-[#48ccbc] mb-3" />
@@ -719,7 +719,7 @@ function AgencyDashboard({
 					</Link>
 				)}
 				<Link
-					href="/knowledge-base"
+					href="/resources/knowledge-base"
 					className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow group"
 				>
 					<Search className="h-8 w-8 text-purple-600 mb-3" />

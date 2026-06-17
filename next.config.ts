@@ -51,6 +51,29 @@ const nextConfig: NextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  // Redirects for renamed/moved routes
+  redirects: async () => [
+    {
+      source: '/knowledge-base',
+      destination: '/resources/knowledge-base',
+      permanent: true,
+    },
+    {
+      source: '/knowledge-base/:path*',
+      destination: '/resources/knowledge-base/:path*',
+      permanent: true,
+    },
+    {
+      source: '/pricing',
+      destination: '/memberships',
+      permanent: false,
+    },
+    {
+      source: '/directory',
+      destination: '/resources/knowledge-base',
+      permanent: true,
+    },
+  ],
   // Security headers
   headers: async () => [
     {

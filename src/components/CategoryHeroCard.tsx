@@ -70,7 +70,7 @@ export default function CategoryHeroCard({
         </div>
 
         {/* Title */}
-        <Link href={`/knowledge-base/${slug}`}>
+        <Link href={`/resources/knowledge-base/${slug}`}>
           <h3
             className="text-2xl md:text-3xl font-bold mb-4 hover:underline"
             style={{ color: color?.dark || '#1E40AF' }}
@@ -88,7 +88,7 @@ export default function CategoryHeroCard({
 
         {/* CTA */}
         <Link
-          href={`/knowledge-base/${slug}`}
+          href={`/resources/knowledge-base/${slug}`}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all hover:gap-3 shadow-md hover:shadow-lg"
           style={{
             backgroundColor: color?.base || '#2563EB',

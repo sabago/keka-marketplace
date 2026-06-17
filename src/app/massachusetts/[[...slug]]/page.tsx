@@ -23,7 +23,7 @@ export default async function MassachusettsRedirectPage({ params }: PageProps) {
 
   // If no slug, redirect to main knowledge base
   if (slug.length === 0) {
-    redirect('/knowledge-base');
+    redirect('/resources/knowledge-base');
   }
 
   // If it's [category]/overview, try to find the category overview article
@@ -45,13 +45,13 @@ export default async function MassachusettsRedirectPage({ params }: PageProps) {
       });
 
       if (overviewArticle) {
-        redirect(`/knowledge-base/${overviewArticle.slug}`);
+        redirect(`/resources/knowledge-base/${overviewArticle.slug}`);
       }
     }
 
     // If no specific overview found, redirect to category view
     if (categorySlug) {
-      redirect(`/knowledge-base?category=${categorySlug}`);
+      redirect(`/resources/knowledge-base?category=${categorySlug}`);
     }
   }
 
@@ -71,7 +71,7 @@ export default async function MassachusettsRedirectPage({ params }: PageProps) {
     });
 
     if (article) {
-      redirect(`/knowledge-base/${article.slug}`);
+      redirect(`/resources/knowledge-base/${article.slug}`);
     }
   }
 
@@ -81,10 +81,10 @@ export default async function MassachusettsRedirectPage({ params }: PageProps) {
     const categorySlug = categoryFolderMap[categoryFolder];
 
     if (categorySlug) {
-      redirect(`/knowledge-base?category=${categorySlug}`);
+      redirect(`/resources/knowledge-base?category=${categorySlug}`);
     }
   }
 
   // If nothing matched, redirect to main knowledge base
-  redirect('/knowledge-base');
+  redirect('/resources/knowledge-base');
 }

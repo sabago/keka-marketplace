@@ -34,7 +34,7 @@ export default function KnowledgeBaseListItem({
   const color = getCategoryColor(category ?? null);
 
   return (
-    <Link href={`/knowledge-base/${slug}`}>
+    <Link href={`/resources/knowledge-base/${slug}`}>
       <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all p-5 cursor-pointer border-l-4 border-r border-t border-b border-gray-200 hover:bg-gray-50 hover:shadow-lg"
         style={{
           borderLeftColor: color.base,

@@ -120,7 +120,7 @@ export default function AIRecommendations() {
             </div>
 
             <Link
-              href={`/knowledge-base/${rec.slug}`}
+              href={`/resources/knowledge-base/${rec.slug}`}
               className="inline-flex items-center text-[#0B4F96] hover:text-[#48ccbc] font-medium text-sm transition-colors"
             >
               View Guide
@@ -132,7 +132,7 @@ export default function AIRecommendations() {
 
       <div className="mt-6 text-center">
         <Link
-          href="/knowledge-base"
+          href="/resources/knowledge-base"
           className="text-sm text-gray-600 hover:text-[#0B4F96] transition-colors"
         >
           Browse all referral sources

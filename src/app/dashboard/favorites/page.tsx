@@ -200,7 +200,7 @@ export default function FavoritesPage() {
               </span>
             ) : (
               <Link
-                href="/knowledge-base"
+                href="/resources/knowledge-base"
                 className="inline-flex items-center px-6 py-3 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors"
               >
                 Browse Knowledge Base
@@ -296,7 +296,7 @@ export default function FavoritesPage() {
                   <div className="p-6 pt-4 bg-gray-50 border-t border-gray-200">
                     <div className="flex space-x-3">
                       <Link
-                        href={`/knowledge-base/${favorite.articleSlug}`}
+                        href={`/resources/knowledge-base/${favorite.articleSlug}`}
                         className="flex-1 flex items-center justify-center px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#48ccbc] transition-colors text-sm font-medium"
                       >
                         View Guide
@@ -325,7 +325,7 @@ export default function FavoritesPage() {
                   </p>
                 </div>
                 <Link
-                  href="/knowledge-base"
+                  href="/resources/knowledge-base"
                   className="flex items-center text-[#0B4F96] hover:text-[#48ccbc] font-medium"
                 >
                   Add More Favorites

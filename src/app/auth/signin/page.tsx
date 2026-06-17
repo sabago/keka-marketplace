@@ -1,23 +1,34 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import SignInForm from "@/components/SignInForm";
-import { LogIn } from "lucide-react";
 
 export default function SignInPage() {
 	return (
-		<div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-4 py-12">
+		<div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center px-4 py-12">
 			<div className="w-full max-w-md">
-				{/* Logo/Brand Section */}
-				<div className="text-center mb-8">
-					<div className="inline-flex items-center justify-center w-16 h-16 bg-[#0B4F96] rounded-full mb-4">
-						<LogIn className="w-8 h-8 text-white" />
+				{/* Sign In Card */}
+				<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-6">
+					{/* Logo + Heading */}
+					<div className="text-center mb-8">
+						<div className="flex justify-center mb-5">
+							<Image
+								src="/images/logo-full.png"
+								alt="Mastering HomeCare"
+								height={48}
+								width={200}
+								className="h-12 w-auto"
+								priority
+							/>
+						</div>
+						<h1 className="text-2xl font-bold text-[#0b4f96] mb-2">
+							Welcome to Mastering Home Care
+						</h1>
+						<p className="text-gray-500 text-sm">
+							Please enter your email and password to sign in
+						</p>
 					</div>
-					<h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-					<p className="text-gray-600">Sign in to your account</p>
-				</div>
 
-				{/* Sign In Form Card */}
-				<div className="bg-white rounded-lg shadow-lg p-8 border border-gray-200 mb-6">
 					<Suspense
 						fallback={<div className="h-64 animate-pulse bg-gray-100 rounded-lg" />}
 					>
@@ -25,43 +36,43 @@ export default function SignInPage() {
 					</Suspense>
 				</div>
 
-				{/* Request Access Link */}
-				<div className="text-center">
+				{/* Join Community Link */}
+				<div className="text-center mb-6">
 					<p className="text-gray-600 text-sm">
-						Want to register your agency?{" "}
+						New to Mastering HomeCare?{" "}
 						<Link
-							href="/request-access"
-							className="text-[#0B4F96] hover:text-[#48ccbc] font-semibold"
+							href="/community"
+							className="text-[#0b4f96] hover:text-[#48ccbc] font-semibold"
 						>
-							Request access
+							Join our community
 						</Link>
 					</p>
 				</div>
 
 				{/* Additional Links */}
-				<div className="mt-8 pt-8 border-t border-gray-200 text-center space-y-2">
+				<div className="pt-6 border-t border-gray-200 text-center space-y-2">
 					<p className="text-sm text-gray-600">
 						<Link
 							href="/pricing"
-							className="text-[#0B4F96] hover:text-[#48ccbc] font-semibold"
+							className="text-[#0b4f96] hover:text-[#48ccbc] font-semibold"
 						>
 							View Pricing
 						</Link>
 						{" • "}
 						<Link
-							href="/knowledge-base"
-							className="text-[#0B4F96] hover:text-[#48ccbc] font-semibold"
+							href="/resources/knowledge-base"
+							className="text-[#0b4f96] hover:text-[#48ccbc] font-semibold"
 						>
 							Browse Directory
 						</Link>
 					</p>
 					<p className="text-xs text-gray-500">
 						By signing in, you agree to our{" "}
-						<Link href="/terms" className="underline hover:text-[#0B4F96]">
+						<Link href="/terms" className="underline hover:text-[#0b4f96]">
 							Terms of Service
 						</Link>{" "}
 						and{" "}
-						<Link href="/privacy" className="underline hover:text-[#0B4F96]">
+						<Link href="/privacy" className="underline hover:text-[#0b4f96]">
 							Privacy Policy
 						</Link>
 					</p>

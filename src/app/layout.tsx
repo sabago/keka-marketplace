@@ -4,7 +4,6 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import DirectoryChatbot from "@/components/DirectoryChatbot";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -35,7 +34,6 @@ export default function RootLayout({
 					<Header />
 					<main className="flex-grow">{children}</main>
 					<Footer />
-					<DirectoryChatbot />
 				</Providers>
 			</body>
 		</html>

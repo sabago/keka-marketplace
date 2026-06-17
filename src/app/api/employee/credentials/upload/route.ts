@@ -118,19 +118,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check credential upload limit (FREE plan: 10 lifetime uploads)
-    const credCheck = await canUploadCredential(employee.agencyId);
-    if (!credCheck.canUpload) {
-      return NextResponse.json(
-        {
-          error: 'CREDENTIAL_LIMIT_REACHED',
-          message: `Your free trial includes ${credCheck.limit} credential document uploads. You've used all ${credCheck.currentCount}. Upgrade to Pro for unlimited credential tracking.`,
-          currentCount: credCheck.currentCount,
-          limit: credCheck.limit,
-        },
-        { status: 403 }
-      );
-    }
+    // TODO: re-enable plan gating when subscription enforcement is restored
+    // const credCheck = await canUploadCredential(employee.agencyId);
+    // if (!credCheck.canUpload) { ... }
 
     // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();

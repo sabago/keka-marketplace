@@ -64,6 +64,15 @@ export const categoryColors: Record<string, CategoryColor> = {
   },
 };
 
+// Slugs hidden from the directory — unskilled/personal-care categories not relevant
+// for skilled-care agencies. Re-enable by moving entries back into `categories`.
+export const HIDDEN_CATEGORY_SLUGS: string[] = [
+  'aging-services-access-points',   // MassHealth personal care / homemaker (unskilled)
+  'aging-programs-coas-geriatrics', // COAs / PACE — personal care referrals (unskilled)
+  'veteran-military',               // Mixed skilled+unskilled — hiding until skilled-only content is separated
+  'community-consumer-platforms',   // Care.com, A Place for Mom — private pay personal care (unskilled)
+];
+
 // Category definitions
 export const categories: Category[] = [
   {
@@ -75,24 +84,24 @@ export const categories: Category[] = [
     color: categoryColors['hospitals-health-systems'],
     order: 1,
   },
-  {
-    id: '2',
-    name: 'Aging Services Access Points',
-    slug: 'aging-services-access-points',
-    description: 'State-funded ASAPs, MassHealth, and aging services programs',
-    icon: Users,
-    color: categoryColors['aging-services-access-points'],
-    order: 2,
-  },
-  {
-    id: '3',
-    name: 'Aging Programs & COAs',
-    slug: 'aging-programs-coas-geriatrics',
-    description: 'Councils on Aging, PACE programs, and local senior services',
-    icon: Heart,
-    color: categoryColors['aging-programs-coas-geriatrics'],
-    order: 3,
-  },
+  // {
+  //   id: '2',
+  //   name: 'Aging Services Access Points',
+  //   slug: 'aging-services-access-points',
+  //   description: 'State-funded ASAPs, MassHealth, and aging services programs',
+  //   icon: Users,
+  //   color: categoryColors['aging-services-access-points'],
+  //   order: 2,
+  // },
+  // {
+  //   id: '3',
+  //   name: 'Aging Programs & COAs',
+  //   slug: 'aging-programs-coas-geriatrics',
+  //   description: 'Councils on Aging, PACE programs, and local senior services',
+  //   icon: Heart,
+  //   color: categoryColors['aging-programs-coas-geriatrics'],
+  //   order: 3,
+  // },
   {
     id: '4',
     name: 'Insurance & Health Plans',
@@ -111,24 +120,24 @@ export const categories: Category[] = [
     color: categoryColors['mcos-acos'],
     order: 5,
   },
-  {
-    id: '6',
-    name: 'Veteran & Military',
-    slug: 'veteran-military',
-    description: 'VA healthcare systems and veteran benefit programs',
-    icon: Flag,
-    color: categoryColors['veteran-military'],
-    order: 6,
-  },
-  {
-    id: '7',
-    name: 'Community & Consumer Platforms',
-    slug: 'community-consumer-platforms',
-    description: 'Consumer platforms, professional partnerships, and community networks',
-    icon: Network,
-    color: categoryColors['community-consumer-platforms'],
-    order: 7,
-  },
+  // {
+  //   id: '6',
+  //   name: 'Veteran & Military',
+  //   slug: 'veteran-military',
+  //   description: 'VA healthcare systems and veteran benefit programs',
+  //   icon: Flag,
+  //   color: categoryColors['veteran-military'],
+  //   order: 6,
+  // },
+  // {
+  //   id: '7',
+  //   name: 'Community & Consumer Platforms',
+  //   slug: 'community-consumer-platforms',
+  //   description: 'Consumer platforms, professional partnerships, and community networks',
+  //   icon: Network,
+  //   color: categoryColors['community-consumer-platforms'],
+  //   order: 7,
+  // },
 ];
 
 // Helper functions
