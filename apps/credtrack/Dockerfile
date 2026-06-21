@@ -41,7 +41,7 @@ COPY --from=deps /app/packages/credential-core/node_modules ./packages/credentia
 
 COPY . .
 
-RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=1 ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
