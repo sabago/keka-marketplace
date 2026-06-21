@@ -1,13 +1,13 @@
 #!/bin/sh
 set -e
 
-echo "Starting CredTrack deployment..."
+echo "Starting CredTrack..."
 
 export PORT=${PORT:-3000}
 export HOSTNAME="0.0.0.0"
 
 echo "Generating Prisma Client..."
-./node_modules/.bin/prisma generate
+node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 echo "Waiting for database..."
 DB_HOST="${PGHOST:-localhost}"
@@ -19,7 +19,7 @@ done
 echo "Database ready."
 
 # CredTrack does NOT run migrations — MHC owns schema migrations.
-# Both apps share the same DB; MHC's entrypoint runs `prisma migrate deploy`.
+# Both apps share the same DB; MHC's entrypoint runs prisma migrate deploy.
 
 echo "Starting Next.js on $HOSTNAME:$PORT..."
 exec node apps/credtrack/server.js

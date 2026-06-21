@@ -1,28 +1,32 @@
 # Dockerfile for apps/mhc
-# Build context: monorepo root (docker build -f apps/mhc/Dockerfile .)
+# Build context must be monorepo root:
+#   docker build -f apps/mhc/Dockerfile .
 
 # ── Stage 1: Dependencies ──────────────────────────────────────────────────────
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-# Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Copy workspace manifests
+# Copy workspace manifests only (layer-cache friendly)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/mhc/package.json ./apps/mhc/
 COPY apps/credtrack/package.json ./apps/credtrack/
 COPY packages/db/package.json ./packages/db/
 COPY packages/credential-core/package.json ./packages/credential-core/
 
-# Copy prisma schema (needed for postinstall prisma generate)
+# Copy prisma schema so postinstall can reference it (but skip running it)
 COPY prisma ./prisma
 
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts prevents packages/db postinstall from trying to run
+# `prisma generate` during install (it fails in frozen-lockfile mode).
+# We run `prisma generate` explicitly in the builder stage instead.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 2: Builder ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
@@ -30,16 +34,23 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 ARG DATABASE_URL=postgresql://postgres:postgres@postgres:5432/marketplace_docker
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
+# Copy installed node_modules from deps stage (root + per-app)
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/mhc/node_modules ./apps/mhc/node_modules
+COPY --from=deps /app/apps/credtrack/node_modules ./apps/credtrack/node_modules
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules 2>/dev/null || true
+COPY --from=deps /app/packages/credential-core/node_modules ./packages/credential-core/node_modules 2>/dev/null || true
+
+# Copy full source
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma client now that full source + node_modules are present
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=${DATABASE_URL}
+ENV SKIP_ENV_VALIDATION=1
 
 RUN pnpm --filter @mhc/app build
 
@@ -51,23 +62,26 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN apk add --no-cache postgresql-client curl poppler-utils
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Copy built app
+# Next.js standalone output — with monorepo, server.js lands at:
+#   apps/mhc/.next/standalone/apps/mhc/server.js
+# The standalone folder is self-contained with its own node_modules.
 COPY --from=builder /app/apps/mhc/.next/standalone ./
 COPY --from=builder /app/apps/mhc/.next/static ./apps/mhc/.next/static
 COPY --from=builder /app/apps/mhc/public ./apps/mhc/public
 
-# Copy prisma for migrations
+# Prisma schema + migrations for runtime `prisma migrate deploy`
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Copy scripts + content for import-content-to-db
-COPY --from=builder /app/scripts ./scripts
+# Scripts + content for background import job
+COPY --from=builder /app/apps/mhc/scripts ./apps/mhc/scripts
 COPY --from=builder /app/apps/mhc/src/content ./apps/mhc/src/content
 COPY --from=builder /app/apps/mhc/src/lib ./apps/mhc/src/lib
-
-RUN npm install -g tsx
+COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
 
 COPY apps/mhc/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
