@@ -19,6 +19,9 @@ COPY packages/credential-core/package.json ./packages/credential-core/
 # Copy prisma schema so postinstall can reference it (but skip running it)
 COPY prisma ./prisma
 
+# Ensure package-level node_modules dirs exist so builder COPY steps never fail
+RUN mkdir -p packages/db/node_modules packages/credential-core/node_modules
+
 # --ignore-scripts prevents packages/db postinstall from trying to run
 # `prisma generate` during install (it fails in frozen-lockfile mode).
 # We run `prisma generate` explicitly in the builder stage instead.
@@ -38,8 +41,8 @@ ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/mhc/node_modules ./apps/mhc/node_modules
 COPY --from=deps /app/apps/credtrack/node_modules ./apps/credtrack/node_modules
-COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/credential-core/node_modules ./packages/credential-core/node_modules 2>/dev/null || true
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=deps /app/packages/credential-core/node_modules ./packages/credential-core/node_modules
 
 # Copy full source
 COPY . .
