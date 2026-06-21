@@ -1,0 +1,121 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import DocumentUpload from '@/components/documents/DocumentUpload';
+import type { CredTrackPlan } from '@/types/next-auth';
+
+const AI_PLANS: CredTrackPlan[] = ['GROWTH', 'ENTERPRISE', 'BUNDLED'];
+
+export default function UploadCredentialPage() {
+  const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
+  const [staffRecordId, setStaffRecordId] = useState<string | null>(null);
+  const [documentTypes, setDocumentTypes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const canUseAI = session?.user?.credtrackPlan
+    ? AI_PLANS.includes(session.user.credtrackPlan as CredTrackPlan)
+    : true;
+
+  useEffect(() => {
+    if (sessionStatus === 'loading') return;
+    if (!session) { router.push('/auth/signin'); return; }
+
+    fetch('/api/employee/document-types')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setStaffRecordId(data.staffRecordId);
+        setDocumentTypes(data.documentTypes ?? []);
+      })
+      .catch((e) => setError(e.message || 'Failed to load document types'))
+      .finally(() => setLoading(false));
+  }, [session, sessionStatus]);
+
+  if (sessionStatus === 'loading' || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-10 w-10 text-[#0B4F96] animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg border border-red-200 p-8 max-w-md text-center">
+          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
+          <p className="text-gray-800 font-medium mb-4">{error}</p>
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#083d75]"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg border border-green-200 p-8 max-w-md text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Credential Uploaded</h2>
+          <p className="text-gray-600 mb-6">Your document has been submitted for review.</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => setDone(false)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            >
+              Upload Another
+            </button>
+            <button
+              onClick={() => router.push('/my-credentials')}
+              className="px-4 py-2 bg-[#0B4F96] text-white rounded-lg hover:bg-[#083d75]"
+            >
+              View My Credentials
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">Upload Credential</h1>
+        <p className="text-gray-600 mb-8">Upload your professional licenses and certifications</p>
+
+        {staffRecordId && (
+          <DocumentUpload
+            staffRecordId={staffRecordId}
+            documentTypes={documentTypes}
+            canUseAI={canUseAI}
+            onSuccess={() => setDone(true)}
+            onClose={() => router.back()}
+            inline
+          />
+        )}
+      </div>
+    </div>
+  );
+}

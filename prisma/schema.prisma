@@ -10,6 +10,21 @@ generator client {
   output        = "../node_modules/.prisma/client"
 }
 
+// Generate real client into packages/db so webpack finds it (not just the pnpm stub)
+generator clientForPackagesDb {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "linux-musl-openssl-3.0.x"]
+  output        = "../packages/db/node_modules/.prisma/client"
+}
+
+// pnpm installs @prisma/client@6.19.3 (for @next-auth/prisma-adapter) alongside 6.5.0.
+// Apps resolve to 6.19.3 at runtime — generate into that version's .prisma/client too.
+generator clientFor619 {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "linux-musl-openssl-3.0.x"]
+  output        = "../node_modules/.pnpm/@prisma+client@6.19.3_prisma@6.19.3_typescript@5.9.3__typescript@5.9.3/node_modules/.prisma/client"
+}
+
 datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
