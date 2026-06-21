@@ -7,6 +7,22 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "darwin", "linux-musl-openssl-3.0.x"]
+  output        = "../node_modules/.prisma/client"
+}
+
+// Generate real client into packages/db so webpack finds it (not just the pnpm stub)
+generator clientForPackagesDb {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "linux-musl-openssl-3.0.x"]
+  output        = "../packages/db/node_modules/.prisma/client"
+}
+
+// pnpm installs @prisma/client@6.19.3 (for @next-auth/prisma-adapter) alongside 6.5.0.
+// Apps resolve to 6.19.3 at runtime — generate into that version's .prisma/client too.
+generator clientFor619 {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "linux-musl-openssl-3.0.x"]
+  output        = "../node_modules/.pnpm/@prisma+client@6.19.3_prisma@6.19.3_typescript@5.9.3__typescript@5.9.3/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -274,6 +290,9 @@ model Agency {
   autoReminderEnabled   Boolean                   @default(true)
   reminderFrequency     AgencyReminderFrequency   @default(WEEKLY)
 
+  // Source app discriminator — "MHC" for platform agencies, "CREDTRACK" for standalone CredTrack orgs
+  sourceApp             String                    @default("MHC")
+
   // Relations
   users                 User[]
   chatbotQueries        ChatbotQuery[]
@@ -287,6 +306,7 @@ model Agency {
   credentialReminders   CredentialReminder[]
   complianceSnapshots   ComplianceSnapshot[]
   parsingJobs           CredentialParsingJob[]
+  credTrackSubscription CredTrackSubscription?
 
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
@@ -294,6 +314,7 @@ model Agency {
   @@index([stripeCustomerId])
   @@index([subscriptionPlan])
   @@index([approvalStatus])
+  @@index([sourceApp])
 }
 
 // NextAuth.js User Model
@@ -958,4 +979,38 @@ model CredentialParsingJob {
   @@index([agencyId, status])
   @@index([agencyId, status, processingCompletedAt])
   @@index([createdAt])
+}
+
+// ============================================================================
+// CREDTRACK STANDALONE APP MODELS
+// ============================================================================
+
+// Billing subscription for standalone CredTrack users.
+// MHC-native agencies (sourceApp = "MHC") with PRO/BUSINESS/ENTERPRISE plans
+// get CredTrack access via bundle detection — no row required here.
+// Only standalone CredTrack signups (sourceApp = "CREDTRACK") get a row.
+model CredTrackSubscription {
+  id                    String   @id @default(uuid())
+  agencyId              String   @unique
+  agency                Agency   @relation(fields: [agencyId], references: [id])
+
+  // Plan: STARTER | GROWTH | ENTERPRISE
+  plan                  String   @default("STARTER")
+  // Status: ACTIVE | CANCELED | PAST_DUE
+  status                String   @default("ACTIVE")
+
+  // Stripe billing
+  stripeCustomerId      String?  @unique
+  stripeSubscriptionId  String?  @unique
+
+  // Usage tracking (resets on billing period rollover)
+  aiParseUsedThisMonth  Int      @default(0)
+  billingPeriodEnd      DateTime
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([stripeCustomerId])
+  @@index([status])
 }
