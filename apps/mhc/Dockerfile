@@ -20,8 +20,11 @@ ENV SKIP_ENV_VALIDATION=1
 # Copy everything — prisma generate postinstall needs schema + source
 COPY . .
 
-# Full install with scripts enabled so prisma generate runs via postinstall
-RUN pnpm install --frozen-lockfile
+# Install without scripts — no postinstall hooks can run pnpm add under frozen lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Run prisma generate explicitly after install completes
+RUN node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 RUN pnpm --filter @mhc/app build
 
