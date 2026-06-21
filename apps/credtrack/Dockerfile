@@ -24,7 +24,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Run prisma generate explicitly after install completes
-RUN node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 RUN pnpm --filter @credtrack/app build
 
