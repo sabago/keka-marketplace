@@ -1,9 +1,6 @@
-# Root railway.toml — used by the MHC app service.
-# CredTrack uses apps/credtrack/railway.toml via its own Railway service config.
-
 [build]
 builder = "dockerfile"
-dockerfilePath = "apps/mhc/Dockerfile"
+dockerfilePath = "apps/credtrack/Dockerfile"
 
 [build.buildArgs]
 DATABASE_URL = "${{Postgres.DATABASE_URL}}"
