@@ -1,13 +1,10 @@
 #!/bin/sh
 set -e
 
-echo "Starting MHC deployment..."
+echo "Starting MHC..."
 
 export PORT=${PORT:-3000}
 export HOSTNAME="0.0.0.0"
-
-echo "Generating Prisma Client..."
-./node_modules/.bin/prisma generate
 
 echo "Waiting for database..."
 DB_HOST="${PGHOST:-localhost}"
@@ -19,12 +16,12 @@ done
 echo "Database ready."
 
 echo "Running migrations..."
-npx prisma migrate deploy
+node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma
 
-# Content import runs in background after server starts
+# Content import in background after server starts
 (
   echo "Importing knowledge base content..."
-  tsx scripts/import-content-to-db.ts || echo "Content import skipped or failed"
+  node_modules/.bin/tsx apps/mhc/scripts/import-content-to-db.ts || echo "Content import skipped or failed"
 ) &
 
 echo "Starting Next.js on $HOSTNAME:$PORT..."
