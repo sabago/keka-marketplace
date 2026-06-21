@@ -48,7 +48,7 @@ COPY --from=deps /app/packages/credential-core/node_modules ./packages/credentia
 COPY . .
 
 # Generate Prisma client now that full source + node_modules are present
-RUN npx prisma generate --schema=./prisma/schema.prisma
+RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
