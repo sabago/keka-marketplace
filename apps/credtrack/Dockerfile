@@ -16,6 +16,9 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/credential-core/package.json ./packages/credential-core/
 COPY prisma ./prisma
 
+# Ensure package-level node_modules dirs exist so builder COPY steps never fail
+RUN mkdir -p packages/db/node_modules packages/credential-core/node_modules
+
 # --ignore-scripts prevents packages/db postinstall from failing
 # under frozen-lockfile. prisma generate runs explicitly in builder stage.
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -33,8 +36,8 @@ ARG NEXT_PUBLIC_SITE_URL=http://localhost:3001
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/mhc/node_modules ./apps/mhc/node_modules
 COPY --from=deps /app/apps/credtrack/node_modules ./apps/credtrack/node_modules
-COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/credential-core/node_modules ./packages/credential-core/node_modules 2>/dev/null || true
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=deps /app/packages/credential-core/node_modules ./packages/credential-core/node_modules
 
 COPY . .
 
