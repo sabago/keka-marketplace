@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // Prevent webpack from bundling PDF/OCR packages — they use Node.js internals
   // (worker threads, fs, etc.) that break when processed by the RSC bundler.
   // These packages run only in server-side API routes, never in the browser.
-  serverExternalPackages: ['pdfjs-dist', 'pdf-parse', 'tesseract.js', 'canvas', 'jsdom', 'isomorphic-dompurify'],
+  serverExternalPackages: ['pdfjs-dist', 'pdf-parse', 'tesseract.js', 'canvas', 'jsdom', 'isomorphic-dompurify', '@prisma/client', '.prisma/client'],
   eslint: {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors.
