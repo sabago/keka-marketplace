@@ -1,7 +1,18 @@
-// Re-export the shared prisma singleton from @mhc/db.
-// All MHC code that imports from '@/lib/db' continues to work unchanged.
-export { prisma } from '@mhc/db';
-import { prisma } from '@mhc/db';
+import { PrismaClient } from '@prisma/client';
+import { getConnectionString } from './dbConfig';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+function createPrismaClient() {
+  return new PrismaClient({
+    datasources: { db: { url: getConnectionString() } },
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 // Helper functions for common database operations
 
