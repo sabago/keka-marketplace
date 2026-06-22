@@ -7,8 +7,6 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
-
 ARG DATABASE_URL=postgresql://postgres:postgres@postgres:5432/marketplace_docker
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
@@ -17,20 +15,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=${DATABASE_URL}
 ENV SKIP_ENV_VALIDATION=1
 
-# Copy everything — prisma generate postinstall needs schema + source
 COPY . .
 
-# Install deps and allow postinstall scripts to run.
-# All our own postinstalls have been removed from package.json files;
-# the only postinstall that matters is @prisma/engines which downloads
-# the schema-engine binary needed by prisma migrate deploy at runtime.
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
-# Run prisma generate explicitly (PRISMA_GENERATE_SKIP_AUTOINSTALL prevents
-# the CLI from trying to sync @prisma/client version via pnpm add)
 RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
-RUN pnpm --filter @mhc/app build
+RUN npm run build --workspace=apps/mhc
 
 # ── Stage 2: Runner ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

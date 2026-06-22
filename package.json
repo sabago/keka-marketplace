@@ -7,15 +7,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:mhc": "pnpm --filter @mhc/app dev",
-    "dev:credtrack": "pnpm --filter @credtrack/app dev",
-    "build:mhc": "pnpm --filter @mhc/app build",
-    "build:credtrack": "pnpm --filter @credtrack/app build",
+    "dev:mhc": "npm run dev --workspace=apps/mhc",
+    "dev:credtrack": "npm run dev --workspace=apps/credtrack",
+    "build:mhc": "npm run build --workspace=apps/mhc",
+    "build:credtrack": "npm run build --workspace=apps/credtrack",
     "db:migrate": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
-  "packageManager": "pnpm@9.0.0",
   "devDependencies": {
     "prisma": "6.19.3",
     "@prisma/client": "6.19.3",
