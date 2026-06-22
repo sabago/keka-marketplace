@@ -16,12 +16,12 @@ done
 echo "Database ready."
 
 echo "Running migrations..."
-node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma
+/prisma-tools/node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma
 
 # Content import in background after server starts
 (
   echo "Importing knowledge base content..."
-  node_modules/.bin/tsx apps/mhc/scripts/import-content-to-db.ts || echo "Content import skipped or failed"
+  /prisma-tools/node_modules/.bin/tsx apps/mhc/scripts/import-content-to-db.ts || echo "Content import skipped or failed"
 ) &
 
 echo "Starting Next.js on $HOSTNAME:$PORT..."
