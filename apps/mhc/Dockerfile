@@ -32,6 +32,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN apk add --no-cache postgresql-client curl poppler-utils
 
+# Install prisma CLI + tsx standalone so migrations and content import work at runtime
+RUN npm install --prefix /prisma-tools prisma@6.19.3 tsx@4.20.6 --no-save
+
 COPY --from=builder /app/apps/mhc/.next/standalone ./
 COPY --from=builder /app/apps/mhc/.next/static ./apps/mhc/.next/static
 COPY --from=builder /app/apps/mhc/public ./apps/mhc/public
@@ -39,14 +42,10 @@ COPY --from=builder /app/apps/mhc/public ./apps/mhc/public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 COPY --from=builder /app/apps/mhc/scripts ./apps/mhc/scripts
 COPY --from=builder /app/apps/mhc/src/content ./apps/mhc/src/content
 COPY --from=builder /app/apps/mhc/src/lib ./apps/mhc/src/lib
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
 
 COPY apps/mhc/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
