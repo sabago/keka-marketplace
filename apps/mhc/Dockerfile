@@ -20,13 +20,14 @@ ENV SKIP_ENV_VALIDATION=1
 # Copy everything — prisma generate postinstall needs schema + source
 COPY . .
 
-# Install without scripts — no postinstall hooks can run pnpm add under frozen lockfile
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Install deps and allow postinstall scripts to run.
+# All our own postinstalls have been removed from package.json files;
+# the only postinstall that matters is @prisma/engines which downloads
+# the schema-engine binary needed by prisma migrate deploy at runtime.
+RUN pnpm install --frozen-lockfile
 
-# Download the schema-engine binary for linux-musl (needed by prisma migrate deploy at runtime)
-RUN node node_modules/@prisma/engines/scripts/postinstall.js
-
-# Run prisma generate explicitly after install completes
+# Run prisma generate explicitly (PRISMA_GENERATE_SKIP_AUTOINSTALL prevents
+# the CLI from trying to sync @prisma/client version via pnpm add)
 RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 RUN pnpm --filter @mhc/app build
