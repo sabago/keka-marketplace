@@ -24,7 +24,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Download the schema-engine binary for linux-musl (needed by prisma migrate deploy at runtime)
-RUN node node_modules/@prisma/engines/dist/scripts/postinstall.js
+RUN node node_modules/@prisma/engines/scripts/postinstall.js
 
 # Run prisma generate explicitly after install completes
 RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=1 node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
