@@ -1,0 +1,11 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/mhc/Dockerfile"
+
+[build.buildArgs]
+DATABASE_URL = "${{Postgres.DATABASE_URL}}"
+NEXT_PUBLIC_SITE_URL = "https://${{RAILWAY_PUBLIC_DOMAIN}}"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
