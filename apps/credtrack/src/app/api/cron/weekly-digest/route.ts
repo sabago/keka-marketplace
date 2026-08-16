@@ -1,39 +1,29 @@
 /**
- * Vercel Cron Job Handler - Weekly Compliance Digest
- *
- * Sends a weekly compliance summary email to all agency admins.
  * GET /api/cron/weekly-digest
- * Schedule: Monday 8 AM  (0 8 * * 1)
+ * Sends weekly compliance summary email to all agency admins.
+ * Schedule: Monday 10 AM (0 10 * * 1)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { getAgencyComplianceSummary } from '@/lib/credentialHelpers';
-import { sendWeeklyComplianceDigest } from '@/lib/credentialEmails';
+import { prisma } from '@mhc/db';
+import { sendWeeklyComplianceDigest } from '@mhc/credential-core';
+
+function verifyCronAuth(req: NextRequest): boolean {
+  if (process.env.NODE_ENV !== 'production') return true;
+  const token = req.headers.get('authorization')?.replace('Bearer ', '');
+  return !!token && token === process.env.CRON_SECRET;
+}
 
 export async function GET(req: NextRequest) {
+  if (!verifyCronAuth(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const startTime = Date.now();
 
   try {
-    const authHeader = req.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (process.env.NODE_ENV === 'production') {
-      if (!authHeader || !cronSecret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      const token = authHeader.replace('Bearer ', '');
-      if (token !== cronSecret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-
-    // Get all active agencies with autoReminderEnabled and their admin users
     const agencies = await prisma.agency.findMany({
-      where: {
-        autoReminderEnabled: true,
-        approvalStatus: 'APPROVED',
-      },
+      where: { autoReminderEnabled: true, approvalStatus: 'APPROVED' },
       select: {
         id: true,
         agencyName: true,
@@ -52,9 +42,25 @@ export async function GET(req: NextRequest) {
       if (!agency.users.length) continue;
 
       try {
-        const summary = await getAgencyComplianceSummary(agency.id);
+        const [total, valid, expiringSoon, expired, missing, pendingReview] = await Promise.all([
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id } } }),
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id }, status: 'ACTIVE', isCompliant: true } }),
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id }, status: 'EXPIRING_SOON' } }),
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id }, status: 'EXPIRED' } }),
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id }, status: 'MISSING' } }),
+          prisma.staffCredential.count({ where: { staffMember: { agencyId: agency.id }, reviewStatus: 'PENDING' } }),
+        ]);
 
-        // Get top-5 urgent credentials (expired + expiring soonest)
+        const summary = {
+          total,
+          valid,
+          expiringSoon,
+          expired,
+          missing,
+          pendingReview,
+          complianceRate: total > 0 ? Math.round((valid / total) * 100) : 0,
+        };
+
         const urgentDocs = await prisma.staffCredential.findMany({
           where: {
             staffMember: { agencyId: agency.id, status: 'ACTIVE' },
@@ -80,14 +86,8 @@ export async function GET(req: NextRequest) {
           if (!admin.email) continue;
           try {
             const nameParts = (admin.name ?? '').split(' ');
-            const firstName = nameParts[0] ?? '';
-            const lastName = nameParts.slice(1).join(' ') ?? '';
             const sent = await sendWeeklyComplianceDigest(
-              {
-                email: admin.email,
-                firstName,
-                lastName,
-              },
+              { email: admin.email, firstName: nameParts[0] ?? '', lastName: nameParts.slice(1).join(' ') },
               agency.agencyName ?? 'Your Agency',
               summary,
               urgentCredentials
@@ -113,18 +113,13 @@ export async function GET(req: NextRequest) {
       executionTimeMs: Date.now() - startTime,
     });
   } catch (error) {
-    console.error('[CRON-WEEKLY-DIGEST] Error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 }
-    );
+    console.error('[CT-CRON] weekly-digest error:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
+    }, { status: 500 });
   }
 }
 
-export async function POST(req: NextRequest) {
-  return GET(req);
-}
+export async function POST(req: NextRequest) { return GET(req); }

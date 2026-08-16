@@ -6,9 +6,6 @@ echo "Starting CredTrack..."
 export PORT=${PORT:-3000}
 export HOSTNAME="0.0.0.0"
 
-echo "Generating Prisma Client..."
-node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
-
 echo "Waiting for database..."
 DB_HOST="${PGHOST:-localhost}"
 DB_USER="${PGUSER:-postgres}"
